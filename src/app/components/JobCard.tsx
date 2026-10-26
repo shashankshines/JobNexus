@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Calendar, Building2, ExternalLink, Share2, Check, ShieldCheck, Zap } from 'lucide-react';
+import { MapPin, Calendar, Building2, ExternalLink, Share2, Check, ShieldCheck, Zap, Lock } from 'lucide-react';
 import styles from './JobCard.module.css';
+import { useAuth } from '../context/AuthContext';
 
 interface JobCardProps {
   job: {
@@ -25,7 +26,23 @@ interface JobCardProps {
 }
 
 export default function JobCard({ job, index }: JobCardProps) {
+  const { user, openAuthModal } = useAuth();
   const [copied, setCopied] = useState(false);
+
+  const handleApplyClick = (e: React.MouseEvent) => {
+    if (!user) {
+      e.preventDefault();
+      openAuthModal(
+        `🔒 Sign in with your Gmail account to apply directly to ${job.title} at ${job.company}.`,
+        {
+          type: 'apply',
+          jobTitle: job.title,
+          company: job.company,
+          url: job.url,
+        }
+      );
+    }
+  };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const card = e.currentTarget;
@@ -39,12 +56,25 @@ export default function JobCard({ job, index }: JobCardProps) {
   const handleCopyLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!user) {
+      openAuthModal(
+        `🔒 Sign in with your Gmail account to copy and share direct ATS links.`,
+        {
+          type: 'apply',
+          jobTitle: job.title,
+          company: job.company,
+          url: job.url,
+        }
+      );
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(job.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
       setCopied(false);
     }
   };
@@ -171,7 +201,7 @@ export default function JobCard({ job, index }: JobCardProps) {
             type="button"
             onClick={handleCopyLink}
             className={styles.iconBtn}
-            title="Copy application link"
+            title={!user ? 'Sign in with Gmail to share direct ATS link' : 'Copy application link'}
             aria-label="Copy job link"
           >
             <AnimatePresence mode="wait">
@@ -198,24 +228,54 @@ export default function JobCard({ job, index }: JobCardProps) {
             {copied && <span className={styles.tooltip}>Copied!</span>}
           </button>
 
-          <motion.a
-            href={job.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-primary"
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            style={{
-              fontSize: '0.85rem',
-              padding: '0.5rem 1rem',
-              borderRadius: 8,
-              textDecoration: 'none',
-              fontWeight: 600,
-            }}
-          >
-            <span>Apply</span>
-            <ExternalLink size={13} />
-          </motion.a>
+          {user ? (
+            <motion.a
+              href={job.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              style={{
+                fontSize: '0.85rem',
+                padding: '0.5rem 1rem',
+                borderRadius: 8,
+                textDecoration: 'none',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+              }}
+              title="Apply directly on employer ATS portal"
+            >
+              <span>Apply</span>
+              <ExternalLink size={13} />
+            </motion.a>
+          ) : (
+            <motion.button
+              type="button"
+              className="btn-primary"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleApplyClick}
+              style={{
+                fontSize: '0.85rem',
+                padding: '0.5rem 1rem',
+                borderRadius: 8,
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(139, 92, 246, 0.9))',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                cursor: 'pointer',
+              }}
+              title="Sign in with your Gmail account to unlock direct ATS application"
+            >
+              <span>Apply (Sign In)</span>
+              <Lock size={13} />
+            </motion.button>
+          )}
         </div>
       </div>
     </motion.div>
