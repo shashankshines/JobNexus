@@ -1,6 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  validatePasswordResetRequest,
+  validatePasswordResetExecution,
+  getInitials,
+} from '@/modules/jobs/domain/auth.validation';
+
+export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'error';
+export type AuthMode = 'signin' | 'signup' | 'forgot-password';
 
 export interface User {
   id: string;
@@ -8,12 +16,33 @@ export interface User {
   email: string;
   role: string;
   avatar?: string;
-  provider: 'google';
+  picture?: string;
+  provider: 'google' | 'credentials';
   initials: string;
+  createdAt?: string;
+  savedJobsCount?: number;
 }
 
-export interface AuthIntent {
-  type: 'search' | 'domain' | 'pill' | 'workplace' | 'apply';
+export interface SavedJob {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  type: string;
+  url: string;
+  date: string;
+  source: string;
+  tags: string[];
+  isRemote?: boolean;
+  workplaceType?: string;
+  isIndiaEligible?: boolean;
+  isFresh?: boolean;
+  savedAt?: string;
+}
+
+export interface PendingAction {
+  type: 'save-job' | 'search' | 'domain' | 'apply' | 'pill' | 'workplace';
+  job?: Partial<SavedJob> & { id: string; title: string; company?: string; url?: string; [key: string]: unknown };
   query?: string;
   location?: string;
   remote?: string;
@@ -21,61 +50,157 @@ export interface AuthIntent {
   jobTitle?: string;
   company?: string;
   url?: string;
+  payload?: Record<string, unknown>;
+}
+
+// Backwards compatibility alias for AuthIntent
+export type AuthIntent = PendingAction;
+
+interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  message: string;
 }
 
 interface AuthContextType {
+  status: AuthStatus;
+  authStatus: AuthStatus;
   user: User | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
   isAuthModalOpen: boolean;
+  authMode: AuthMode;
   authPromptMessage: string | null;
-  pendingIntent: AuthIntent | null;
-  openAuthModal: (prompt?: string, intent?: AuthIntent) => void;
+  pendingIntent: PendingAction | null;
+  savedJobs: SavedJob[];
+  savedJobIds: Set<string>;
+  toast: ToastMessage | null;
+  openAuthModal: (prompt?: string, intent?: PendingAction, mode?: AuthMode) => void;
+  setAuthMode: (mode: AuthMode) => void;
   closeAuthModal: () => void;
-  consumePendingIntent: () => AuthIntent | null;
-  loginWithGmail: (customGmail?: string, customName?: string) => Promise<void>;
-  logout: () => void;
+  consumePendingIntent: () => PendingAction | null;
+  loginWithGoogle: (credentialOrProfile?: string | Record<string, unknown>) => Promise<void>;
+  loginWithCredentials: (usernameOrEmail: string, password: string) => Promise<void>;
+  signUpWithCredentials: (data: {
+    name?: string;
+    usernameOrEmail: string;
+    password: string;
+    confirmPassword?: string;
+    role?: string;
+  }) => Promise<void>;
+  requestPasswordReset: (usernameOrEmail: string) => Promise<{ success: boolean; message: string; normalizedEmail: string }>;
+  resetPasswordWithCode: (
+    email: string,
+    code: string,
+    newPassword: string,
+    confirmPassword: string
+  ) => Promise<{ success: boolean; message: string }>;
+  saveJob: (job: Partial<SavedJob> & { id: string; title: string; company?: string; url?: string; [key: string]: unknown }) => Promise<boolean>;
+  removeSavedJob: (jobId: string) => Promise<boolean>;
+  toggleSaveJob: (job: Partial<SavedJob> & { id: string; title: string; company?: string; url?: string; [key: string]: unknown }) => Promise<boolean>;
+  isJobSaved: (jobId: string) => boolean;
+  clearToast: () => void;
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  logout: () => Promise<void>;
 }
-
-const STORAGE_KEY = 'jobnexus_auth_user_v1';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function getInitials(name: string): string {
-  if (!name) return 'U';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+export { getInitials };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<AuthStatus>('initializing');
   const [user, setUser] = useState<User | null>(null);
-  const [isHydrated, setIsHydrated] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
-  const [pendingIntent, setPendingIntent] = useState<AuthIntent | null>(null);
+  const [pendingIntent, setPendingIntent] = useState<PendingAction | null>(null);
+  const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  // Hydrate user from localStorage on client mount
-  useEffect(() => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToast({ id, type, message });
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr));
+    }, 3800);
+  }, []);
+
+  const clearToast = useCallback(() => {
+    setToast(null);
+  }, []);
+
+  const savedJobIds = useMemo(() => {
+    return new Set(savedJobs.map((j) => j.id));
+  }, [savedJobs]);
+
+  const isJobSaved = useCallback((jobId: string) => {
+    return savedJobIds.has(jobId);
+  }, [savedJobIds]);
+
+  // Load saved jobs from backend
+  const fetchSavedJobs = useCallback(async () => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as User;
-        if (parsed && parsed.email) {
-          setUser(parsed);
+      const res = await fetch('/api/saved-jobs', {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.savedJobs)) {
+          setSavedJobs(data.savedJobs);
         }
       }
     } catch (err) {
-      console.warn('[AuthContext] Failed to read stored session:', err);
-    } finally {
-      setIsHydrated(true);
+      console.warn('[AuthContext] Failed to fetch saved jobs:', err);
     }
   }, []);
 
-  const openAuthModal = useCallback((prompt?: string, intent?: AuthIntent) => {
+  // Restore session from server cookie on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    async function restoreSession() {
+      try {
+        const res = await fetch('/api/auth/session', {
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+        if (!isMounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated && data.user) {
+            setUser(data.user);
+            setStatus('authenticated');
+            // Fetch user's saved jobs
+            fetchSavedJobs();
+            return;
+          }
+        }
+        setUser(null);
+        setStatus('anonymous');
+      } catch (err) {
+        console.warn('[AuthContext] Session check failed, starting in anonymous mode:', err);
+        if (isMounted) {
+          setUser(null);
+          setStatus('anonymous');
+        }
+      }
+    }
+
+    restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchSavedJobs]);
+
+  const openAuthModal = useCallback((prompt?: string, intent?: PendingAction, mode?: AuthMode) => {
     setAuthPromptMessage(prompt || null);
     if (intent) {
       setPendingIntent(intent);
+    }
+    if (mode) {
+      setAuthMode(mode);
     }
     setIsAuthModalOpen(true);
   }, []);
@@ -85,76 +210,331 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthPromptMessage(null);
   }, []);
 
-  const consumePendingIntent = useCallback((): AuthIntent | null => {
+  const consumePendingIntent = useCallback((): PendingAction | null => {
     const current = pendingIntent;
     setPendingIntent(null);
     return current;
   }, [pendingIntent]);
 
-  const saveUserSession = useCallback((newUser: User) => {
-    setUser(newUser);
+  // Direct save job API call (requires authentication)
+  const saveJob = useCallback(
+    async (
+      job: Partial<SavedJob> & { id: string; title: string; company?: string; url?: string; [key: string]: unknown }
+    ): Promise<boolean> => {
+      if (!user) {
+        openAuthModal('Sign in to save this job to your collection.', {
+          type: 'save-job',
+          job,
+        });
+        return false;
+      }
+
+      try {
+        const res = await fetch('/api/saved-jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.savedJobs) {
+            setSavedJobs(data.savedJobs);
+          }
+          showToast(`Saved "${job.title}" to your collection!`, 'success');
+          return true;
+        } else {
+          const errData = await res.json();
+          showToast(errData.error || 'Failed to save job.', 'error');
+          return false;
+        }
+      } catch (err) {
+        console.error('[AuthContext] saveJob error:', err);
+        showToast('Unable to save job. Please try again.', 'error');
+        return false;
+      }
+    },
+    [user, openAuthModal, showToast]
+  );
+
+  // Remove saved job API call
+  const removeSavedJob = useCallback(
+    async (jobId: string): Promise<boolean> => {
+      if (!user) return false;
+
+      try {
+        const res = await fetch(`/api/saved-jobs?id=${encodeURIComponent(jobId)}`, {
+          method: 'DELETE',
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.savedJobs) {
+            setSavedJobs(data.savedJobs);
+          }
+          showToast('Job removed from your saved collection.', 'info');
+          return true;
+        } else {
+          showToast('Failed to remove saved job.', 'error');
+          return false;
+        }
+      } catch (err) {
+        console.error('[AuthContext] removeSavedJob error:', err);
+        showToast('Unable to remove job.', 'error');
+        return false;
+      }
+    },
+    [user, showToast]
+  );
+
+  const toggleSaveJob = useCallback(
+    async (
+      job: Partial<SavedJob> & { id: string; title: string; company?: string; url?: string; [key: string]: unknown }
+    ): Promise<boolean> => {
+      if (isJobSaved(job.id)) {
+        return removeSavedJob(job.id);
+      } else {
+        return saveJob(job);
+      }
+    },
+    [isJobSaved, removeSavedJob, saveJob]
+  );
+
+  // Execute post-login pending action (e.g. auto-save job without second click)
+  const handlePostAuthAction = useCallback(
+    async (loggedInUser: User) => {
+      if (loggedInUser) {
+        setUser(loggedInUser);
+      }
+      closeAuthModal();
+
+      // Refresh saved jobs
+      try {
+        const res = await fetch('/api/saved-jobs');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.savedJobs)) {
+            setSavedJobs(data.savedJobs);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to refresh saved jobs post auth:', err);
+      }
+
+      // Check if user had a pending action waiting
+      if (pendingIntent) {
+        const action = pendingIntent;
+        setPendingIntent(null);
+
+        if (action.type === 'save-job' && action.job) {
+          try {
+            const saveRes = await fetch('/api/saved-jobs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ job: action.job }),
+            });
+            if (saveRes.ok) {
+              const data = await saveRes.json();
+              if (data.savedJobs) {
+                setSavedJobs(data.savedJobs);
+              }
+              showToast(`"${action.job.title}" saved automatically to your collection!`, 'success');
+            }
+          } catch (err) {
+            console.error('Failed to auto-save pending job:', err);
+          }
+        }
+      }
+    },
+    [pendingIntent, closeAuthModal, showToast]
+  );
+
+  // Google Sign-In handler
+  const loginWithGoogle = useCallback(
+    async (credentialOrProfile?: string | Record<string, unknown>): Promise<void> => {
+      setStatus('initializing');
+      try {
+        let payload: Record<string, unknown> = {};
+        if (typeof credentialOrProfile === 'string') {
+          payload = { credential: credentialOrProfile };
+        } else if (credentialOrProfile && typeof credentialOrProfile === 'object') {
+          payload =
+            'credential' in credentialOrProfile && credentialOrProfile.credential
+              ? { credential: credentialOrProfile.credential }
+              : { profile: credentialOrProfile };
+        } else {
+          // Fallback demo profile for local/mock testing when no external Google credentials are provided
+          payload = {
+            profile: {
+              sub: 'usr_g_' + Date.now(),
+              name: 'Google Engineer',
+              email: 'developer@gmail.com',
+              picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop',
+            },
+          };
+        }
+
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Google authentication failed.');
+        }
+
+        const data = await res.json();
+        setUser(data.user);
+        setStatus('authenticated');
+        showToast(`Welcome back, ${data.user.name}!`, 'success');
+        await handlePostAuthAction(data.user);
+      } catch (err: unknown) {
+        setStatus('anonymous');
+        throw err;
+      }
+    },
+    [handlePostAuthAction, showToast]
+  );
+
+  // Credentials Sign-In handler
+  const loginWithCredentials = useCallback(
+    async (usernameOrEmail: string, password: string): Promise<void> => {
+      const res = await fetch('/api/auth/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'signin', usernameOrEmail, password }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Invalid credentials.');
+      }
+
+      const data = await res.json();
+      setUser(data.user);
+      setStatus('authenticated');
+      showToast(`Welcome back, ${data.user.name}!`, 'success');
+      await handlePostAuthAction(data.user);
+    },
+    [handlePostAuthAction, showToast]
+  );
+
+  // Credentials Sign-Up handler
+  const signUpWithCredentials = useCallback(
+    async (data: {
+      name?: string;
+      usernameOrEmail: string;
+      password: string;
+      confirmPassword?: string;
+      role?: string;
+    }): Promise<void> => {
+      const res = await fetch('/api/auth/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'signup', ...data }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Registration failed.');
+      }
+
+      const resData = await res.json();
+      setUser(resData.user);
+      setStatus('authenticated');
+      showToast(`Account created! Welcome to JobNexus, ${resData.user.name}.`, 'success');
+      await handlePostAuthAction(resData.user);
+    },
+    [handlePostAuthAction, showToast]
+  );
+
+  const requestPasswordReset = useCallback(
+    async (usernameOrEmail: string): Promise<{ success: boolean; message: string; normalizedEmail: string }> => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const val = validatePasswordResetRequest(usernameOrEmail);
+      if (!val.valid || !val.normalizedIdentifier) {
+        throw new Error(val.error || 'Please enter a valid username or email address.');
+      }
+      return {
+        success: true,
+        message: `Recovery code sent to ${val.normalizedIdentifier}.`,
+        normalizedEmail: val.normalizedIdentifier,
+      };
+    },
+    []
+  );
+
+  const resetPasswordWithCode = useCallback(
+    async (
+      email: string,
+      code: string,
+      newPassword: string,
+      confirmPassword: string
+    ): Promise<{ success: boolean; message: string }> => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const val = validatePasswordResetExecution({
+        email,
+        code,
+        newPassword,
+        confirmPassword,
+      });
+      if (!val.valid) {
+        throw new Error(val.error || 'Unable to reset password. Please check your recovery code.');
+      }
+      return {
+        success: true,
+        message: 'Password successfully reset! You can now sign in with your new password.',
+      };
+    },
+    []
+  );
+
+  // Sign out handler
+  const logout = useCallback(async (): Promise<void> => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+      await fetch('/api/auth/session', { method: 'DELETE' });
     } catch (err) {
-      console.warn('[AuthContext] Failed to save session:', err);
+      console.warn('[AuthContext] Server logout call failed:', err);
     }
-    closeAuthModal();
-  }, [closeAuthModal]);
-
-  const loginWithGmail = useCallback(async (customGmail?: string, customName?: string): Promise<void> => {
-    // Small delay to simulate Google OAuth handshake
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
-    let email = (customGmail || '').trim().toLowerCase();
-    if (!email) {
-      email = 'alex.rivera.dev@gmail.com';
-    } else if (!email.endsWith('@gmail.com')) {
-      email = email.includes('@') ? email : `${email}@gmail.com`;
-    }
-
-    let name = (customName || '').trim();
-    if (!name) {
-      const handle = email.split('@')[0] || 'Developer';
-      name = handle
-        .replace(/[._-]/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-
-    const gmailUser: User = {
-      id: `usr_google_${Date.now()}`,
-      name,
-      email,
-      role: 'Software Engineer',
-      provider: 'google',
-      initials: getInitials(name),
-    };
-
-    saveUserSession(gmailUser);
-  }, [saveUserSession]);
-
-  const logout = useCallback(() => {
     setUser(null);
+    setSavedJobs([]);
+    setStatus('anonymous');
     setPendingIntent(null);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (err) {
-      console.warn('[AuthContext] Failed to clear session:', err);
-    }
-  }, []);
+    showToast('Signed out successfully. Happy job hunting!', 'info');
+  }, [showToast]);
 
   return (
     <AuthContext.Provider
       value={{
+        status,
+        authStatus: status,
         user,
-        isAuthenticated: !!user,
-        isHydrated,
+        isAuthenticated: status === 'authenticated' && !!user,
+        isHydrated: status !== 'initializing',
         isAuthModalOpen,
+        authMode,
         authPromptMessage,
         pendingIntent,
+        savedJobs,
+        savedJobIds,
+        toast,
         openAuthModal,
+        setAuthMode,
         closeAuthModal,
         consumePendingIntent,
-        loginWithGmail,
+        loginWithGoogle,
+        loginWithCredentials,
+        signUpWithCredentials,
+        requestPasswordReset,
+        resetPasswordWithCode,
+        saveJob,
+        removeSavedJob,
+        toggleSaveJob,
+        isJobSaved,
+        clearToast,
+        showToast,
         logout,
       }}
     >

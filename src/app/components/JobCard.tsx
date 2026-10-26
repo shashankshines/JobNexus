@@ -2,7 +2,17 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Calendar, Building2, ExternalLink, Share2, Check, ShieldCheck, Zap, Lock } from 'lucide-react';
+import {
+  MapPin,
+  Calendar,
+  Building2,
+  ExternalLink,
+  Share2,
+  Check,
+  ShieldCheck,
+  Zap,
+  Bookmark,
+} from 'lucide-react';
 import styles from './JobCard.module.css';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,23 +36,9 @@ interface JobCardProps {
 }
 
 export default function JobCard({ job, index }: JobCardProps) {
-  const { user, openAuthModal } = useAuth();
+  const { isJobSaved, toggleSaveJob } = useAuth();
   const [copied, setCopied] = useState(false);
-
-  const handleApplyClick = (e: React.MouseEvent) => {
-    if (!user) {
-      e.preventDefault();
-      openAuthModal(
-        `🔒 Sign in with your Gmail account to apply directly to ${job.title} at ${job.company}.`,
-        {
-          type: 'apply',
-          jobTitle: job.title,
-          company: job.company,
-          url: job.url,
-        }
-      );
-    }
-  };
+  const isSaved = isJobSaved(job.id);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const card = e.currentTarget;
@@ -57,19 +53,6 @@ export default function JobCard({ job, index }: JobCardProps) {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!user) {
-      openAuthModal(
-        `🔒 Sign in with your Gmail account to copy and share direct ATS links.`,
-        {
-          type: 'apply',
-          jobTitle: job.title,
-          company: job.company,
-          url: job.url,
-        }
-      );
-      return;
-    }
-
     try {
       await navigator.clipboard.writeText(job.url);
       setCopied(true);
@@ -77,6 +60,12 @@ export default function JobCard({ job, index }: JobCardProps) {
     } catch {
       setCopied(false);
     }
+  };
+
+  const handleBookmarkClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSaveJob(job);
   };
 
   const isRemote = job.isRemote || job.workplaceType === 'remote';
@@ -102,92 +91,80 @@ export default function JobCard({ job, index }: JobCardProps) {
           </div>
         </div>
 
-        <div className={styles.badges}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
           {isFresh && (
-            <span
-              style={{
-                background: 'rgba(236, 72, 153, 0.15)',
-                color: '#f472b6',
-                border: '1px solid rgba(236, 72, 153, 0.3)',
-                padding: '0.2rem 0.55rem',
-                borderRadius: 9999,
-                fontSize: '0.72rem',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-              }}
-            >
-              <Zap size={11} color="#f472b6" />
-              New
+            <span className={styles.freshBadge} title="Published within 48 hours">
+              <Zap size={12} />
+              <span>FRESH</span>
             </span>
           )}
 
-          <span
-            className={styles.tag}
+          {/* Bookmark / Save Job Button */}
+          <button
+            type="button"
+            onClick={handleBookmarkClick}
+            className={styles.iconBtn}
+            aria-label={isSaved ? `Remove ${job.title} from saved jobs` : `Save ${job.title} to collection`}
+            title={isSaved ? 'Job saved to your collection (Click to remove)' : 'Save job to your collection'}
             style={{
-              background: isRemote
-                ? 'rgba(16, 185, 129, 0.14)'
-                : isHybrid
-                ? 'rgba(217, 70, 239, 0.14)'
-                : 'rgba(245, 158, 11, 0.14)',
-              color: isRemote ? '#34d399' : isHybrid ? '#e879f9' : '#fbbf24',
-              borderColor: isRemote
-                ? 'rgba(16, 185, 129, 0.35)'
-                : isHybrid
-                ? 'rgba(217, 70, 239, 0.35)'
-                : 'rgba(245, 158, 11, 0.35)',
-              fontWeight: 600,
-              fontSize: '0.78rem',
+              color: isSaved ? '#10b981' : 'var(--text-secondary)',
+              borderColor: isSaved ? 'rgba(16, 185, 129, 0.4)' : undefined,
+              background: isSaved ? 'rgba(16, 185, 129, 0.12)' : undefined,
             }}
           >
-            {isRemote
-              ? job.isIndiaEligible &&
-                (job.location.toLowerCase().includes('india') ||
-                  job.location.toLowerCase().includes('worldwide'))
-                ? job.location.toLowerCase().includes('india')
-                  ? '🇮🇳 Remote'
-                  : '🌍 Remote'
-                : '🏠 Remote'
-              : isHybrid
-              ? '🔄 Hybrid'
-              : '🏢 On-site'}
-          </span>
-
-          <span
-            className={styles.tag}
-            style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              color: 'var(--text-secondary)',
-              borderColor: 'var(--border)',
-            }}
-          >
-            {job.type}
-          </span>
+            <motion.div
+              key={isSaved ? 'saved' : 'unsaved'}
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            >
+              <Bookmark
+                size={16}
+                fill={isSaved ? '#10b981' : 'none'}
+                color={isSaved ? '#10b981' : 'currentColor'}
+              />
+            </motion.div>
+          </button>
         </div>
       </div>
 
       <div className={styles.meta}>
         <div className={styles.metaItem}>
-          <MapPin size={14} color="var(--text-muted)" />
+          <MapPin size={14} />
           <span>{job.location}</span>
+          {isRemote && <span className={`${styles.badge} ${styles.badgeRemote}`}>Remote</span>}
+          {isHybrid && <span className={`${styles.badge} ${styles.badgeHybrid}`}>Hybrid</span>}
+          {job.isIndiaEligible && (
+            <span className={`${styles.badge} ${styles.badgeIndia}`} title="Open to engineers based in India">
+              🇮🇳 India
+            </span>
+          )}
         </div>
+
         <div className={styles.metaItem}>
-          <Calendar size={14} color="var(--text-muted)" />
-          <span>{job.date ? new Date(job.date).toLocaleDateString() : 'Active'}</span>
+          <Calendar size={14} />
+          <span>
+            {(() => {
+              try {
+                const d = new Date(job.date);
+                return isNaN(d.getTime()) ? 'Recently' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+              } catch {
+                return 'Recently';
+              }
+            })()}
+          </span>
+          <span className={styles.dot}>•</span>
+          <span>{job.type}</span>
         </div>
       </div>
 
       <div className={styles.tags}>
-        {job.tags.slice(0, 4).map((tag, i) => (
-          <motion.span
-            key={i}
-            whileHover={{ scale: 1.05 }}
-            className={styles.tag}
-          >
-            {tag}
-          </motion.span>
-        ))}
+        {job.tags &&
+          job.tags.slice(0, 4).map((tag, i) => (
+            <span key={i} className={styles.tag}>
+              {tag}
+            </span>
+          ))}
       </div>
 
       <div className={styles.actions}>
@@ -197,11 +174,12 @@ export default function JobCard({ job, index }: JobCardProps) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Share / Copy Link Button */}
           <button
             type="button"
             onClick={handleCopyLink}
             className={styles.iconBtn}
-            title={!user ? 'Sign in with Gmail to share direct ATS link' : 'Copy application link'}
+            title="Copy direct application link"
             aria-label="Copy job link"
           >
             <AnimatePresence mode="wait">
@@ -228,54 +206,29 @@ export default function JobCard({ job, index }: JobCardProps) {
             {copied && <span className={styles.tooltip}>Copied!</span>}
           </button>
 
-          {user ? (
-            <motion.a
-              href={job.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              style={{
-                fontSize: '0.85rem',
-                padding: '0.5rem 1rem',
-                borderRadius: 8,
-                textDecoration: 'none',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-              title="Apply directly on employer ATS portal"
-            >
-              <span>Apply</span>
-              <ExternalLink size={13} />
-            </motion.a>
-          ) : (
-            <motion.button
-              type="button"
-              className="btn-primary"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleApplyClick}
-              style={{
-                fontSize: '0.85rem',
-                padding: '0.5rem 1rem',
-                borderRadius: 8,
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(139, 92, 246, 0.9))',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                cursor: 'pointer',
-              }}
-              title="Sign in with your Gmail account to unlock direct ATS application"
-            >
-              <span>Apply (Sign In)</span>
-              <Lock size={13} />
-            </motion.button>
-          )}
+          {/* Direct ATS Apply Link - Available to all users without forced login */}
+          <motion.a
+            href={job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            style={{
+              fontSize: '0.85rem',
+              padding: '0.5rem 1rem',
+              borderRadius: 8,
+              textDecoration: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+            }}
+            title="Apply directly on employer ATS portal"
+          >
+            <span>Apply</span>
+            <ExternalLink size={13} />
+          </motion.a>
         </div>
       </div>
     </motion.div>

@@ -17,8 +17,9 @@ import {
   Code2,
   Server,
   MapPin,
+  UserPlus,
 } from 'lucide-react';
-import { useAuth, AuthIntent } from '../context/AuthContext';
+import { useAuth, AuthIntent, AuthMode } from '../context/AuthContext';
 import JobCard from './JobCard';
 import ThemeToggle from './ThemeToggle';
 
@@ -26,7 +27,7 @@ const PREVIEW_VERIFIED_JOBS = [
   {
     id: 'preview-1',
     title: 'Staff Distributed Systems Engineer',
-    company: 'Stripe Ecosystem Partner',
+    company: 'Confidential Employer',
     location: 'Remote (US / Global)',
     type: 'Full-time',
     salary: '$185,000 - $240,000',
@@ -37,12 +38,12 @@ const PREVIEW_VERIFIED_JOBS = [
     workplaceType: 'remote',
     isIndiaEligible: true,
     isFresh: true,
-    url: 'https://stripe.com/jobs',
+    url: 'https://boards.greenhouse.io',
   },
   {
     id: 'preview-2',
     title: 'Senior Full Stack Engineer (Next.js / TypeScript)',
-    company: 'Vercel Ecosystem Tech',
+    company: 'Confidential Employer',
     location: 'Bengaluru, India (Hybrid)',
     type: 'Full-time',
     salary: '₹35 - ₹55 LPA',
@@ -53,12 +54,12 @@ const PREVIEW_VERIFIED_JOBS = [
     workplaceType: 'hybrid',
     isIndiaEligible: true,
     isFresh: true,
-    url: 'https://vercel.com/careers',
+    url: 'https://ashbyhq.com',
   },
   {
     id: 'preview-3',
     title: 'Lead AI & Machine Learning Scientist',
-    company: 'Anthropic AI Partner',
+    company: 'Confidential Employer',
     location: 'Remote (Global Flexible)',
     type: 'Full-time',
     salary: '$195,000 - $260,000',
@@ -69,12 +70,12 @@ const PREVIEW_VERIFIED_JOBS = [
     workplaceType: 'remote',
     isIndiaEligible: true,
     isFresh: false,
-    url: 'https://anthropic.com/careers',
+    url: 'https://himalayas.app',
   },
   {
     id: 'preview-4',
     title: 'Frontend Engineer, Ads & Monetization',
-    company: 'Reddit',
+    company: 'Confidential Employer',
     location: 'Anywhere in the World',
     type: 'Full-time',
     salary: '$160,000 - $210,000',
@@ -85,12 +86,12 @@ const PREVIEW_VERIFIED_JOBS = [
     workplaceType: 'remote',
     isIndiaEligible: true,
     isFresh: true,
-    url: 'https://weworkremotely.com/remote-jobs/reddit-frontend-engineer-ads',
+    url: 'https://weworkremotely.com',
   },
   {
     id: 'preview-5',
     title: 'Cloud Infrastructure & SRE Architect',
-    company: 'Datadog Ecosystem Partner',
+    company: 'Confidential Employer',
     location: 'Remote / Hybrid (US & EU)',
     type: 'Full-time',
     salary: '$175,000 - $230,000',
@@ -101,12 +102,12 @@ const PREVIEW_VERIFIED_JOBS = [
     workplaceType: 'remote',
     isIndiaEligible: false,
     isFresh: false,
-    url: 'https://datadoghq.com/careers',
+    url: 'https://boards.greenhouse.io',
   },
   {
     id: 'preview-6',
     title: 'Principal Platform Engineer (Kubernetes & Go)',
-    company: 'Fintech Scaleup',
+    company: 'Confidential Employer',
     location: 'Pune / Bengaluru, India',
     type: 'Full-time',
     salary: '₹45 - ₹70 LPA',
@@ -240,10 +241,11 @@ export default function LandingView() {
   const [searchKeywords, setSearchKeywords] = useState('');
   const [searchLocation, setSearchLocation] = useState('');
 
-  const handleGatedAction = (promptMsg?: string, intent?: AuthIntent) => {
+  const handleGatedAction = (promptMsg?: string, intent?: AuthIntent, mode?: AuthMode) => {
     openAuthModal(
-      promptMsg || 'Sign in with your Gmail account to unlock the full search console and direct ATS applications.',
-      intent
+      promptMsg || 'Sign in to your account to unlock the full search console and direct ATS applications.',
+      intent,
+      mode
     );
   };
 
@@ -252,7 +254,7 @@ export default function LandingView() {
     const query = searchKeywords.trim();
     const loc = searchLocation.trim();
     handleGatedAction(
-      `🔒 Sign in with your Gmail account to search for "${query || 'verified roles'}" across all direct ATS feeds.`,
+      `🔒 Sign in to your account to search for "${query || 'verified roles'}" across all direct ATS feeds.`,
       {
         type: 'search',
         query,
@@ -323,29 +325,36 @@ export default function LandingView() {
             </div>
           </div>
 
-          {/* Right Action Button & Theme Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          {/* Right Action Buttons & Theme Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <ThemeToggle />
             <button
               type="button"
-              onClick={() => handleGatedAction('Sign in with your Gmail account to access verified tech roles.')}
-              className="btn-primary"
+              onClick={() => handleGatedAction('Sign in to your account to access verified tech roles.', undefined, 'signin')}
+              className="btn-secondary"
               style={{
-                padding: '0.55rem 1.35rem',
-                fontSize: '0.86rem',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
+                padding: '0.52rem 0.95rem',
+                fontSize: '0.84rem',
                 borderRadius: 10,
               }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.3 8.9 5 12 5z" />
-                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5.1 3.7-8.8z" />
-                <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3L1.6 7.2C.6 9.2 0 10.5 0 12.4s.6 3.2 1.6 5.2l3.7-2.9z" />
-                <path fill="#34A853" d="M12 23.8c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.3L1.6 16.7C3.5 20.6 7.4 23.8 12 23.8z" />
-              </svg>
-              <span>Sign In with Gmail</span>
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => handleGatedAction('Create your free JobNexus account to access verified tech roles.', undefined, 'signup')}
+              className="btn-primary"
+              style={{
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.86rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                borderRadius: 10,
+              }}
+            >
+              <UserPlus size={15} />
+              <span>Sign Up Free</span>
             </button>
           </div>
         </div>
@@ -358,22 +367,14 @@ export default function LandingView() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.4rem 1rem',
-              borderRadius: 9999,
-              background: 'rgba(99, 102, 241, 0.1)',
-              border: '1px solid rgba(99, 102, 241, 0.25)',
-              color: '#c7d2fe',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              marginBottom: '1.6rem',
-            }}
+            className="hero-ats-badge"
           >
-            <Sparkles size={14} color="#818cf8" />
-            <span>Direct ATS Ingestion • 100% Free For Engineers</span>
+            <Sparkles size={14} className="hero-ats-badge-icon" />
+            <span>
+              <span className="hero-ats-badge-accent">Direct ATS Ingestion</span>
+              <span className="hero-ats-badge-bullet">•</span>
+              <span className="hero-ats-badge-secondary">100% Free For Engineers</span>
+            </span>
           </motion.div>
 
           {/* Main Headline */}
@@ -411,7 +412,7 @@ export default function LandingView() {
             remote hubs. Direct applications. Zero recruitment middleman fees.
           </motion.p>
 
-          {/* Single Hero Gmail CTA */}
+          {/* Single Hero CTA */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -424,7 +425,7 @@ export default function LandingView() {
           >
             <button
               type="button"
-              onClick={() => handleGatedAction('Sign in with your Gmail account to access verified tech roles and direct applications.')}
+              onClick={() => handleGatedAction('Sign in to your account to access verified tech roles and direct applications.')}
               className="btn-primary"
               style={{
                 padding: '0.92rem 2.6rem',
@@ -436,13 +437,8 @@ export default function LandingView() {
                 gap: '0.75rem',
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.3 8.9 5 12 5z" />
-                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5.1 3.7-8.8z" />
-                <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3L1.6 7.2C.6 9.2 0 10.5 0 12.4s.6 3.2 1.6 5.2l3.7-2.9z" />
-                <path fill="#34A853" d="M12 23.8c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.3L1.6 16.7C3.5 20.6 7.4 23.8 12 23.8z" />
-              </svg>
-              <span>Continue with Gmail</span>
+              <Sparkles size={18} />
+              <span>Get Started Free</span>
               <ArrowRight size={18} />
             </button>
           </motion.div>
@@ -511,7 +507,7 @@ export default function LandingView() {
               Preview 1,340+ Verified Direct ATS Openings
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: 620, margin: '0.5rem auto 0' }}>
-              Explore real-world engineering roles from top tech employers. Connect your Gmail account to unlock live keyword querying and 1-click ATS applications.
+              Explore real-world engineering roles from top tech employers. Sign in to your account to unlock live keyword querying and 1-click ATS applications.
             </p>
           </div>
 
@@ -541,7 +537,7 @@ export default function LandingView() {
                   type="button"
                   onClick={() =>
                     handleGatedAction(
-                      `🔒 Sign in with your Gmail account to explore ${item.label} engineering roles.`,
+                      `🔒 Sign in to your account to explore ${item.label} engineering roles.`,
                       { type: 'workplace', remote: item.remoteParam }
                     )
                   }
@@ -595,7 +591,7 @@ export default function LandingView() {
                 type="text"
                 value={searchKeywords}
                 onChange={(e) => setSearchKeywords(e.target.value)}
-                placeholder="Search role, skills, or company (e.g. React, Python, Staff SRE)..."
+                placeholder="Search role, skill, or discipline (e.g. React, Python, Staff SRE)..."
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -662,7 +658,7 @@ export default function LandingView() {
                 type="button"
                 onClick={() =>
                   handleGatedAction(
-                    `🔒 Sign in with your Gmail account to explore ${pill.label} positions.`,
+                    `🔒 Sign in to your account to explore ${pill.label} positions.`,
                     { type: 'pill', query: pill.query }
                   )
                 }
@@ -716,7 +712,7 @@ export default function LandingView() {
                   border: '1px solid rgba(16, 185, 129, 0.28)',
                 }}
               >
-                6 Roles Previewed • 1,340+ Behind Gmail Login
+                6 Roles Previewed • 1,340+ Behind Member Login
               </span>
             </div>
 
@@ -756,13 +752,13 @@ export default function LandingView() {
                   Ready to Apply? Unlock All 1,340+ Verified Openings
                 </h4>
                 <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', maxWidth: 540 }}>
-                  Sign in with your Gmail account to search any skill, filter by timezone or Indian tech hubs, and apply directly with 1 click.
+                  Sign in to your account to search any skill, filter by timezone or Indian tech hubs, and apply directly with 1 click.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() => handleGatedAction('Sign in with your Gmail account to access verified tech roles and direct applications.')}
+                onClick={() => handleGatedAction('Sign in to your account to access verified tech roles and direct applications.')}
                 className="btn-primary"
                 style={{
                   padding: '0.75rem 1.8rem',
@@ -773,13 +769,7 @@ export default function LandingView() {
                   gap: '0.6rem',
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.3 8.9 5 12 5z" />
-                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5.1 3.7-8.8z" />
-                  <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3L1.6 7.2C.6 9.2 0 10.5 0 12.4s.6 3.2 1.6 5.2l3.7-2.9z" />
-                  <path fill="#34A853" d="M12 23.8c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.3L1.6 16.7C3.5 20.6 7.4 23.8 12 23.8z" />
-                </svg>
-                <span>Sign In with Gmail</span>
+                <span>Sign In to Unlock</span>
                 <ArrowRight size={16} />
               </button>
             </motion.div>
@@ -816,7 +806,7 @@ export default function LandingView() {
                   whileTap={{ scale: 0.98 }}
                   onClick={() =>
                     handleGatedAction(
-                      `🔒 Sign in with your Gmail account to explore ${domain.title} opportunities.`,
+                      `🔒 Sign in to your account to explore ${domain.title} opportunities.`,
                       {
                         type: 'domain',
                         domainTitle: domain.title,
@@ -1055,7 +1045,7 @@ export default function LandingView() {
         </div>
       </section>
 
-      {/* Bottom High-Conversion Gmail CTA Banner */}
+      {/* Bottom High-Conversion CTA Banner */}
       <section style={{ padding: '5rem 1.5rem', textAlign: 'center' }}>
         <div className="container" style={{ maxWidth: 840 }}>
           <div
@@ -1086,12 +1076,12 @@ export default function LandingView() {
               Your Dream Role Is One Verified Click Away
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem', maxWidth: 560, margin: '0 auto 2rem' }}>
-              Sign in with your Gmail account to access 1,340+ verified tech roles and direct ATS application links.
+              Sign in to your account to access 1,340+ verified tech roles and direct ATS application links.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <button
                 type="button"
-                onClick={() => handleGatedAction('Sign in with your Gmail account to access verified tech roles and direct applications.')}
+                onClick={() => handleGatedAction('Sign in to your account to access verified tech roles and direct applications.')}
                 className="btn-primary"
                 style={{
                   padding: '0.88rem 2.4rem',
@@ -1102,13 +1092,7 @@ export default function LandingView() {
                   gap: '0.65rem',
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.3 8.9 5 12 5z" />
-                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5.1 3.7-8.8z" />
-                  <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3L1.6 7.2C.6 9.2 0 10.5 0 12.4s.6 3.2 1.6 5.2l3.7-2.9z" />
-                  <path fill="#34A853" d="M12 23.8c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.3L1.6 16.7C3.5 20.6 7.4 23.8 12 23.8z" />
-                </svg>
-                <span>Sign In with Gmail</span>
+                <span>Sign In / Create Account</span>
                 <ArrowRight size={16} />
               </button>
             </div>
@@ -1163,10 +1147,10 @@ export default function LandingView() {
             </span>
             <button
               type="button"
-              onClick={() => handleGatedAction('Sign in with your Gmail account to access verified tech roles.')}
+              onClick={() => handleGatedAction('Sign in to your account to access verified tech roles.')}
               style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer' }}
             >
-              Sign In with Gmail
+              Sign In
             </button>
           </div>
         </div>

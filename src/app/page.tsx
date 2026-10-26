@@ -21,9 +21,13 @@ import {
   ArrowRight,
   ChevronRight,
   Compass,
+  Bookmark,
+  User as UserIcon,
+  LogOut,
+  Check,
+  ChevronDown,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
-import LandingView from './components/LandingView';
 import ThemeToggle from './components/ThemeToggle';
 import { useAuth } from './context/AuthContext';
 import {
@@ -132,7 +136,21 @@ const QUICK_JOB_POSTS: QuickPill[] = [
 ];
 
 export default function Home() {
-  const { user, isAuthenticated, isHydrated, logout, consumePendingIntent } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    authStatus,
+    isHydrated,
+    logout,
+    consumePendingIntent,
+    openAuthModal,
+    savedJobs,
+    toast,
+    clearToast,
+  } = useAuth();
+  const [activeView, setActiveView] = useState<'all' | 'saved'>('all');
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [type, setType] = useState('');
@@ -153,6 +171,7 @@ export default function Home() {
 
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const locBoxRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const intentProcessedRef = useRef(false);
 
   const executeSearch = useCallback(
@@ -257,6 +276,9 @@ export default function Home() {
       if (locBoxRef.current && !locBoxRef.current.contains(event.target as Node)) {
         setShowLocDropdown(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -358,8 +380,11 @@ export default function Home() {
     executeSearch('', '', '', '', '', '');
   };
 
-  // Client-side instant sorting
+  // Client-side instant sorting & activeView filtering
   const displayedJobs = useMemo(() => {
+    if (activeView === 'saved') {
+      return savedJobs;
+    }
     if (sortBy === 'date') {
       return [...jobs].sort((a, b) => {
         const timeA = a.date ? new Date(a.date).getTime() : 0;
@@ -368,7 +393,7 @@ export default function Home() {
       });
     }
     return jobs;
-  }, [jobs, sortBy]);
+  }, [jobs, sortBy, activeView, savedJobs]);
 
   if (!isHydrated) {
     return (
@@ -400,10 +425,6 @@ export default function Home() {
         </div>
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return <LandingView />;
   }
 
   return (
@@ -453,8 +474,8 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Live Aggregation Status Pill + ThemeToggle + User Profile Capsule */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+        {/* Live Aggregation Status Pill + ThemeToggle + Auth Navigation */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <ThemeToggle />
           <motion.div
             initial={{ opacity: 0, x: 15 }}
@@ -477,89 +498,271 @@ export default function Home() {
             </span>
           </motion.div>
 
-          {/* User Profile Capsule */}
-          {user && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
+          {/* Loading Skeleton during session restoration to prevent layout shift */}
+          {authStatus === 'initializing' && (
+            <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.65rem',
-                background: 'var(--surface-card)',
-                padding: '0.35rem 0.75rem 0.35rem 0.45rem',
+                width: 90,
+                height: 36,
                 borderRadius: 9999,
+                background: 'var(--surface-card)',
                 border: '1px solid var(--border-card)',
-                boxShadow: 'var(--shadow-card)',
+                animation: 'pulse 1.5s infinite ease-in-out',
               }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  boxShadow: '0 2px 8px rgba(66, 133, 244, 0.4)',
-                }}
-              >
-                {user.initials}
-              </div>
-              <div style={{ textAlign: 'left', marginRight: '0.2rem' }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span>{user.name}</span>
-                  <span
-                    style={{
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                      background: 'rgba(66, 133, 244, 0.18)',
-                      color: 'var(--primary)',
-                      padding: '0.1rem 0.4rem',
-                      borderRadius: 4,
-                      border: '1px solid rgba(66, 133, 244, 0.3)',
-                    }}
-                  >
-                    Gmail
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', lineHeight: 1.1 }}>
-                  {user.email}
-                </div>
-              </div>
+            />
+          )}
+
+          {/* Authenticated State: Saved Jobs button + User Profile Dropdown */}
+          {isAuthenticated && user && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
               <button
                 type="button"
-                onClick={logout}
-                title="Sign out of JobNexus"
+                onClick={() => setActiveView(activeView === 'saved' ? 'all' : 'saved')}
+                title={activeView === 'saved' ? 'View all jobs' : 'View saved jobs'}
                 style={{
-                  background: 'var(--tag-bg)',
-                  border: '1px solid var(--tag-border)',
-                  borderRadius: 8,
-                  padding: '0.32rem 0.65rem',
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.74rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.42rem 0.85rem',
+                  borderRadius: 9999,
+                  background: activeView === 'saved' ? 'rgba(99, 102, 241, 0.2)' : 'var(--surface-card)',
+                  border: activeView === 'saved' ? '1px solid var(--primary-start)' : '1px solid var(--border-card)',
+                  color: activeView === 'saved' ? 'var(--primary-start)' : 'var(--text-primary)',
+                  fontSize: '0.8rem',
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.35)';
-                  e.currentTarget.style.color = '#ef4444';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--tag-bg)';
-                  e.currentTarget.style.borderColor = 'var(--tag-border)';
-                  e.currentTarget.style.color = 'var(--text-secondary)';
+                  boxShadow: 'var(--shadow-card)',
                 }}
               >
-                Log Out
+                <Bookmark size={14} fill={activeView === 'saved' ? 'currentColor' : 'none'} />
+                <span>Saved</span>
+                <span
+                  style={{
+                    background: activeView === 'saved' ? 'var(--primary-start)' : 'rgba(255, 255, 255, 0.12)',
+                    color: activeView === 'saved' ? '#ffffff' : 'var(--text-secondary)',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    padding: '0.05rem 0.4rem',
+                    borderRadius: 9999,
+                  }}
+                >
+                  {savedJobs.length}
+                </span>
               </button>
-            </motion.div>
+
+              {/* User Dropdown Capsule */}
+              <div ref={userMenuRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  aria-haspopup="true"
+                  aria-expanded={isUserMenuOpen}
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem',
+                    background: 'var(--surface-card)',
+                    padding: '0.35rem 0.75rem 0.35rem 0.45rem',
+                    borderRadius: 9999,
+                    border: '1px solid var(--border-card)',
+                    boxShadow: 'var(--shadow-card)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: '50%',
+                      background: user.picture
+                        ? `url(${user.picture}) center/cover no-repeat`
+                        : 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.76rem',
+                      fontWeight: 700,
+                      boxShadow: '0 2px 8px rgba(66, 133, 244, 0.35)',
+                    }}
+                  >
+                    {!user.picture && user.initials}
+                  </div>
+                  <div style={{ textAlign: 'left', marginRight: '0.15rem' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15 }}>
+                      {user.name.split(' ')[0]}
+                    </div>
+                  </div>
+                  <ChevronDown
+                    size={14}
+                    color="var(--text-secondary)"
+                    style={{
+                      transform: isUserMenuOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                    }}
+                  />
+                </button>
+
+                {/* Dropdown Menu */}
+                <AnimatePresence>
+                  {isUserMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                      transition={{ duration: 0.15 }}
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 'calc(100% + 8px)',
+                        width: 230,
+                        background: 'var(--surface-card)',
+                        border: '1px solid var(--border-card)',
+                        borderRadius: 14,
+                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
+                        backdropFilter: 'blur(16px)',
+                        padding: '0.5rem',
+                        zIndex: 250,
+                      }}
+                    >
+                      {/* User Identity Header */}
+                      <div style={{ padding: '0.5rem 0.6rem 0.65rem', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {user.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                          {user.email}
+                        </div>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            marginTop: '0.35rem',
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            background: user.provider === 'google' ? 'rgba(66, 133, 244, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                            color: user.provider === 'google' ? '#60a5fa' : 'var(--primary-start)',
+                            padding: '0.12rem 0.45rem',
+                            borderRadius: 4,
+                          }}
+                        >
+                          {user.provider === 'google' ? 'Google Account' : 'Verified Member'}
+                        </span>
+                      </div>
+
+                      {/* Menu Actions */}
+                      <div style={{ padding: '0.35rem 0' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveView('saved');
+                            setIsUserMenuOpen(false);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.6rem',
+                            padding: '0.55rem 0.65rem',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: activeView === 'saved' ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.82rem',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <Bookmark size={15} color="var(--primary-start)" />
+                          <span>Saved Jobs ({savedJobs.length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsProfileModalOpen(true);
+                            setIsUserMenuOpen(false);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.6rem',
+                            padding: '0.55rem 0.65rem',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: 'transparent',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.82rem',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <UserIcon size={15} color="var(--text-secondary)" />
+                          <span>Account Profile</span>
+                        </button>
+                      </div>
+
+                      {/* Sign Out Action */}
+                      <div style={{ paddingTop: '0.35rem', borderTop: '1px solid var(--border)' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            logout();
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.6rem',
+                            padding: '0.55rem 0.65rem',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#ef4444',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <LogOut size={15} color="#ef4444" />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {/* Anonymous State: Standard Sign In CTA */}
+          {authStatus === 'anonymous' && (
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={() => openAuthModal()}
+              className="btn-primary"
+              style={{
+                padding: '0.42rem 1.05rem',
+                borderRadius: 9999,
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+              }}
+            >
+              <UserIcon size={14} />
+              <span>Sign In</span>
+            </motion.button>
           )}
         </div>
       </header>
@@ -1187,7 +1390,7 @@ export default function Home() {
       </section>
 
       {/* Results Header Toolbar */}
-      {!loading && searched && displayedJobs.length > 0 && (
+      {!loading && (activeView === 'saved' ? savedJobs.length > 0 : searched && displayedJobs.length > 0) && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1204,17 +1407,29 @@ export default function Home() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {displayedJobs.length} Verified Positions
+              {activeView === 'saved' ? `${savedJobs.length} Saved Positions` : `${displayedJobs.length} Verified Positions`}
             </span>
-            <button
-              type="button"
-              onClick={resetToDiscovery}
-              className="btn-secondary"
-              style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-            >
-              <Compass size={13} />
-              <span>Back to Discovery</span>
-            </button>
+            {activeView === 'saved' ? (
+              <button
+                type="button"
+                onClick={() => setActiveView('all')}
+                className="btn-secondary"
+                style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                <Compass size={13} />
+                <span>Back to All Roles</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={resetToDiscovery}
+                className="btn-secondary"
+                style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                <Compass size={13} />
+                <span>Back to Discovery</span>
+              </button>
+            )}
             {(query || location || remote || selectedRole || type || level) && (
               <button
                 type="button"
@@ -1325,6 +1540,48 @@ export default function Home() {
               </div>
             ))}
           </div>
+        ) : activeView === 'saved' ? (
+          savedJobs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
+              <div
+                style={{
+                  background: 'rgba(99, 102, 241, 0.12)',
+                  display: 'inline-flex',
+                  padding: '1.25rem',
+                  borderRadius: '50%',
+                  marginBottom: '1.25rem',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                }}
+              >
+                <Bookmark size={36} color="var(--primary-start)" />
+              </div>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>No Saved Jobs Yet</h3>
+              <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto 1.5rem', lineHeight: 1.6 }}>
+                Bookmark tech opportunities by clicking the bookmark icon on any job card. They will stay saved securely across your sessions.
+              </p>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setActiveView('all')}
+                className="btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
+              >
+                <Compass size={15} />
+                <span>Browse Verified Roles</span>
+              </motion.button>
+            </div>
+          ) : (
+            <motion.div
+              layout
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}
+            >
+              <AnimatePresence mode="popLayout">
+                {savedJobs.map((job, index) => (
+                  <JobCard key={job.id} job={job} index={index} />
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )
         ) : searched && displayedJobs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
             <div
@@ -1547,6 +1804,221 @@ export default function Home() {
           >
             <ArrowUp size={20} />
           </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification for real-time auth and save feedback */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 25, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            style={{
+              position: 'fixed',
+              bottom: 32,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              padding: '0.7rem 1.35rem',
+              borderRadius: 9999,
+              background: toast.type === 'success' ? '#064e3b' : toast.type === 'error' ? '#7f1d1d' : '#1e1b4b',
+              color: '#ffffff',
+              boxShadow: '0 12px 36px rgba(0, 0, 0, 0.45)',
+              border: `1px solid ${toast.type === 'success' ? '#059669' : toast.type === 'error' ? '#dc2626' : '#6366f1'}`,
+              fontSize: '0.86rem',
+              fontWeight: 600,
+              backdropFilter: 'blur(12px)',
+            }}
+          >
+            {toast.type === 'success' ? <Check size={16} color="#34d399" /> : <AlertCircle size={16} color="#f87171" />}
+            <span>{toast.message}</span>
+            <button
+              type="button"
+              onClick={clearToast}
+              aria-label="Dismiss toast"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.7)',
+                cursor: 'pointer',
+                marginLeft: '0.5rem',
+                fontSize: '1rem',
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* User Account Profile Modal */}
+      <AnimatePresence>
+        {isProfileModalOpen && user && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 500,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1.25rem',
+              background: 'rgba(0, 0, 0, 0.72)',
+              backdropFilter: 'blur(8px)',
+            }}
+            onClick={() => setIsProfileModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-panel"
+              style={{
+                width: '100%',
+                maxWidth: 440,
+                padding: '2rem',
+                borderRadius: 20,
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-card)',
+                boxShadow: '0 24px 64px rgba(0, 0, 0, 0.5)',
+                position: 'relative',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  Account Profile
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsProfileModalOpen(false)}
+                  aria-label="Close profile"
+                  style={{
+                    background: 'var(--tag-bg)',
+                    border: '1px solid var(--tag-border)',
+                    borderRadius: '50%',
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '1.1rem',
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Avatar & Core Identity */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  marginBottom: '1.5rem',
+                  padding: '1rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 14,
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: '50%',
+                    background: user.picture
+                      ? `url(${user.picture}) center/cover no-repeat`
+                      : 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    boxShadow: '0 4px 16px rgba(66, 133, 244, 0.4)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {!user.picture && user.initials}
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {user.name}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                    {user.email}
+                  </div>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '0.45rem',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      background: user.provider === 'google' ? 'rgba(66, 133, 244, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                      color: user.provider === 'google' ? '#60a5fa' : 'var(--primary-start)',
+                      padding: '0.15rem 0.55rem',
+                      borderRadius: 4,
+                      border: `1px solid ${user.provider === 'google' ? 'rgba(66, 133, 244, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`,
+                    }}
+                  >
+                    {user.provider === 'google' ? 'Verified Google Account' : 'Verified Email Account'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Profile Details Grid */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Saved Opportunities</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{savedJobs.length} roles</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Session Security</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#34d399' }}>HTTP-Only Secure Cookie</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Member Status</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-start)' }}>Active</span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileModalOpen(false);
+                    setActiveView('saved');
+                  }}
+                  className="btn-primary"
+                  style={{ flex: 1, padding: '0.65rem', fontSize: '0.85rem' }}
+                >
+                  View Saved Jobs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileModalOpen(false);
+                    logout();
+                  }}
+                  className="btn-secondary"
+                  style={{ padding: '0.65rem 1rem', fontSize: '0.85rem', color: '#ef4444' }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </main>

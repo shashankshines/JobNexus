@@ -60,6 +60,17 @@
   --tag-border: rgba(255, 255, 255, 0.08);
   --tag-text: var(--text-secondary);
 
+  /* Hero ATS Badge Tokens (Dark Mode) */
+  --hero-badge-bg: rgba(99, 102, 241, 0.12);
+  --hero-badge-border: rgba(99, 102, 241, 0.32);
+  --hero-badge-text: #e0e7ff;
+  --hero-badge-accent: #a5b4fc;
+  --hero-badge-bullet: rgba(165, 180, 252, 0.55);
+  --hero-badge-icon: #818cf8;
+  --hero-badge-shadow: 0 2px 14px -2px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --hero-badge-hover-bg: rgba(99, 102, 241, 0.18);
+  --hero-badge-hover-border: rgba(99, 102, 241, 0.45);
+
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);
   --scrollbar-track: rgba(8, 12, 20, 0.9);
 
@@ -135,6 +146,17 @@
   --tag-bg: rgba(15, 23, 42, 0.04);
   --tag-border: rgba(15, 23, 42, 0.08);
   --tag-text: #475569;
+
+  /* Hero ATS Badge Tokens (Light Mode - High Contrast) */
+  --hero-badge-bg: rgba(99, 102, 241, 0.08);
+  --hero-badge-border: rgba(99, 102, 241, 0.24);
+  --hero-badge-text: #3730a3;
+  --hero-badge-accent: #4338ca;
+  --hero-badge-bullet: rgba(79, 70, 229, 0.45);
+  --hero-badge-icon: #4f46e5;
+  --hero-badge-shadow: 0 2px 10px rgba(79, 70, 229, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --hero-badge-hover-bg: rgba(99, 102, 241, 0.14);
+  --hero-badge-hover-border: rgba(99, 102, 241, 0.38);
 
   --scrollbar-thumb: rgba(15, 23, 42, 0.22);
   --scrollbar-track: rgba(241, 245, 249, 0.95);
@@ -516,6 +538,101 @@ a {
   border-color: rgba(99, 102, 241, 0.3);
   color: var(--text-primary);
 }
+
+/* Hero ATS Ingestion Announcement Badge */
+.hero-ats-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.42rem 1.05rem;
+  border-radius: 9999px;
+  background: var(--hero-badge-bg);
+  border: 1px solid var(--hero-badge-border);
+  color: var(--hero-badge-text);
+  box-shadow: var(--hero-badge-shadow);
+  font-size: 0.83rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.4;
+  margin-bottom: 1.6rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.hero-ats-badge:hover {
+  background: var(--hero-badge-hover-bg);
+  border-color: var(--hero-badge-hover-border);
+  transform: translateY(-1px);
+}
+
+.hero-ats-badge-icon {
+  color: var(--hero-badge-icon);
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.hero-ats-badge:hover .hero-ats-badge-icon {
+  transform: rotate(12deg) scale(1.1);
+}
+
+.hero-ats-badge-accent {
+  color: var(--hero-badge-accent);
+  font-weight: 700;
+}
+
+.hero-ats-badge-bullet {
+  color: var(--hero-badge-bullet);
+  margin: 0 0.15rem;
+  font-weight: 400;
+}
+
+.hero-ats-badge-secondary {
+  color: var(--hero-badge-text);
+  font-weight: 600;
+}
+
+/* Auth Modal Tabs & Modern Form Elements */
+.auth-tabs-wrapper {
+  display: flex;
+  background: var(--tag-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.auth-tab-btn {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.auth-tab-btn.active {
+  color: var(--text-primary);
+  background: var(--surface-solid);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18), 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
 
 /* Responsive Ergonomics & Android Optimization */
 .desktop-only {

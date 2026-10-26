@@ -1,53 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { User, AuthIntent } from '../../../app/context/AuthContext';
-
-// Helper matching AuthContext initials generation
-function getInitials(name: string): string {
-  if (!name) return 'U';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-// Helper matching AuthModal / AuthContext Gmail normalization & validation logic
-function validateAndNormalizeGmail(input: string): { valid: boolean; normalized?: string; error?: string } {
-  const clean = (input || '').trim().toLowerCase();
-  if (!clean) {
-    return { valid: false, error: 'Please provide your Gmail address.' };
-  }
-
-  // Handle shorthand handles (e.g. 'alex.rivera' -> 'alex.rivera@gmail.com')
-  if (!clean.includes('@') && !clean.includes('.')) {
-    return { valid: true, normalized: `${clean}@gmail.com` };
-  }
-
-  if (clean.endsWith('@gmail.com') || clean.endsWith('@googlemail.com')) {
-    const username = clean.split('@')[0];
-    if (!username) {
-      return { valid: false, error: 'Please provide a valid @gmail.com address.' };
-    }
-    return { valid: true, normalized: clean };
-  }
-
-  // If user enters an email from another provider
-  if (clean.includes('@')) {
-    return { valid: false, error: 'Please provide a valid @gmail.com address.' };
-  }
-
-  // Fallback shorthand with dots (e.g. 'alex.rivera' -> 'alex.rivera@gmail.com')
-  return { valid: true, normalized: `${clean}@gmail.com` };
-}
-
-// Helper matching AuthContext name derivation from email handle
-function deriveDisplayName(email: string, customName?: string): string {
-  const name = (customName || '').trim();
-  if (name) return name;
-  const handle = email.split('@')[0] || 'Developer';
-  return handle
-    .replace(/[._-]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import {
+  validateAndNormalizeIdentifier,
+  deriveDisplayName,
+  getInitials,
+} from '../domain/auth.validation';
 
 // Helper matching JobCard apply button gating and DOM security
 function evaluateApplyAction(user: User | null, jobUrl: string): {
@@ -65,7 +23,7 @@ function evaluateApplyAction(user: User | null, jobUrl: string): {
       hasRawHref: false,
       effectiveHref: undefined,
       requiresAuthPrompt: true,
-      promptMessage: '🔒 Sign in with your Gmail account to apply directly to verified roles.',
+      promptMessage: '🔒 Sign in to your account to reveal employer details and direct ATS application.',
     };
   }
 
@@ -96,63 +54,72 @@ function evaluateShareAction(user: User | null): {
   };
 }
 
-describe('Gmail-Only Authentication & Access Control Journey', () => {
-  describe('Gmail Address Validation & Normalization (Positive & Negative)', () => {
+describe('Universal Authentication & Access Control Journey', () => {
+  describe('Identifier Validation & Normalization (Universal Email & Username Support)', () => {
     it('accepts standard @gmail.com email addresses', () => {
-      const result = validateAndNormalizeGmail('developer@gmail.com');
+      const result = validateAndNormalizeIdentifier('developer@gmail.com');
       assert.strictEqual(result.valid, true);
       assert.strictEqual(result.normalized, 'developer@gmail.com');
+      assert.strictEqual(result.isEmail, true);
       assert.strictEqual(result.error, undefined);
     });
 
-    it('accepts @googlemail.com addresses', () => {
-      const result = validateAndNormalizeGmail('alex.engineer@googlemail.com');
-      assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.normalized, 'alex.engineer@googlemail.com');
+    it('accepts non-Gmail email addresses (Yahoo, Outlook, Hotmail, Proton, Apple, Corporate)', () => {
+      const resultYahoo = validateAndNormalizeIdentifier('john@yahoo.com');
+      assert.strictEqual(resultYahoo.valid, true);
+      assert.strictEqual(resultYahoo.normalized, 'john@yahoo.com');
+      assert.strictEqual(resultYahoo.isEmail, true);
+
+      const resultOutlook = validateAndNormalizeIdentifier('john@outlook.com');
+      assert.strictEqual(resultOutlook.valid, true);
+      assert.strictEqual(resultOutlook.normalized, 'john@outlook.com');
+
+      const resultStripe = validateAndNormalizeIdentifier('staff.eng@stripe.com');
+      assert.strictEqual(resultStripe.valid, true);
+      assert.strictEqual(resultStripe.normalized, 'staff.eng@stripe.com');
     });
 
-    it('automatically normalizes username handle without domain to @gmail.com', () => {
-      const result = validateAndNormalizeGmail('sarah_connor');
+    it('accepts usernames without domain', () => {
+      const result = validateAndNormalizeIdentifier('sarah_connor');
       assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.normalized, 'sarah_connor@gmail.com');
+      assert.strictEqual(result.normalized, 'sarah_connor');
+      assert.strictEqual(result.isEmail, false);
+      assert.strictEqual(result.username, 'sarah_connor');
     });
 
-    it('normalizes dotted usernames to @gmail.com', () => {
-      const result = validateAndNormalizeGmail('alex.rivera.dev');
+    it('accepts dotted usernames', () => {
+      const result = validateAndNormalizeIdentifier('alex.rivera.dev');
       assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.normalized, 'alex.rivera.dev@gmail.com');
+      assert.strictEqual(result.normalized, 'alex.rivera.dev');
+      assert.strictEqual(result.isEmail, false);
     });
 
     it('normalizes uppercase and trims spaces', () => {
-      const result = validateAndNormalizeGmail('  Alex.Rivera@Gmail.COM  ');
+      const result = validateAndNormalizeIdentifier('  Alex.Rivera@Example.COM  ');
       assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.normalized, 'alex.rivera@gmail.com');
+      assert.strictEqual(result.normalized, 'alex.rivera@example.com');
     });
 
-    it('rejects empty input', () => {
-      const result = validateAndNormalizeGmail('');
+    it('rejects empty input with informative message', () => {
+      const result = validateAndNormalizeIdentifier('');
       assert.strictEqual(result.valid, false);
-      assert.strictEqual(result.error, 'Please provide your Gmail address.');
+      assert.strictEqual(result.error, 'Please enter your username or email address.');
     });
 
-    it('rejects non-gmail email addresses (Yahoo, Hotmail, etc.)', () => {
-      const resultYahoo = validateAndNormalizeGmail('john@yahoo.com');
-      assert.strictEqual(resultYahoo.valid, false);
-      assert.strictEqual(resultYahoo.error, 'Please provide a valid @gmail.com address.');
-
-      const resultOutlook = validateAndNormalizeGmail('john@outlook.com');
-      assert.strictEqual(resultOutlook.valid, false);
-      assert.strictEqual(resultOutlook.error, 'Please provide a valid @gmail.com address.');
-    });
-
-    it('rejects lone @gmail.com without username', () => {
-      const result = validateAndNormalizeGmail('@gmail.com');
+    it('rejects inputs containing internal spaces', () => {
+      const result = validateAndNormalizeIdentifier('john doe@domain.com');
       assert.strictEqual(result.valid, false);
-      assert.strictEqual(result.error, 'Please provide a valid @gmail.com address.');
+      assert.strictEqual(result.error, 'Username or email cannot contain spaces.');
+    });
+
+    it('rejects lone @ domain without username', () => {
+      const result = validateAndNormalizeIdentifier('@domain.com');
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.error, 'Please enter a valid username before @.');
     });
   });
 
-  describe('Initials Generation for Google Profile Capsule', () => {
+  describe('Initials Generation for Member Profile Capsule', () => {
     it('generates two-letter initials from first and last name', () => {
       assert.strictEqual(getInitials('Alex Rivera'), 'AR');
       assert.strictEqual(getInitials('Sarah Jenkins'), 'SJ');
@@ -166,41 +133,41 @@ describe('Gmail-Only Authentication & Access Control Journey', () => {
     });
   });
 
-  describe('Display Name Derivation from Gmail Handle', () => {
+  describe('Display Name Derivation from Handle', () => {
     it('formats dot and underscore separated handles into clean capitalized names', () => {
-      assert.strictEqual(deriveDisplayName('alex.rivera.dev@gmail.com'), 'Alex Rivera Dev');
-      assert.strictEqual(deriveDisplayName('sarah_connor@gmail.com'), 'Sarah Connor');
-      assert.strictEqual(deriveDisplayName('johndoe@gmail.com'), 'Johndoe');
+      assert.strictEqual(deriveDisplayName('alex.rivera.dev@custom.com'), 'Alex Rivera Dev');
+      assert.strictEqual(deriveDisplayName('sarah_connor'), 'Sarah Connor');
+      assert.strictEqual(deriveDisplayName('johndoe@domain.com'), 'Johndoe');
     });
 
     it('preserves custom user names if provided', () => {
-      assert.strictEqual(deriveDisplayName('test@gmail.com', 'Alex Rivera'), 'Alex Rivera');
+      assert.strictEqual(deriveDisplayName('test@domain.com', 'Alex Rivera'), 'Alex Rivera');
     });
   });
 
-  describe('Google User Model & Session Storage Serialization', () => {
-    it('creates a compliant Google OAuth User model', () => {
-      const googleUser: User = {
-        id: 'usr_google_1729900000',
+  describe('Credentials User Model & Session Storage Serialization', () => {
+    it('creates a compliant Credentials User model', () => {
+      const user: User = {
+        id: 'usr_cred_1729900000',
         name: 'Alex Rivera',
-        email: 'alex.rivera.dev@gmail.com',
+        email: 'alex.rivera@domain.com',
         role: 'Software Engineer',
-        provider: 'google',
+        provider: 'credentials',
         initials: 'AR',
       };
 
-      assert.strictEqual(googleUser.provider, 'google');
-      assert.strictEqual(googleUser.email.endsWith('@gmail.com'), true);
-      assert.strictEqual(googleUser.initials, 'AR');
+      assert.strictEqual(user.provider, 'credentials');
+      assert.strictEqual(user.email, 'alex.rivera@domain.com');
+      assert.strictEqual(user.initials, 'AR');
     });
 
-    it('serializes and deserializes Google user session consistently for localStorage', () => {
+    it('serializes and deserializes user session consistently for localStorage', () => {
       const original: User = {
-        id: 'usr_google_987654',
+        id: 'usr_cred_987654',
         name: 'Sarah Connor',
-        email: 'sarah.connor.tech@gmail.com',
+        email: 'sarah.connor.tech@enterprise.org',
         role: 'Staff Systems Architect',
-        provider: 'google',
+        provider: 'credentials',
         initials: 'SC',
       };
 
@@ -208,9 +175,9 @@ describe('Gmail-Only Authentication & Access Control Journey', () => {
       const parsed = JSON.parse(serialized) as User;
 
       assert.deepStrictEqual(parsed, original);
-      assert.strictEqual(parsed.provider, 'google');
+      assert.strictEqual(parsed.provider, 'credentials');
       assert.strictEqual(parsed.initials, 'SC');
-      assert.strictEqual(parsed.email, 'sarah.connor.tech@gmail.com');
+      assert.strictEqual(parsed.email, 'sarah.connor.tech@enterprise.org');
     });
   });
 
@@ -224,16 +191,16 @@ describe('Gmail-Only Authentication & Access Control Journey', () => {
       assert.strictEqual(preloginResult.hasRawHref, false);
       assert.strictEqual(preloginResult.effectiveHref, undefined);
       assert.strictEqual(preloginResult.label, 'Apply (Sign In)');
-      assert.ok(preloginResult.promptMessage?.includes('Gmail'));
+      assert.strictEqual(preloginResult.promptMessage, '🔒 Sign in to your account to reveal employer details and direct ATS application.');
     });
 
     it('postlogin: allows direct ATS application and exposes verified outbound link', () => {
       const authUser: User = {
-        id: 'usr_google_555',
+        id: 'usr_cred_555',
         name: 'Alex Rivera',
-        email: 'alex.rivera.dev@gmail.com',
+        email: 'alex.rivera.dev@custom.com',
         role: 'Senior Full Stack Engineer',
-        provider: 'google',
+        provider: 'credentials',
         initials: 'AR',
       };
 
@@ -245,7 +212,7 @@ describe('Gmail-Only Authentication & Access Control Journey', () => {
       assert.strictEqual(postloginResult.label, 'Apply');
     });
 
-    it('prelogin: intercepts share action and gates link copying behind Gmail login', () => {
+    it('prelogin: intercepts share action and gates link copying behind login', () => {
       const preloginShare = evaluateShareAction(null);
       assert.strictEqual(preloginShare.allowedDirectCopy, false);
       assert.strictEqual(preloginShare.requiresAuthPrompt, true);
@@ -253,17 +220,52 @@ describe('Gmail-Only Authentication & Access Control Journey', () => {
 
     it('postlogin: allows direct ATS link copying to clipboard', () => {
       const authUser: User = {
-        id: 'usr_google_777',
+        id: 'usr_cred_777',
         name: 'Sarah Connor',
-        email: 'sarah.connor@gmail.com',
+        email: 'sarah.connor@domain.com',
         role: 'Systems Engineer',
-        provider: 'google',
+        provider: 'credentials',
         initials: 'SC',
       };
 
       const postloginShare = evaluateShareAction(authUser);
       assert.strictEqual(postloginShare.allowedDirectCopy, true);
       assert.strictEqual(postloginShare.requiresAuthPrompt, false);
+    });
+
+    it('prelogin: strictly conceals company details and displays confidential badge', () => {
+      const evaluateCompanyVisibility = (user: User | null, rawCompany: string) => {
+        if (!user) {
+          return {
+            isConfidential: true,
+            displayedName: 'Confidential Co.',
+            hasDirectCompanyInDom: false,
+          };
+        }
+        return {
+          isConfidential: false,
+          displayedName: rawCompany,
+          hasDirectCompanyInDom: true,
+        };
+      };
+
+      const prelogin = evaluateCompanyVisibility(null, 'Acme Corp');
+      assert.strictEqual(prelogin.isConfidential, true);
+      assert.strictEqual(prelogin.displayedName, 'Confidential Co.');
+      assert.strictEqual(prelogin.hasDirectCompanyInDom, false);
+
+      const authUser: User = {
+        id: 'usr_cred_123',
+        name: 'Alex Rivera',
+        email: 'alex@company.com',
+        role: 'Developer',
+        provider: 'credentials',
+        initials: 'AR',
+      };
+      const postlogin = evaluateCompanyVisibility(authUser, 'Acme Corp');
+      assert.strictEqual(postlogin.isConfidential, false);
+      assert.strictEqual(postlogin.displayedName, 'Acme Corp');
+      assert.strictEqual(postlogin.hasDirectCompanyInDom, true);
     });
   });
 
@@ -288,7 +290,7 @@ describe('Gmail-Only Authentication & Access Control Journey', () => {
       assert.strictEqual(pendingIntent, null);
     });
 
-    it('preserves discovery track exploration intent across Google authentication', () => {
+    it('preserves discovery track exploration intent across credentials authentication', () => {
       let pendingIntent: AuthIntent | null = {
         type: 'domain',
         domainTitle: 'AI & Machine Learning',
