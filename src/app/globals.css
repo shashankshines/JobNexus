@@ -938,6 +938,47 @@ a {
   animation: jn-beacon-pulse-info 1.8s infinite ease-out;
 }
 
+/* Dynamic Roles Matched & Auto-load Pills (Light & Dark Theme Adaptive) */
+.roles-matched-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.26rem 0.8rem;
+  border-radius: 9999px;
+  background: var(--badge-indigo-bg);
+  border: 1px solid var(--badge-indigo-border);
+  color: var(--badge-indigo-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+  transition: all 0.2s ease;
+}
+
+.roles-matched-pill:hover {
+  background: var(--hero-badge-hover-bg, rgba(99, 102, 241, 0.18));
+  border-color: var(--hero-badge-hover-border, rgba(99, 102, 241, 0.45));
+}
+
+.autoload-scroll-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.22rem 0.6rem;
+  border-radius: 9999px;
+  background: var(--badge-purple-bg);
+  border: 1px solid var(--badge-purple-border);
+  color: var(--badge-purple-text);
+  white-space: nowrap;
+  user-select: none;
+  box-shadow: 0 1px 4px rgba(168, 85, 247, 0.1);
+  transition: all 0.2s ease;
+}
+
 /* ==========================================================================
    State-Aware Floating Island Header (Linear / Raycast Aesthetic)
    ========================================================================== */

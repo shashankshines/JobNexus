@@ -1048,13 +1048,13 @@ export default function Home() {
             marginBottom: '2rem',
           }}
         >
-          <span style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
             <ShieldCheck size={14} color="#10b981" /> 100% Direct ATS Links
           </span>
-          <span style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
             <Zap size={14} color="#f59e0b" /> Zero Paywalls
           </span>
-          <span style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
             <Globe size={14} color="#38bdf8" /> Global &amp; India Roles
           </span>
         </motion.div>
@@ -2337,9 +2337,9 @@ export default function Home() {
                     gap: '0.35rem',
                     padding: '0.22rem 0.6rem',
                     borderRadius: 9999,
-                    background: 'rgba(244, 63, 94, 0.15)',
-                    border: '1px solid rgba(244, 63, 94, 0.35)',
-                    color: '#fda4af',
+                    background: 'var(--badge-rose-bg)',
+                    border: '1px solid var(--badge-rose-border)',
+                    color: 'var(--badge-rose-text)',
                     fontSize: '0.76rem',
                     fontWeight: 600,
                   }}
@@ -2382,20 +2382,8 @@ export default function Home() {
                   key={`console-matched-${displayedJobs.length}`}
                   initial={{ opacity: 0, scale: 0.94 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.45rem',
-                    padding: '0.24rem 0.75rem',
-                    borderRadius: 9999,
-                    background: 'rgba(99, 102, 241, 0.12)',
-                    border: '1px solid rgba(99, 102, 241, 0.3)',
-                    color: '#c7d2fe',
-                    fontSize: '0.76rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.01em',
-                    marginLeft: 'auto',
-                  }}
+                  className="roles-matched-pill"
+                  style={{ marginLeft: 'auto' }}
                 >
                   <span className="pulse-dot" />
                   <span>
@@ -2470,38 +2458,16 @@ export default function Home() {
                 key={`toolbar-matched-${displayedJobs.length}`}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.45rem',
-                  padding: '0.28rem 0.8rem',
-                  borderRadius: 9999,
-                  background: 'rgba(99, 102, 241, 0.12)',
-                  border: '1px solid rgba(99, 102, 241, 0.3)',
-                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.15)',
-                }}
+                className="roles-matched-pill"
               >
                 <span className="pulse-dot" />
-                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c7d2fe', letterSpacing: '0.01em' }}>
+                <span>
                   {displayedJobs.length.toLocaleString()} Roles Matched • {formattedCount} Total Verified
                 </span>
               </motion.div>
             )}
             {displayedJobs.length > JOBS_BATCH_SIZE && (
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  padding: '0.2rem 0.55rem',
-                  borderRadius: 9999,
-                  background: 'rgba(99, 102, 241, 0.12)',
-                  border: '1px solid rgba(99, 102, 241, 0.25)',
-                  color: '#a5b4fc',
-                }}
-              >
+              <span className="autoload-scroll-pill">
                 <Zap size={11} />
                 <span>Auto-loading on scroll</span>
               </span>
@@ -2700,7 +2666,7 @@ export default function Home() {
                 >
                   {isLoadingMore ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#a5b4fc', fontSize: '0.92rem', fontWeight: 600 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-primary)', fontSize: '0.92rem', fontWeight: 600 }}>
                         <Loader2 size={18} className="animate-spin" color="var(--accent-indigo)" />
                         <span>Loading more saved roles...</span>
                       </div>
@@ -2840,7 +2806,7 @@ export default function Home() {
               >
                 {isLoadingMore ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#a5b4fc', fontSize: '0.92rem', fontWeight: 600 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-primary)', fontSize: '0.92rem', fontWeight: 600 }}>
                       <Loader2 size={18} className="animate-spin" color="var(--accent-indigo)" />
                       <span>Loading more verified openings...</span>
                     </div>
