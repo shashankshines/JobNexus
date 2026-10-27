@@ -129,4 +129,28 @@ describe('Job Deduplication Unit Tests', () => {
     const deduped = deduplicateJobs([jobLondon, jobBlr]);
     assert.strictEqual(deduped.length, 2);
   });
+
+  it('guarantees unique IDs across all returned jobs even if distinct input jobs share the same id', () => {
+    // Two distinct jobs (different companies, titles, URLs) that somehow both have id = 'wwr-1'
+    const job1 = createSampleJob({
+      id: 'wwr-1',
+      company: 'Company Alpha',
+      title: 'Senior DevOps Architect',
+      applicationUrl: 'https://weworkremotely.com/remote-jobs/alpha-devops-1',
+    });
+
+    const job2 = createSampleJob({
+      id: 'wwr-1',
+      company: 'Company Beta',
+      title: 'Product Marketing Manager',
+      applicationUrl: 'https://weworkremotely.com/remote-jobs/beta-marketing-1',
+    });
+
+    const deduped = deduplicateJobs([job1, job2]);
+    assert.strictEqual(deduped.length, 2);
+    // Keys must be strictly unique
+    assert.notStrictEqual(deduped[0].id, deduped[1].id);
+    assert.strictEqual(deduped[0].id, 'wwr-1');
+    assert.ok(deduped[1].id.startsWith('wwr-1-'));
+  });
 });

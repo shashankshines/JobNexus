@@ -41,6 +41,17 @@ const INDIAN_HUBS = [
   'jaipur',
   'indore',
   'lucknow',
+  'nagpur',
+  'bhubaneswar',
+  'patna',
+  'bhopal',
+  'visakhapatnam',
+  'vizag',
+  'coimbatore',
+  'vadodara',
+  'baroda',
+  'mysore',
+  'mysuru',
 ];
 
 export function isValidHttpUrl(url: unknown): boolean {
@@ -176,10 +187,12 @@ export function normalizeEmploymentType(rawType?: unknown): string {
   }
 
   const lower = str.toLowerCase();
+  if (lower.includes('apprentice')) return 'Apprenticeship';
+  if (lower.includes('intern')) return 'Internship';
+  if (lower.includes('trainee') || lower.includes('fresher')) return 'Trainee / Fresher';
   if (lower.includes('part') || lower.includes('part-time')) return 'Part Time';
   if (lower.includes('contract') || lower.includes('freelance') || lower.includes('consult'))
     return 'Contract';
-  if (lower.includes('intern')) return 'Internship';
   return 'Full Time';
 }
 
@@ -192,8 +205,34 @@ export function normalizeSeniority(title: string, tags: string[] = []): string {
   if (/\b(senior|sr\.?|advanced|expert)\b/i.test(text)) {
     return 'Senior';
   }
-  if (/\b(entry|junior|jr\.?|intern|internship|graduate|associate)\b/i.test(text)) {
+  if (/\b(entry|junior|jr\.?|intern|internship|graduate|associate|fresher|apprentice|trainee)\b/i.test(text)) {
     return 'Entry';
   }
   return 'Mid';
+}
+
+export function normalizeSalary(rawSalary?: unknown): string | undefined {
+  if (!rawSalary) return undefined;
+  if (typeof rawSalary !== 'string' && typeof rawSalary !== 'number') return undefined;
+  const str = String(rawSalary).trim();
+  if (
+    !str ||
+    str.toLowerCase() === 'unspecified' ||
+    str.toLowerCase() === 'competitive' ||
+    str.toLowerCase() === 'not disclosed'
+  ) {
+    return undefined;
+  }
+
+  // Preserve Indian LPA / Lakhs / Per Annum representations: e.g. "12 - 18 LPA", "6 Lakhs", "₹12,00,000"
+  if (/(\b(lpa|lakh|lakhs|inr|₹)\b)/i.test(str)) {
+    return str.replace(/\s+/g, ' ');
+  }
+
+  // Preserve standard currency strings: e.g. "₹50,000 / month", "$120,000 - $150,000"
+  if (/[₹$€£]\s*[\d,]+/.test(str)) {
+    return str.replace(/\s+/g, ' ');
+  }
+
+  return str.replace(/\s+/g, ' ');
 }

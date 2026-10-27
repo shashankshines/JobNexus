@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
@@ -82,10 +83,12 @@ export class GreenhouseAdapter implements JobProvider {
       const rawLocation = raw.location?.name || 'Worldwide';
       const locInfo = normalizeLocation(rawLocation);
 
+      const idHash = crypto.createHash('sha256').update(`${boardSlug}:${raw.id}`).digest('hex').slice(0, 16);
+      const safeId = `gh-${idHash}`;
       const job: NormalizedJob = {
-        id: `gh-${boardSlug}-${raw.id}`,
+        id: safeId,
         sourceId: this.id,
-        sourceName: `${this.name} (${companyName})`,
+        sourceName: this.name,
         title: raw.title.trim(),
         company: companyName,
         location: locInfo.location,
@@ -96,7 +99,7 @@ export class GreenhouseAdapter implements JobProvider {
         workplaceType: locInfo.workplaceType,
         isIndiaEligible: locInfo.isIndiaEligible,
         publishedAt: normalizeDate(raw.updated_at),
-        tags: [companyName, locInfo.isRemote ? 'Remote' : 'On-site'],
+        tags: [locInfo.isRemote ? 'Remote' : 'On-site'],
         description: '',
       };
 

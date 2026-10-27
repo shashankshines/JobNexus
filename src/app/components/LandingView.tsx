@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Sparkles,
@@ -20,6 +20,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useAuth, AuthIntent, AuthMode } from '../context/AuthContext';
+import { useJobStats } from '@/modules/jobs/hooks/useJobStats';
 import JobCard from './JobCard';
 import ThemeToggle from './ThemeToggle';
 
@@ -184,13 +185,6 @@ const QUICK_ROLE_PILLS = [
   { label: '🔒 Cybersecurity', query: 'Cybersecurity Analyst' },
 ];
 
-const PLATFORM_METRICS = [
-  { value: '1,340+', label: 'Verified Public Roles', icon: ShieldCheck, color: '#10b981' },
-  { value: '8', label: 'Direct ATS & API Feeds', icon: Layers, color: '#6366f1' },
-  { value: '48h', label: 'Avg Interview Response', icon: Clock, color: '#38bdf8' },
-  { value: '0$', label: '100% Free For Seekers', icon: Zap, color: '#f59e0b' },
-];
-
 const PILLARS = [
   {
     title: 'Direct ATS Integration',
@@ -238,8 +232,19 @@ const TESTIMONIALS = [
 
 export default function LandingView() {
   const { openAuthModal } = useAuth();
+  const { formattedCount, sourcesCount } = useJobStats();
   const [searchKeywords, setSearchKeywords] = useState('');
   const [searchLocation, setSearchLocation] = useState('');
+
+  const platformMetrics = useMemo(
+    () => [
+      { value: formattedCount, label: 'Verified Public Roles', icon: ShieldCheck, color: '#10b981' },
+      { value: String(sourcesCount), label: 'Direct ATS & API Feeds', icon: Layers, color: '#6366f1' },
+      { value: '48h', label: 'Avg Interview Response', icon: Clock, color: '#38bdf8' },
+      { value: '0$', label: '100% Free For Seekers', icon: Zap, color: '#f59e0b' },
+    ],
+    [formattedCount, sourcesCount]
+  );
 
   const handleGatedAction = (promptMsg?: string, intent?: AuthIntent, mode?: AuthMode) => {
     openAuthModal(
@@ -457,7 +462,7 @@ export default function LandingView() {
               boxShadow: 'var(--shadow-card)',
             }}
           >
-            {PLATFORM_METRICS.map((metric, idx) => {
+            {platformMetrics.map((metric, idx) => {
               const Icon = metric.icon;
               return (
                 <div key={idx} style={{ textAlign: 'center' }}>
@@ -504,7 +509,7 @@ export default function LandingView() {
               PRE-LOGIN EXPLORER
             </span>
             <h2 style={{ fontSize: '2rem', fontWeight: 800, marginTop: '0.4rem', color: 'var(--text-primary)' }}>
-              Preview 1,340+ Verified Direct ATS Openings
+              Preview {formattedCount} Verified Direct ATS Openings
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: 620, margin: '0.5rem auto 0' }}>
               Explore real-world engineering roles from top tech employers. Sign in to your account to unlock live keyword querying and 1-click ATS applications.
@@ -712,7 +717,7 @@ export default function LandingView() {
                   border: '1px solid rgba(16, 185, 129, 0.28)',
                 }}
               >
-                6 Roles Previewed • 1,340+ Behind Member Login
+                {PREVIEW_VERIFIED_JOBS.length} Roles Previewed • {formattedCount} Behind Member Login
               </span>
             </div>
 
@@ -725,7 +730,7 @@ export default function LandingView() {
               }}
             >
               {PREVIEW_VERIFIED_JOBS.map((job, index) => (
-                <JobCard key={job.id} job={job} index={index} />
+                <JobCard key={job.id || `preview-${index}`} job={job} index={index} />
               ))}
             </div>
 
@@ -749,7 +754,7 @@ export default function LandingView() {
             >
               <div>
                 <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                  Ready to Apply? Unlock All 1,340+ Verified Openings
+                  Ready to Apply? Unlock All {formattedCount} Verified Openings
                 </h4>
                 <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', maxWidth: 540 }}>
                   Sign in to your account to search any skill, filter by timezone or Indian tech hubs, and apply directly with 1 click.
@@ -1076,7 +1081,7 @@ export default function LandingView() {
               Your Dream Role Is One Verified Click Away
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem', maxWidth: 560, margin: '0 auto 2rem' }}>
-              Sign in to your account to access 1,340+ verified tech roles and direct ATS application links.
+              Sign in to your account to access {formattedCount} verified tech roles and direct ATS application links.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <button

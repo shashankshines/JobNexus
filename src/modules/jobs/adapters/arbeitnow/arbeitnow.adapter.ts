@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
@@ -56,8 +57,11 @@ export class ArbeitnowAdapter implements JobProvider {
       const empType = normalizeEmploymentType((item.job_types || []).join(', '));
       const seniority = normalizeSeniority(title, tags);
 
+      const idSource = item.slug || item.url;
+      const idHash = crypto.createHash('sha256').update(idSource).digest('hex').slice(0, 16);
+
       jobs.push({
-        id: `arb-${item.slug || Math.random().toString(36).substring(7)}`,
+        id: `arb-${idHash}`,
         sourceId: item.slug || '',
         sourceName: this.name,
         title,

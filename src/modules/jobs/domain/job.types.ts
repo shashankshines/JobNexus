@@ -20,6 +20,7 @@ export interface NormalizedJob {
   workplaceType?: 'remote' | 'hybrid' | 'onsite';
   score?: number;
   alternateSources?: Array<{ sourceName: string; sourceUrl?: string; applicationUrl: string }>;
+  salary?: string;
 }
 
 export interface JobSearchParams {
@@ -47,6 +48,7 @@ export interface LegacyJob {
   workplaceType?: string;
   isIndiaEligible?: boolean;
   isFresh?: boolean;
+  salary?: string;
 }
 
 export interface ProviderDiagnostic {
@@ -63,6 +65,18 @@ export interface JobSearchResponse {
   count: number;
   sources: string[];
   diagnostics?: ProviderDiagnostic[];
+}
+
+export interface JobStatsResponse {
+  totalJobs: number;
+  formattedCount: string;
+  exactCount: number;
+  remoteJobs: number;
+  indiaEligibleJobs: number;
+  sources: string[];
+  sourcesCount: number;
+  providerBreakdown: Record<string, number>;
+  lastUpdated: string;
 }
 
 export function toLegacyJob(job: NormalizedJob): LegacyJob {
@@ -85,5 +99,6 @@ export function toLegacyJob(job: NormalizedJob): LegacyJob {
     workplaceType: job.workplaceType || (job.isRemote ? 'remote' : 'onsite'),
     isIndiaEligible: job.isIndiaEligible,
     isFresh,
+    salary: job.salary,
   };
 }

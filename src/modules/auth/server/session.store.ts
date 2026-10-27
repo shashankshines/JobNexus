@@ -126,6 +126,16 @@ export function validateSession(sessionId: string | null | undefined): {
 }
 
 /**
+ * Artificially expires a session for deterministic security testing.
+ */
+export function expireSessionForTesting(sessionId: string): void {
+  const session = sessions.get(sessionId);
+  if (session) {
+    session.expiresAt = Date.now() - 1000;
+  }
+}
+
+/**
  * Destroys an existing session and produces an expired cookie header.
  */
 export function destroySession(sessionId: string | null | undefined): { cookieHeader: string } {
@@ -147,12 +157,17 @@ export function findOrCreateGoogleUser(profile: {
   email: string;
   name: string;
   picture?: string;
+  email_verified?: boolean;
 }): UserRecord {
   const cleanEmail = profile.email.trim().toLowerCase();
   const existingUserId = usersByEmail.get(cleanEmail);
 
   if (existingUserId && users.has(existingUserId)) {
     const existing = users.get(existingUserId)!;
+    // Security check: Never link to existing account if Google email is unverified
+    if (profile.email_verified === false) {
+      throw new Error('Google account email is not verified. Account linking rejected.');
+    }
     // Update profile fields
     existing.name = profile.name || existing.name;
     existing.avatar = profile.picture || existing.avatar;
@@ -217,6 +232,7 @@ export function registerCredentialsUser(data: {
 
 /**
  * Validates credentials for sign-in.
+ * Rejects non-existent accounts or incorrect passwords without leaking account existence.
  */
 export function verifyCredentialsUser(
   email: string,
@@ -226,26 +242,69 @@ export function verifyCredentialsUser(
   const userId = usersByEmail.get(cleanEmail);
 
   if (!userId || !users.has(userId)) {
-    // If not found in mock store, auto-provision user so seamless demo credentials works
-    const autoUser = registerCredentialsUser({
-      email: cleanEmail,
-      password: password || 'Password123!',
-      name: cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail,
-      role: 'Software Engineer',
-    });
-    return autoUser;
+    return { error: 'Invalid email/username or password. Please try again.' };
+  }
+
+  if (!password) {
+    return { error: 'Password is required to sign in.' };
   }
 
   const user = users.get(userId)!;
-  if (password && passwordHashes.has(userId)) {
+  if (passwordHashes.has(userId)) {
     const salt = userId;
     const computedHash = hashPassword(password, salt);
     if (computedHash !== passwordHashes.get(userId)) {
-      return { error: 'Invalid password. Please check your credentials.' };
+      return { error: 'Invalid email/username or password. Please try again.' };
     }
   }
 
   return { user };
+}
+
+/**
+ * Updates a user's password securely (for password reset flows).
+ */
+export function updateUserPassword(
+  identifier: string,
+  newPassword: string
+): { success: boolean; error?: string } {
+  const clean = identifier.trim().toLowerCase();
+  const userId = usersByEmail.get(clean);
+  if (!userId || !users.has(userId)) {
+    return { success: false, error: 'Account not found.' };
+  }
+  const salt = userId;
+  passwordHashes.set(userId, hashPassword(newPassword, salt));
+  return { success: true };
+}
+
+// In-memory rate limiting store: key -> { count: number, resetAt: number }
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+export function checkAuthRateLimit(
+  key: string,
+  maxAttempts: number = 5,
+  windowMs: number = 10 * 60 * 1000 // 10 minutes
+): { allowed: boolean; remaining: number; retryAfterSec?: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, remaining: maxAttempts - 1 };
+  }
+
+  if (entry.count >= maxAttempts) {
+    const retryAfterSec = Math.ceil((entry.resetAt - now) / 1000);
+    return { allowed: false, remaining: 0, retryAfterSec };
+  }
+
+  entry.count += 1;
+  return { allowed: true, remaining: maxAttempts - entry.count };
+}
+
+export function resetRateLimits(): void {
+  rateLimitMap.clear();
 }
 
 /**
@@ -317,4 +376,5 @@ export function resetAuthStore(): void {
   usersByEmail.clear();
   sessions.clear();
   passwordHashes.clear();
+  resetRateLimits();
 }

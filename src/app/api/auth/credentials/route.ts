@@ -2,20 +2,86 @@ import { NextResponse } from 'next/server';
 import {
   registerCredentialsUser,
   verifyCredentialsUser,
+  updateUserPassword,
   createSession,
+  checkAuthRateLimit,
 } from '@/modules/auth/server/session.store';
 import {
   validateCredentialsSignIn,
   validateCredentialsSignUp,
+  validatePasswordResetRequest,
+  validatePasswordResetExecution,
 } from '@/modules/jobs/domain/auth.validation';
+
+function getClientIp(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return request.headers.get('cf-connecting-ip') || '127.0.0.1';
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { mode, email, usernameOrEmail, password, name, role, confirmPassword } = body;
+    const { mode, email, usernameOrEmail, password, name, role, confirmPassword, code, newPassword } = body;
 
     const identifier = (usernameOrEmail || email || '').trim();
+    const clientIp = getClientIp(request);
 
+    // Rate limiting guard
+    const rateLimitKey = `auth_cred_${clientIp}_${identifier.toLowerCase()}`;
+    const rateCheck = checkAuthRateLimit(rateLimitKey, 6, 10 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Too many attempts. Please try again in ${rateCheck.retryAfterSec} seconds.` },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rateCheck.retryAfterSec || 60) },
+        }
+      );
+    }
+
+    // 1. Password Reset Request Mode
+    if (mode === 'request-reset') {
+      const val = validatePasswordResetRequest(identifier);
+      if (!val.valid || !val.normalizedIdentifier) {
+        return NextResponse.json({ error: val.error || 'Please enter a valid email or username.' }, { status: 400 });
+      }
+
+      // Avoid leaking whether account exists: return generic confirmation
+      return NextResponse.json({
+        success: true,
+        message: `If an account exists for ${val.normalizedIdentifier}, a recovery code has been dispatched.`,
+        normalizedEmail: val.normalizedIdentifier,
+      });
+    }
+
+    // 2. Password Reset Execution Mode
+    if (mode === 'reset-password') {
+      const val = validatePasswordResetExecution({
+        email: identifier,
+        code: code || '',
+        newPassword: newPassword || password || '',
+        confirmPassword: confirmPassword || '',
+      });
+
+      if (!val.valid) {
+        return NextResponse.json({ error: val.error || 'Invalid reset details.' }, { status: 400 });
+      }
+
+      const updateRes = updateUserPassword(identifier, newPassword || password);
+      if (!updateRes.success) {
+        return NextResponse.json({ error: 'Unable to reset password. Please verify your details.' }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Password successfully reset. You can now sign in with your new password.',
+      });
+    }
+
+    // 3. Sign Up Mode
     if (mode === 'signup') {
       const val = validateCredentialsSignUp({
         name,
@@ -37,7 +103,7 @@ export async function POST(request: Request) {
       });
 
       if (regResult.error || !regResult.user) {
-        return NextResponse.json({ error: regResult.error || 'Unable to create account.' }, { status: 400 });
+        return NextResponse.json({ error: regResult.error || 'Unable to create account.' }, { status: 409 });
       }
 
       const { cookieHeader } = createSession(regResult.user.id);
@@ -58,7 +124,7 @@ export async function POST(request: Request) {
       return response;
     }
 
-    // Default: sign in
+    // 4. Default: Sign In Mode
     const val = validateCredentialsSignIn({
       usernameOrEmail: identifier,
       password,
@@ -90,7 +156,9 @@ export async function POST(request: Request) {
     response.headers.set('Set-Cookie', cookieHeader);
     return response;
   } catch (error) {
-    console.error('[Credentials Auth Error]:', error);
-    return NextResponse.json({ error: 'Internal server error.' }, { status: 500 });
+    // Never leak stack traces, secrets, or internal details
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[Credentials Auth Error]:', message);
+    return NextResponse.json({ error: 'An unexpected authentication error occurred. Please try again.' }, { status: 500 });
   }
 }

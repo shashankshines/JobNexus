@@ -69,6 +69,35 @@ describe('Provider Adapters Unit Tests', () => {
       const jobs = adapter.parseRssXml(badXml);
       assert.strictEqual(jobs.length, 0);
     });
+
+    it('generates strictly unique, collision-free deterministic IDs even when URLs share numeric slug suffixes like -1', () => {
+      const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+      <channel>
+        <item>
+          <title>Company A: Senior Software Engineer</title>
+          <link>https://weworkremotely.com/remote-jobs/comp-a-senior-software-engineer-1</link>
+        </item>
+        <item>
+          <title>Company B: Product Designer</title>
+          <link>https://weworkremotely.com/remote-jobs/comp-b-product-designer-1</link>
+        </item>
+      </channel>
+    </rss>`;
+
+      const jobs = adapter.parseRssXml(sampleXml);
+      assert.strictEqual(jobs.length, 2);
+      assert.notStrictEqual(jobs[0].id, 'wwr-1');
+      assert.notStrictEqual(jobs[1].id, 'wwr-1');
+      assert.notStrictEqual(jobs[0].id, jobs[1].id);
+      assert.ok(jobs[0].id.startsWith('wwr-'));
+      assert.ok(jobs[1].id.startsWith('wwr-'));
+
+      // Verify determinism across parsing passes
+      const jobsSecondPass = adapter.parseRssXml(sampleXml);
+      assert.strictEqual(jobs[0].id, jobsSecondPass[0].id);
+      assert.strictEqual(jobs[1].id, jobsSecondPass[1].id);
+    });
   });
 
   describe('Greenhouse & Ashby ATS Adapters', () => {
@@ -80,6 +109,18 @@ describe('Provider Adapters Unit Tests', () => {
     it('initializes Ashby adapter with default verified employer boards', () => {
       const ashby = new AshbyAdapter();
       assert.strictEqual(ashby.name, 'Ashby ATS');
+    });
+  });
+
+  describe('National Career Service (NCS) Adapter', () => {
+    it('initializes NCS adapter and fetches valid normalized jobs with Indian eligibility', async () => {
+      const { NcsAdapter } = await import('../adapters/ncs/ncs.adapter');
+      const ncs = new NcsAdapter();
+      assert.strictEqual(ncs.name, 'National Career Service');
+      assert.strictEqual(ncs.id, 'ncs');
+      const jobs = await ncs.fetchJobs();
+      assert.ok(jobs.length > 0);
+      assert.strictEqual(jobs.every((j) => j.isIndiaEligible === true), true);
     });
   });
 });

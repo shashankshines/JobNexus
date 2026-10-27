@@ -23,17 +23,6 @@ import {
   validatePasswordResetExecution,
 } from '@/modules/jobs/domain/auth.validation';
 
-const ENGINEERING_ROLES = [
-  'Full Stack Engineer',
-  'Frontend Engineer',
-  'Backend Engineer',
-  'DevOps / Cloud Engineer',
-  'AI / ML Engineer',
-  'Data Engineer',
-  'Mobile Engineer (iOS/Android)',
-  'Systems / Platform Engineer',
-];
-
 export default function AuthModal() {
   const {
     isAuthModalOpen,
@@ -41,6 +30,7 @@ export default function AuthModal() {
     setAuthMode,
     authPromptMessage,
     closeAuthModal,
+    pendingIntent,
     loginWithGoogle,
     loginWithCredentials,
     signUpWithCredentials,
@@ -49,6 +39,9 @@ export default function AuthModal() {
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState<AuthMode>(authMode || 'signin');
+  const signinRef = useRef<HTMLDivElement>(null);
+  const signupRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState<number | 'auto'>('auto');
 
   // Sign In state
   const [signInEmail, setSignInEmail] = useState('');
@@ -60,7 +53,6 @@ export default function AuthModal() {
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState('');
-  const [signUpRole, setSignUpRole] = useState(ENGINEERING_ROLES[0]);
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
   const [showSignUpConfirmPassword, setShowSignUpConfirmPassword] = useState(false);
 
@@ -110,6 +102,44 @@ export default function AuthModal() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isAuthModalOpen, closeAuthModal, showTermsModal]);
 
+  // Measure active tab height for smooth height transitions during sliding
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isAuthModalOpen) return;
+
+    const measureHeight = () => {
+      const target = activeTab === 'signin' ? signinRef.current : signupRef.current;
+      if (target && target.offsetHeight > 0) {
+        setContainerHeight(target.offsetHeight);
+      }
+    };
+
+    measureHeight();
+    const rafId = requestAnimationFrame(measureHeight);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => {
+        measureHeight();
+      });
+
+      if (signinRef.current) ro.observe(signinRef.current);
+      if (signupRef.current) ro.observe(signupRef.current);
+
+      return () => {
+        cancelAnimationFrame(rafId);
+        ro.disconnect();
+      };
+    }
+
+    return () => cancelAnimationFrame(rafId);
+  }, [isAuthModalOpen, activeTab, error, successMessage, signUpPassword]);
+
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+  const isGoogleOAuthConfigured = Boolean(
+    googleClientId &&
+    !googleClientId.includes('your-google-client-id') &&
+    !googleClientId.includes('placeholder')
+  );
+
   if (!isAuthModalOpen) return null;
 
   const handleTabSwitch = (newTab: AuthMode) => {
@@ -124,7 +154,16 @@ export default function AuthModal() {
     setError(null);
     setIsGoogleLoading(true);
     try {
-      await loginWithGoogle();
+      if (isGoogleOAuthConfigured) {
+        if (pendingIntent && typeof window !== 'undefined') {
+          sessionStorage.setItem('jn_pending_intent', JSON.stringify(pendingIntent));
+        }
+        // Direct OAuth 2.0 authorization code flow — bypasses Chrome FedCM AbortError completely
+        window.location.href = '/api/auth/google';
+        return;
+      }
+
+      await loginWithGoogle({ isDevDemo: true });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Google authentication failed. Please try again.');
     } finally {
@@ -169,7 +208,6 @@ export default function AuthModal() {
       usernameOrEmail: signUpEmail,
       password: signUpPassword,
       confirmPassword: signUpConfirmPassword,
-      role: signUpRole,
     });
 
     if (!validation.valid || !validation.normalizedIdentifier) {
@@ -531,6 +569,24 @@ export default function AuthModal() {
                   )}
                 </button>
 
+                {!isGoogleOAuthConfigured && (
+                  <div
+                    style={{
+                      marginTop: '0.45rem',
+                      fontSize: '0.74rem',
+                      color: 'var(--text-muted, #94a3b8)',
+                      textAlign: 'center',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem',
+                    }}
+                  >
+                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#38bdf8' }} />
+                    <span>Dev Sandbox ready (1-click test). Add Google credentials to .env.local for live OAuth.</span>
+                  </div>
+                )}
+
                 {/* Divider between Google and Email authentication */}
                 <div
                   style={{
@@ -547,12 +603,13 @@ export default function AuthModal() {
                   <div style={{ flex: 1, height: 1, background: 'var(--border, rgba(255, 255, 255, 0.12))' }} />
                 </div>
 
-                {/* Accessible Tab Switcher (Sign In vs Sign Up) */}
+                {/* Accessible Tab Switcher (Sign In vs Sign Up) with Smooth Sliding Indicator */}
                 <div
                   role="tablist"
                   aria-label="Authentication mode"
                   style={{
                     display: 'flex',
+                    position: 'relative',
                     background: 'var(--surface-solid, rgba(255, 255, 255, 0.05))',
                     padding: 4,
                     borderRadius: 12,
@@ -569,17 +626,39 @@ export default function AuthModal() {
                     onClick={() => handleTabSwitch('signin')}
                     style={{
                       flex: 1,
-                      padding: '0.55rem',
+                      position: 'relative',
+                      padding: '0.6rem 0.5rem',
                       borderRadius: 8,
                       border: 'none',
                       fontSize: '0.86rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      background: activeTab === 'signin' ? 'var(--primary, #6366f1)' : 'transparent',
+                      background: 'transparent',
                       color: activeTab === 'signin' ? '#ffffff' : 'var(--text-secondary, #94a3b8)',
-                      transition: 'all 0.15s ease',
+                      transition: 'color 0.2s ease',
+                      zIndex: 1,
+                      outline: 'none',
+                      WebkitTapHighlightColor: 'transparent',
                     }}
                   >
+                    {activeTab === 'signin' && (
+                      <motion.div
+                        layoutId="activeAuthTabPill"
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          borderRadius: 8,
+                          background: 'linear-gradient(135deg, var(--primary, #6366f1), #4f46e5)',
+                          boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+                          zIndex: -1,
+                        }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 480,
+                          damping: 36,
+                        }}
+                      />
+                    )}
                     Sign In
                   </button>
                   <button
@@ -591,359 +670,409 @@ export default function AuthModal() {
                     onClick={() => handleTabSwitch('signup')}
                     style={{
                       flex: 1,
-                      padding: '0.55rem',
+                      position: 'relative',
+                      padding: '0.6rem 0.5rem',
                       borderRadius: 8,
                       border: 'none',
                       fontSize: '0.86rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      background: activeTab === 'signup' ? 'var(--primary, #6366f1)' : 'transparent',
+                      background: 'transparent',
                       color: activeTab === 'signup' ? '#ffffff' : 'var(--text-secondary, #94a3b8)',
-                      transition: 'all 0.15s ease',
+                      transition: 'color 0.2s ease',
+                      zIndex: 1,
+                      outline: 'none',
+                      WebkitTapHighlightColor: 'transparent',
                     }}
                   >
+                    {activeTab === 'signup' && (
+                      <motion.div
+                        layoutId="activeAuthTabPill"
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          borderRadius: 8,
+                          background: 'linear-gradient(135deg, var(--primary, #6366f1), #4f46e5)',
+                          boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+                          zIndex: -1,
+                        }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 480,
+                          damping: 36,
+                        }}
+                      />
+                    )}
                     Create Account
                   </button>
                 </div>
 
-                {/* Tab 1: Sign In View */}
-                {activeTab === 'signin' && (
-                  <form id="panel-signin" role="tabpanel" aria-labelledby="tab-signin" onSubmit={handleSignInSubmit}>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label htmlFor="signin-email" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
-                        Email or Username
-                      </label>
-                      <input
-                        id="signin-email"
-                        type="text"
-                        required
-                        value={signInEmail}
-                        onChange={(e) => setSignInEmail(e.target.value)}
-                        placeholder="you@domain.com or username"
-                        style={{
-                          width: '100%',
-                          padding: '0.72rem 0.95rem',
-                          borderRadius: 10,
-                          background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
-                          border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
-                          color: 'var(--text-primary, #ffffff)',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: '0.65rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                        <label htmlFor="signin-password" style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                          Password
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handleTabSwitch('forgot-password')}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--primary, #6366f1)',
-                            fontSize: '0.78rem',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            textDecoration: 'underline',
-                          }}
-                        >
-                          Forgot password?
-                        </button>
-                      </div>
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          id="signin-password"
-                          type={showSignInPassword ? 'text' : 'password'}
-                          required
-                          value={signInPassword}
-                          onChange={(e) => setSignInPassword(e.target.value)}
-                          placeholder="••••••••"
-                          style={{
-                            width: '100%',
-                            padding: '0.72rem 2.6rem 0.72rem 0.95rem',
-                            borderRadius: 10,
-                            background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
-                            border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
-                            color: 'var(--text-primary, #ffffff)',
-                            fontSize: '0.9rem',
-                            outline: 'none',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowSignInPassword(!showSignInPassword)}
-                          aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
-                          style={{
-                            position: 'absolute',
-                            right: 10,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--text-secondary, #94a3b8)',
-                            cursor: 'pointer',
-                            padding: 4,
-                          }}
-                        >
-                          {showSignInPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || isGoogleLoading}
-                      className="btn-primary"
+                {/* Continuous Smooth Horizontal Sliding Panels Container */}
+                <motion.div
+                  style={{
+                    overflow: 'hidden',
+                    position: 'relative',
+                    width: '100%',
+                  }}
+                  animate={{
+                    height: containerHeight,
+                  }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 420,
+                    damping: 36,
+                    mass: 0.8,
+                  }}
+                >
+                  <motion.div
+                    style={{
+                      display: 'flex',
+                      width: '200%',
+                      alignItems: 'flex-start',
+                    }}
+                    animate={{
+                      x: activeTab === 'signin' ? '0%' : '-50%',
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 380,
+                      damping: 34,
+                      mass: 0.9,
+                    }}
+                  >
+                    {/* Panel 1: Sign In */}
+                    <div
+                      ref={signinRef}
                       style={{
-                        width: '100%',
-                        padding: '0.82rem',
-                        marginTop: '1rem',
-                        borderRadius: 12,
-                        fontSize: '0.94rem',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        width: '50%',
+                        flexShrink: 0,
+                        boxSizing: 'border-box',
+                        paddingRight: '0.4rem',
                       }}
+                      inert={activeTab !== 'signin' ? true : undefined}
+                      aria-hidden={activeTab !== 'signin'}
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>Signing In...</span>
-                        </>
-                      ) : (
-                        <span>Sign In</span>
-                      )}
-                    </button>
-                  </form>
-                )}
+                      <form id="panel-signin" role="tabpanel" aria-labelledby="tab-signin" onSubmit={handleSignInSubmit}>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label htmlFor="signin-email" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
+                            Email or Username
+                          </label>
+                          <input
+                            id="signin-email"
+                            type="text"
+                            required
+                            value={signInEmail}
+                            onChange={(e) => setSignInEmail(e.target.value)}
+                            placeholder="you@domain.com or username"
+                            style={{
+                              width: '100%',
+                              padding: '0.72rem 0.95rem',
+                              borderRadius: 10,
+                              background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
+                              border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
+                              color: 'var(--text-primary, #ffffff)',
+                              fontSize: '0.9rem',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
 
-                {/* Tab 2: Sign Up View */}
-                {activeTab === 'signup' && (
-                  <form id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" onSubmit={handleSignUpSubmit}>
-                    <div style={{ marginBottom: '0.85rem' }}>
-                      <label htmlFor="signup-name" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                        Full Name
-                      </label>
-                      <input
-                        id="signup-name"
-                        type="text"
-                        value={signUpName}
-                        onChange={(e) => setSignUpName(e.target.value)}
-                        placeholder="Alex Rivera"
-                        style={{
-                          width: '100%',
-                          padding: '0.7rem 0.95rem',
-                          borderRadius: 10,
-                          background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
-                          border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
-                          color: 'var(--text-primary, #ffffff)',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: '0.85rem' }}>
-                      <label htmlFor="signup-email" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                        Email or Username
-                      </label>
-                      <input
-                        id="signup-email"
-                        type="text"
-                        required
-                        value={signUpEmail}
-                        onChange={(e) => setSignUpEmail(e.target.value)}
-                        placeholder="you@domain.com or username"
-                        style={{
-                          width: '100%',
-                          padding: '0.7rem 0.95rem',
-                          borderRadius: 10,
-                          background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
-                          border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
-                          color: 'var(--text-primary, #ffffff)',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: '0.85rem' }}>
-                      <label htmlFor="signup-password" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                        Password (min 6 characters)
-                      </label>
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          id="signup-password"
-                          type={showSignUpPassword ? 'text' : 'password'}
-                          required
-                          value={signUpPassword}
-                          onChange={(e) => setSignUpPassword(e.target.value)}
-                          placeholder="••••••••"
-                          style={{
-                            width: '100%',
-                            padding: '0.7rem 2.6rem 0.7rem 0.95rem',
-                            borderRadius: 10,
-                            background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
-                            border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
-                            color: 'var(--text-primary, #ffffff)',
-                            fontSize: '0.9rem',
-                            outline: 'none',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowSignUpPassword(!showSignUpPassword)}
-                          aria-label={showSignUpPassword ? 'Hide password' : 'Show password'}
-                          style={{
-                            position: 'absolute',
-                            right: 10,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--text-secondary, #94a3b8)',
-                            cursor: 'pointer',
-                            padding: 4,
-                          }}
-                        >
-                          {showSignUpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-
-                      {/* Password strength indicator */}
-                      {signUpPassword.length > 0 && (
-                        <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden', display: 'flex' }}>
-                            <div
+                        <div style={{ marginBottom: '0.65rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <label htmlFor="signin-password" style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              Password
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleTabSwitch('forgot-password')}
                               style={{
-                                width: passStrength === 'weak' ? '33%' : passStrength === 'medium' ? '66%' : '100%',
-                                background: passStrength === 'weak' ? '#ef4444' : passStrength === 'medium' ? '#f59e0b' : '#10b981',
-                                transition: 'all 0.25s ease',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--primary, #6366f1)',
+                                fontSize: '0.78rem',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              Forgot password?
+                            </button>
+                          </div>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              id="signin-password"
+                              type={showSignInPassword ? 'text' : 'password'}
+                              required
+                              value={signInPassword}
+                              onChange={(e) => setSignInPassword(e.target.value)}
+                              placeholder="••••••••"
+                              style={{
+                                width: '100%',
+                                padding: '0.72rem 2.6rem 0.72rem 0.95rem',
+                                borderRadius: 10,
+                                background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
+                                border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
+                                color: 'var(--text-primary, #ffffff)',
+                                fontSize: '0.9rem',
+                                outline: 'none',
                               }}
                             />
+                            <button
+                              type="button"
+                              onClick={() => setShowSignInPassword(!showSignInPassword)}
+                              aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
+                              style={{
+                                position: 'absolute',
+                                right: 10,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-secondary, #94a3b8)',
+                                cursor: 'pointer',
+                                padding: 4,
+                              }}
+                            >
+                              {showSignInPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
                           </div>
-                          <span
-                            style={{
-                              fontSize: '0.72rem',
-                              fontWeight: 600,
-                              color: passStrength === 'weak' ? '#ef4444' : passStrength === 'medium' ? '#f59e0b' : '#10b981',
-                              textTransform: 'capitalize',
-                            }}
-                          >
-                            {passStrength}
-                          </span>
                         </div>
-                      )}
-                    </div>
 
-                    <div style={{ marginBottom: '0.85rem' }}>
-                      <label htmlFor="signup-confirm-password" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                        Confirm Password
-                      </label>
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          id="signup-confirm-password"
-                          type={showSignUpConfirmPassword ? 'text' : 'password'}
-                          required
-                          value={signUpConfirmPassword}
-                          onChange={(e) => setSignUpConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || isGoogleLoading}
+                          className="btn-primary"
                           style={{
                             width: '100%',
-                            padding: '0.7rem 2.6rem 0.7rem 0.95rem',
-                            borderRadius: 10,
-                            background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
-                            border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
-                            color: 'var(--text-primary, #ffffff)',
-                            fontSize: '0.9rem',
-                            outline: 'none',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowSignUpConfirmPassword(!showSignUpConfirmPassword)}
-                          aria-label={showSignUpConfirmPassword ? 'Hide password' : 'Show password'}
-                          style={{
-                            position: 'absolute',
-                            right: 10,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--text-secondary, #94a3b8)',
-                            cursor: 'pointer',
-                            padding: 4,
+                            padding: '0.82rem',
+                            marginTop: '1rem',
+                            borderRadius: 12,
+                            fontSize: '0.94rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
                           }}
                         >
-                          {showSignUpConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" />
+                              <span>Signing In...</span>
+                            </>
+                          ) : (
+                            <span>Sign In</span>
+                          )}
                         </button>
-                      </div>
+                      </form>
                     </div>
 
-                    <div style={{ marginBottom: '1.1rem' }}>
-                      <label htmlFor="signup-role" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                        Primary Engineering Role
-                      </label>
-                      <select
-                        id="signup-role"
-                        value={signUpRole}
-                        onChange={(e) => setSignUpRole(e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '0.7rem 0.95rem',
-                          borderRadius: 10,
-                          background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
-                          border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
-                          color: 'var(--text-primary, #ffffff)',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                        }}
-                      >
-                        {ENGINEERING_ROLES.map((role) => (
-                          <option key={role} value={role} style={{ background: '#1e293b', color: '#ffffff' }}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || isGoogleLoading}
-                      className="btn-primary"
+                    {/* Panel 2: Create Account (Sign Up) */}
+                    <div
+                      ref={signupRef}
                       style={{
-                        width: '100%',
-                        padding: '0.82rem',
-                        borderRadius: 12,
-                        fontSize: '0.94rem',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        width: '50%',
+                        flexShrink: 0,
+                        boxSizing: 'border-box',
+                        paddingLeft: '0.4rem',
                       }}
+                      inert={activeTab !== 'signup' ? true : undefined}
+                      aria-hidden={activeTab !== 'signup'}
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>Creating Account...</span>
-                        </>
-                      ) : (
-                        <span>Create Free Account</span>
-                      )}
-                    </button>
-                  </form>
-                )}
-              </>
-            ) : (
+                      <form id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" onSubmit={handleSignUpSubmit}>
+                        <div style={{ marginBottom: '0.85rem' }}>
+                          <label htmlFor="signup-name" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Full Name
+                          </label>
+                          <input
+                            id="signup-name"
+                            type="text"
+                            value={signUpName}
+                            onChange={(e) => setSignUpName(e.target.value)}
+                            placeholder="Alex Rivera"
+                            style={{
+                              width: '100%',
+                              padding: '0.7rem 0.95rem',
+                              borderRadius: 10,
+                              background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
+                              border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
+                              color: 'var(--text-primary, #ffffff)',
+                              fontSize: '0.9rem',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ marginBottom: '0.85rem' }}>
+                          <label htmlFor="signup-email" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Email or Username
+                          </label>
+                          <input
+                            id="signup-email"
+                            type="text"
+                            required
+                            value={signUpEmail}
+                            onChange={(e) => setSignUpEmail(e.target.value)}
+                            placeholder="you@domain.com or username"
+                            style={{
+                              width: '100%',
+                              padding: '0.7rem 0.95rem',
+                              borderRadius: 10,
+                              background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
+                              border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
+                              color: 'var(--text-primary, #ffffff)',
+                              fontSize: '0.9rem',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ marginBottom: '0.85rem' }}>
+                          <label htmlFor="signup-password" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Password (min 6 characters)
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              id="signup-password"
+                              type={showSignUpPassword ? 'text' : 'password'}
+                              required
+                              value={signUpPassword}
+                              onChange={(e) => setSignUpPassword(e.target.value)}
+                              placeholder="••••••••"
+                              style={{
+                                width: '100%',
+                                padding: '0.7rem 2.6rem 0.7rem 0.95rem',
+                                borderRadius: 10,
+                                background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
+                                border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
+                                color: 'var(--text-primary, #ffffff)',
+                                fontSize: '0.9rem',
+                                outline: 'none',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                              aria-label={showSignUpPassword ? 'Hide password' : 'Show password'}
+                              style={{
+                                position: 'absolute',
+                                right: 10,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-secondary, #94a3b8)',
+                                cursor: 'pointer',
+                                padding: 4,
+                              }}
+                            >
+                              {showSignUpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+
+                          {/* Password strength indicator */}
+                          {signUpPassword.length > 0 && (
+                            <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden', display: 'flex' }}>
+                                <div
+                                  style={{
+                                    width: passStrength === 'weak' ? '33%' : passStrength === 'medium' ? '66%' : '100%',
+                                    background: passStrength === 'weak' ? '#ef4444' : passStrength === 'medium' ? '#f59e0b' : '#10b981',
+                                    transition: 'all 0.25s ease',
+                                  }}
+                                />
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 600,
+                                  color: passStrength === 'weak' ? '#ef4444' : passStrength === 'medium' ? '#f59e0b' : '#10b981',
+                                  textTransform: 'capitalize',
+                                }}
+                              >
+                                {passStrength}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ marginBottom: '0.85rem' }}>
+                          <label htmlFor="signup-confirm-password" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Confirm Password
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              id="signup-confirm-password"
+                              type={showSignUpConfirmPassword ? 'text' : 'password'}
+                              required
+                              value={signUpConfirmPassword}
+                              onChange={(e) => setSignUpConfirmPassword(e.target.value)}
+                              placeholder="••••••••"
+                              style={{
+                                width: '100%',
+                                padding: '0.7rem 2.6rem 0.7rem 0.95rem',
+                                borderRadius: 10,
+                                background: 'var(--input-bg, rgba(255, 255, 255, 0.06))',
+                                border: '1px solid var(--input-border, rgba(255, 255, 255, 0.15))',
+                                color: 'var(--text-primary, #ffffff)',
+                                fontSize: '0.9rem',
+                                outline: 'none',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSignUpConfirmPassword(!showSignUpConfirmPassword)}
+                              aria-label={showSignUpConfirmPassword ? 'Hide password' : 'Show password'}
+                              style={{
+                                position: 'absolute',
+                                right: 10,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-secondary, #94a3b8)',
+                                cursor: 'pointer',
+                                padding: 4,
+                              }}
+                            >
+                              {showSignUpConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || isGoogleLoading}
+                          className="btn-primary"
+                          style={{
+                            width: '100%',
+                            padding: '0.82rem',
+                            borderRadius: 12,
+                            fontSize: '0.94rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" />
+                              <span>Creating Account...</span>
+                            </>
+                          ) : (
+                            <span>Create Free Account</span>
+                          )}
+                        </button>
+                      </form>
+                    </div>
+                  </motion.div>
+                </motion.div>
+        </>
+      ) : (
               /* Tab 3: Forgot Password View */
               <div>
                 {forgotStep === 'request' ? (

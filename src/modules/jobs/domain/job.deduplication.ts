@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { NormalizedJob } from './job.types';
 import { canonicalizeUrl } from './job.normalization';
 
@@ -28,6 +29,7 @@ function getLocationBucket(job: NormalizedJob): string {
 export function deduplicateJobs(jobs: NormalizedJob[]): NormalizedJob[] {
   const seenCanonicalUrls = new Map<string, NormalizedJob>();
   const seenRoleKeys = new Map<string, NormalizedJob>();
+  const seenJobIds = new Set<string>();
   const uniqueJobs: NormalizedJob[] = [];
 
   for (const job of jobs) {
@@ -52,7 +54,17 @@ export function deduplicateJobs(jobs: NormalizedJob[]): NormalizedJob[] {
       continue;
     }
 
-    // Add as new unique job
+    // Check layer 3: Defense-in-depth against duplicate job IDs
+    if (seenJobIds.has(job.id)) {
+      const disambiguator = crypto
+        .createHash('sha256')
+        .update(`${job.id}:${canonicalUrl || job.title}:${uniqueJobs.length}`)
+        .digest('hex')
+        .slice(0, 8);
+      job.id = `${job.id}-${disambiguator}`;
+    }
+
+    seenJobIds.add(job.id);
     if (canonicalUrl) {
       seenCanonicalUrls.set(canonicalUrl, job);
     }

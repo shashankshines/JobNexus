@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
@@ -76,8 +77,10 @@ export class HimalayasAdapter implements JobProvider {
           r.toLowerCase().includes('anywhere')
       );
 
+      const idSource = raw.guid || canonicalUrl;
+      const idHash = crypto.createHash('sha256').update(idSource).digest('hex').slice(0, 16);
       const job: NormalizedJob = {
-        id: `himalayas-${raw.guid || canonicalUrl}`,
+        id: `himalayas-${idHash}`,
         sourceId: this.id,
         sourceName: this.name,
         title: raw.title.trim(),

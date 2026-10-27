@@ -71,6 +71,67 @@
   --hero-badge-hover-bg: rgba(99, 102, 241, 0.18);
   --hero-badge-hover-border: rgba(99, 102, 241, 0.45);
 
+  /* Contextual Badge & Label Colorways (Dark Mode) */
+  --badge-rose-bg: rgba(244, 63, 94, 0.12);
+  --badge-rose-border: rgba(244, 63, 94, 0.32);
+  --badge-rose-text: #fda4af;
+  --badge-rose-icon: #fb7185;
+
+  --badge-cyan-bg: rgba(6, 182, 212, 0.12);
+  --badge-cyan-border: rgba(6, 182, 212, 0.32);
+  --badge-cyan-text: #67e8f9;
+  --badge-cyan-icon: #22d3ee;
+
+  --badge-indigo-bg: rgba(99, 102, 241, 0.12);
+  --badge-indigo-border: rgba(99, 102, 241, 0.32);
+  --badge-indigo-text: #c7d2fe;
+  --badge-indigo-icon: #818cf8;
+
+  --badge-purple-bg: rgba(168, 85, 247, 0.12);
+  --badge-purple-border: rgba(168, 85, 247, 0.32);
+  --badge-purple-text: #e9d5ff;
+  --badge-purple-icon: #c084fc;
+
+  --badge-emerald-bg: rgba(16, 185, 129, 0.12);
+  --badge-emerald-border: rgba(16, 185, 129, 0.32);
+  --badge-emerald-text: #a7f3d0;
+  --badge-emerald-icon: #34d399;
+
+  --badge-amber-bg: rgba(245, 158, 11, 0.12);
+  --badge-amber-border: rgba(245, 158, 11, 0.32);
+  --badge-amber-text: #fde68a;
+  --badge-amber-icon: #fbbf24;
+
+  --badge-crimson-bg: rgba(239, 68, 68, 0.12);
+  --badge-crimson-border: rgba(239, 68, 68, 0.32);
+  --badge-crimson-text: #fecaca;
+  --badge-crimson-icon: #f87171;
+
+  --badge-teal-bg: rgba(20, 184, 166, 0.12);
+  --badge-teal-border: rgba(20, 184, 166, 0.32);
+  --badge-teal-text: #99f6e4;
+  --badge-teal-icon: #2dd4bf;
+
+  --badge-sky-bg: rgba(14, 165, 233, 0.12);
+  --badge-sky-border: rgba(14, 165, 233, 0.32);
+  --badge-sky-text: #7dd3fc;
+  --badge-sky-icon: #38bdf8;
+
+  --badge-lime-bg: rgba(132, 204, 22, 0.12);
+  --badge-lime-border: rgba(132, 204, 22, 0.32);
+  --badge-lime-text: #d9f99d;
+  --badge-lime-icon: #a3e635;
+
+  --badge-gold-bg: rgba(234, 179, 8, 0.14);
+  --badge-gold-border: rgba(234, 179, 8, 0.36);
+  --badge-gold-text: #fef08a;
+  --badge-gold-icon: #eab308;
+
+  --badge-india-bg: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(16, 185, 129, 0.14) 100%);
+  --badge-india-border: rgba(245, 158, 11, 0.35);
+  --badge-india-text: #fef3c7;
+  --badge-india-icon: #f59e0b;
+
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);
   --scrollbar-track: rgba(8, 12, 20, 0.9);
 
@@ -157,6 +218,67 @@
   --hero-badge-shadow: 0 2px 10px rgba(79, 70, 229, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --hero-badge-hover-bg: rgba(99, 102, 241, 0.14);
   --hero-badge-hover-border: rgba(99, 102, 241, 0.38);
+
+  /* Contextual Badge & Label Colorways (Light Mode - High Contrast) */
+  --badge-rose-bg: rgba(244, 63, 94, 0.08);
+  --badge-rose-border: rgba(244, 63, 94, 0.25);
+  --badge-rose-text: #be123c;
+  --badge-rose-icon: #e11d48;
+
+  --badge-cyan-bg: rgba(6, 182, 212, 0.08);
+  --badge-cyan-border: rgba(6, 182, 212, 0.25);
+  --badge-cyan-text: #0e7490;
+  --badge-cyan-icon: #0891b2;
+
+  --badge-indigo-bg: rgba(99, 102, 241, 0.08);
+  --badge-indigo-border: rgba(99, 102, 241, 0.25);
+  --badge-indigo-text: #3730a3;
+  --badge-indigo-icon: #4f46e5;
+
+  --badge-purple-bg: rgba(168, 85, 247, 0.08);
+  --badge-purple-border: rgba(168, 85, 247, 0.25);
+  --badge-purple-text: #6b21a8;
+  --badge-purple-icon: #9333ea;
+
+  --badge-emerald-bg: rgba(16, 185, 129, 0.08);
+  --badge-emerald-border: rgba(16, 185, 129, 0.25);
+  --badge-emerald-text: #047857;
+  --badge-emerald-icon: #059669;
+
+  --badge-amber-bg: rgba(245, 158, 11, 0.08);
+  --badge-amber-border: rgba(245, 158, 11, 0.25);
+  --badge-amber-text: #b45309;
+  --badge-amber-icon: #d97706;
+
+  --badge-crimson-bg: rgba(239, 68, 68, 0.08);
+  --badge-crimson-border: rgba(239, 68, 68, 0.25);
+  --badge-crimson-text: #b91c1c;
+  --badge-crimson-icon: #dc2626;
+
+  --badge-teal-bg: rgba(20, 184, 166, 0.08);
+  --badge-teal-border: rgba(20, 184, 166, 0.25);
+  --badge-teal-text: #0f766e;
+  --badge-teal-icon: #0d9488;
+
+  --badge-sky-bg: rgba(14, 165, 233, 0.08);
+  --badge-sky-border: rgba(14, 165, 233, 0.25);
+  --badge-sky-text: #0369a1;
+  --badge-sky-icon: #0284c7;
+
+  --badge-lime-bg: rgba(132, 204, 22, 0.08);
+  --badge-lime-border: rgba(132, 204, 22, 0.25);
+  --badge-lime-text: #4d7c0f;
+  --badge-lime-icon: #65a30d;
+
+  --badge-gold-bg: rgba(234, 179, 8, 0.1);
+  --badge-gold-border: rgba(234, 179, 8, 0.28);
+  --badge-gold-text: #854d0e;
+  --badge-gold-icon: #ca8a04;
+
+  --badge-india-bg: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+  --badge-india-border: rgba(245, 158, 11, 0.3);
+  --badge-india-text: #92400e;
+  --badge-india-icon: #d97706;
 
   --scrollbar-thumb: rgba(15, 23, 42, 0.22);
   --scrollbar-track: rgba(241, 245, 249, 0.95);
@@ -647,4 +769,91 @@ a {
   .container {
     padding: 0 16px !important;
   }
+}
+
+/* Futuristic Cyber-HUD Toast Notification Keyframes & Utilities */
+@keyframes jn-laser-sweep {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateX(100%);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100%);
+    opacity: 0.3;
+  }
+}
+
+@keyframes jn-beacon-pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 7px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes jn-beacon-pulse-error {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 7px rgba(244, 63, 94, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+@keyframes jn-beacon-pulse-info {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 7px rgba(99, 102, 241, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+@keyframes jn-progress-deplete {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.jn-toast-deplete-bar {
+  transform-origin: left;
+  animation: jn-progress-deplete 3.8s linear forwards;
+}
+
+.jn-beacon-success {
+  animation: jn-beacon-pulse 1.8s infinite ease-out;
+}
+
+.jn-beacon-error {
+  animation: jn-beacon-pulse-error 1.8s infinite ease-out;
+}
+
+.jn-beacon-info {
+  animation: jn-beacon-pulse-info 1.8s infinite ease-out;
 }

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
@@ -90,10 +91,12 @@ export class AshbyAdapter implements JobProvider {
         ? 'hybrid'
         : locInfo.workplaceType;
 
+      const idHash = crypto.createHash('sha256').update(`${boardSlug}:${raw.id}`).digest('hex').slice(0, 16);
+      const safeId = `ashby-${idHash}`;
       const job: NormalizedJob = {
-        id: `ashby-${boardSlug}-${raw.id}`,
+        id: safeId,
         sourceId: this.id,
-        sourceName: `${this.name} (${companyName})`,
+        sourceName: this.name,
         title: raw.title.trim(),
         company: companyName,
         location: locInfo.location,
@@ -104,7 +107,7 @@ export class AshbyAdapter implements JobProvider {
         workplaceType,
         isIndiaEligible: locInfo.isIndiaEligible,
         publishedAt: normalizeDate(raw.publishedAt),
-        tags: [companyName, raw.department || '', isRemote ? 'Remote' : 'On-site'].filter(Boolean),
+        tags: [raw.department || '', isRemote ? 'Remote' : 'On-site'].filter(Boolean),
         description: '',
       };
 

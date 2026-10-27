@@ -43,6 +43,7 @@ export interface SavedJob {
 export interface PendingAction {
   type: 'save-job' | 'search' | 'domain' | 'apply' | 'pill' | 'workplace';
   job?: Partial<SavedJob> & { id: string; title: string; company?: string; url?: string; [key: string]: unknown };
+  jobId?: string;
   query?: string;
   location?: string;
   remote?: string;
@@ -173,9 +174,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setStatus('authenticated');
             // Fetch user's saved jobs
             fetchSavedJobs();
+
+            if (typeof window !== 'undefined') {
+              const urlParams = new URLSearchParams(window.location.search);
+              if (urlParams.get('auth_success') === 'google') {
+                showToast(`Welcome back, ${data.user.name}!`, 'success');
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+              const savedIntentStr = sessionStorage.getItem('jn_pending_intent');
+              if (savedIntentStr) {
+                sessionStorage.removeItem('jn_pending_intent');
+                try {
+                  const savedIntent = JSON.parse(savedIntentStr);
+                  if (savedIntent.type === 'save-job' && savedIntent.job) {
+                    fetch('/api/saved-jobs', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ job: savedIntent.job }),
+                    }).then(() => fetchSavedJobs());
+                    showToast(`"${savedIntent.job.title}" saved automatically to your collection!`, 'success');
+                  } else if (savedIntent.type === 'apply' && savedIntent.url) {
+                    window.open(savedIntent.url, '_blank', 'noopener,noreferrer');
+                  }
+                } catch (e) {
+                  console.error('Failed to restore pending intent:', e);
+                }
+              }
+            }
             return;
           }
         }
+
+        if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const authError = urlParams.get('auth_error');
+          if (authError) {
+            showToast(`Authentication not completed: ${authError.replace(/_/g, ' ')}`, 'error');
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        }
+
         setUser(null);
         setStatus('anonymous');
       } catch (err) {
@@ -192,7 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [fetchSavedJobs]);
+  }, [fetchSavedJobs, showToast]);
 
   const openAuthModal = useCallback((prompt?: string, intent?: PendingAction, mode?: AuthMode) => {
     setAuthPromptMessage(prompt || null);
@@ -324,9 +362,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Check if user had a pending action waiting
       if (pendingIntent) {
         const action = pendingIntent;
-        setPendingIntent(null);
 
         if (action.type === 'save-job' && action.job) {
+          setPendingIntent(null);
           try {
             const saveRes = await fetch('/api/saved-jobs', {
               method: 'POST',
@@ -343,6 +381,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (err) {
             console.error('Failed to auto-save pending job:', err);
           }
+        } else if (action.type === 'apply' && action.url) {
+          setPendingIntent(null);
+          try {
+            if (typeof window !== 'undefined') {
+              window.open(action.url, '_blank', 'noopener,noreferrer');
+              showToast(`Resuming application for ${action.jobTitle || 'job'}!`, 'success');
+            }
+          } catch (err) {
+            console.error('Failed to resume application link:', err);
+          }
         }
       }
     },
@@ -358,20 +406,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (typeof credentialOrProfile === 'string') {
           payload = { credential: credentialOrProfile };
         } else if (credentialOrProfile && typeof credentialOrProfile === 'object') {
-          payload =
-            'credential' in credentialOrProfile && credentialOrProfile.credential
-              ? { credential: credentialOrProfile.credential }
-              : { profile: credentialOrProfile };
+          if ('credential' in credentialOrProfile && credentialOrProfile.credential) {
+            payload = { credential: credentialOrProfile.credential };
+          } else if ('isDevDemo' in credentialOrProfile || 'devMode' in credentialOrProfile) {
+            payload = { ...credentialOrProfile };
+          } else {
+            payload = { profile: credentialOrProfile };
+          }
         } else {
-          // Fallback demo profile for local/mock testing when no external Google credentials are provided
-          payload = {
-            profile: {
-              sub: 'usr_g_' + Date.now(),
-              name: 'Google Engineer',
-              email: 'developer@gmail.com',
-              picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop',
-            },
-          };
+          payload = {};
         }
 
         const res = await fetch('/api/auth/google', {
@@ -388,7 +431,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         setUser(data.user);
         setStatus('authenticated');
-        showToast(`Welcome back, ${data.user.name}!`, 'success');
+        if (data.isDevDemo) {
+          showToast('Signed in with Google (Dev Mode). Add credentials to .env.local for live accounts.', 'info');
+        } else {
+          showToast(`Welcome back, ${data.user.name}!`, 'success');
+        }
         await handlePostAuthAction(data.user);
       } catch (err: unknown) {
         setStatus('anonymous');
@@ -450,22 +497,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [handlePostAuthAction, showToast]
   );
 
+  // Password reset request handler connecting to backend
   const requestPasswordReset = useCallback(
     async (usernameOrEmail: string): Promise<{ success: boolean; message: string; normalizedEmail: string }> => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
       const val = validatePasswordResetRequest(usernameOrEmail);
       if (!val.valid || !val.normalizedIdentifier) {
         throw new Error(val.error || 'Please enter a valid username or email address.');
       }
+
+      const res = await fetch('/api/auth/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'request-reset', usernameOrEmail: val.normalizedIdentifier }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to send password recovery code.');
+      }
+
+      const data = await res.json();
       return {
         success: true,
-        message: `Recovery code sent to ${val.normalizedIdentifier}.`,
+        message: data.message || `Recovery code sent to ${val.normalizedIdentifier}.`,
         normalizedEmail: val.normalizedIdentifier,
       };
     },
     []
   );
 
+  // Password reset execution handler connecting to backend
   const resetPasswordWithCode = useCallback(
     async (
       email: string,
@@ -473,7 +534,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       newPassword: string,
       confirmPassword: string
     ): Promise<{ success: boolean; message: string }> => {
-      await new Promise((resolve) => setTimeout(resolve, 350));
       const val = validatePasswordResetExecution({
         email,
         code,
@@ -483,9 +543,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!val.valid) {
         throw new Error(val.error || 'Unable to reset password. Please check your recovery code.');
       }
+
+      const res = await fetch('/api/auth/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'reset-password',
+          email,
+          code,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Unable to reset password. Please verify code and password.');
+      }
+
+      const data = await res.json();
       return {
         success: true,
-        message: 'Password successfully reset! You can now sign in with your new password.',
+        message: data.message || 'Password successfully reset! You can now sign in with your new password.',
       };
     },
     []

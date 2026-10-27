@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
@@ -81,8 +82,11 @@ export class WeWorkRemotelyAdapter implements JobProvider {
         region.toLowerCase().includes('world');
       const isIndia = region.toLowerCase().includes('india') || isWorldwide;
 
+      // Generate deterministic 16-hex hash of canonical URL to guarantee uniqueness and mask company identity
+      const idHash = crypto.createHash('sha256').update(canonicalUrl).digest('hex').slice(0, 16);
+
       const job: NormalizedJob = {
-        id: `wwr-${canonicalUrl}`,
+        id: `wwr-${idHash}`,
         sourceId: this.id,
         sourceName: this.name,
         title: title.trim(),

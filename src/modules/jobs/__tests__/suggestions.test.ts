@@ -73,4 +73,40 @@ describe('Job Post & Location Dropdowns Suggestions Tests', () => {
     assert.ok(remoteGroup.posts.some((p) => p.label.includes('Remote Software Engineer')));
     assert.ok(remoteGroup.posts.some((p) => p.label.includes('Remote Full Stack Developer')));
   });
+
+  it('supports interactive search filtering across grouped roles and categories for custom dropdown', () => {
+    const filterGroups = (searchQuery: string) => {
+      if (!searchQuery.trim()) return JOB_POST_GROUPS;
+      const q = searchQuery.toLowerCase().trim();
+      return JOB_POST_GROUPS.map((group) => {
+        const groupMatches = group.group.toLowerCase().includes(q);
+        const filteredPosts = group.posts.filter(
+          (post) =>
+            groupMatches ||
+            post.label.toLowerCase().includes(q) ||
+            post.value.toLowerCase().includes(q)
+        );
+        return {
+          ...group,
+          posts: filteredPosts,
+        };
+      }).filter((group) => group.posts.length > 0);
+    };
+
+    // Test search for "React"
+    const reactFiltered = filterGroups('React');
+    assert.ok(reactFiltered.length > 0);
+    const allReactPosts = reactFiltered.flatMap((g) => g.posts);
+    assert.ok(allReactPosts.some((p) => p.label.toLowerCase().includes('react')));
+
+    // Test search for "Cyber"
+    const cyberFiltered = filterGroups('cyber');
+    assert.ok(cyberFiltered.length > 0);
+    assert.ok(cyberFiltered.some((g) => g.group.toLowerCase().includes('cybersecurity')));
+
+    // Test non-matching query returns empty list
+    const nonMatching = filterGroups('xyznonexistentrole123');
+    assert.strictEqual(nonMatching.length, 0);
+  });
 });
+
