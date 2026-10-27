@@ -13,6 +13,7 @@ import {
   Loader2,
   Lock,
   Flame,
+  Banknote,
 } from 'lucide-react';
 import styles from './JobCard.module.css';
 import { useAuth } from '../context/AuthContext';
@@ -61,6 +62,7 @@ interface JobCardProps {
     workplaceType?: string;
     isIndiaEligible?: boolean;
     isFresh?: boolean;
+    salary?: string;
   };
   index: number;
 }
@@ -293,13 +295,14 @@ export default function JobCard({ job, index }: JobCardProps) {
   };
 
   const isFresh = Boolean(job.isFresh);
+  const isInitialBatch = index < 18;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={isInitialBatch ? { opacity: 0, y: 16 } : { opacity: 0 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.35, delay: Math.min(index * 0.04, 0.4), ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.25, delay: isInitialBatch ? Math.min((index % 18) * 0.03, 0.3) : 0, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -5, scale: 1.01 }}
       className={styles.card}
       onMouseMove={handleMouseMove}
@@ -422,6 +425,20 @@ export default function JobCard({ job, index }: JobCardProps) {
           </span>
           <span>{employmentBadge.label}</span>
         </span>
+
+        {/* Verified Compensation / Salary Badge */}
+        {job.salary && (
+          <span
+            className={`${styles.contextualBadge} ${styles.paletteEmerald}`}
+            title={`Compensation: ${job.salary}`}
+            style={{ fontWeight: 700 }}
+          >
+            <span className={styles.badgeIcon}>
+              <Banknote size={12} strokeWidth={2.4} />
+            </span>
+            <span>{job.salary}</span>
+          </span>
+        )}
       </div>
 
       {/* 4. Metadata: Location & Date with Micro-Icon Wrappers */}

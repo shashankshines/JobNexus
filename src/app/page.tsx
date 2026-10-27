@@ -26,6 +26,7 @@ import {
   LogOut,
   ChevronDown,
   Check,
+  ArrowDown,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
@@ -195,6 +196,13 @@ export default function Home() {
   const [searched, setSearched] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  // Progressive Chunk Lazy Loading (Infinite Scroll) state
+  const JOBS_BATCH_SIZE = 18;
+  const [visibleCount, setVisibleCount] = useState(JOBS_BATCH_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Suggestions state
   const [jobSuggestions, setJobSuggestions] = useState<string[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
@@ -211,6 +219,7 @@ export default function Home() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const locBoxRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const headerWrapperRef = useRef<HTMLDivElement>(null);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
   const workplaceDropdownRef = useRef<HTMLDivElement>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
@@ -566,6 +575,101 @@ export default function Home() {
     return jobs;
   }, [jobs, sortBy, activeView, savedJobs]);
 
+  // Reset lazy load visible count whenever any query or filter condition changes
+  useEffect(() => {
+    if (loadingMoreTimeoutRef.current) {
+      clearTimeout(loadingMoreTimeoutRef.current);
+    }
+    setIsLoadingMore(false);
+    setVisibleCount(JOBS_BATCH_SIZE);
+  }, [query, location, type, level, selectedRole, remote, sortBy, activeView, jobs]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (loadingMoreTimeoutRef.current) {
+        clearTimeout(loadingMoreTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Sliced jobs for progressive chunk lazy loading
+  const visibleJobs = useMemo(() => {
+    return displayedJobs.slice(0, visibleCount);
+  }, [displayedJobs, visibleCount]);
+
+  const hasMore = visibleCount < displayedJobs.length;
+
+  const loadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+
+    if (loadingMoreTimeoutRef.current) {
+      clearTimeout(loadingMoreTimeoutRef.current);
+    }
+
+    loadingMoreTimeoutRef.current = setTimeout(() => {
+      // Preserve the user's exact scroll offset before new items mount
+      const savedScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+
+      setVisibleCount((prev) => Math.min(prev + JOBS_BATCH_SIZE, displayedJobs.length));
+      setIsLoadingMore(false);
+
+      // Verify and lock scroll position on the next frame so viewport never jumps upward
+      if (typeof window !== 'undefined') {
+        requestAnimationFrame(() => {
+          if (window.scrollY < savedScrollY) {
+            window.scrollTo({ top: savedScrollY, behavior: 'instant' as ScrollBehavior });
+          }
+        });
+      }
+    }, 280);
+  }, [isLoadingMore, hasMore, displayedJobs.length]);
+
+  // Seamless auto-load on scroll via IntersectionObserver
+  useEffect(() => {
+    if (!hasMore || loading || isLoadingMore) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '300px 0px',
+        threshold: 0.05,
+      }
+    );
+
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loading, isLoadingMore, loadMore]);
+
+  // Sticky Header Scroll-State IntersectionObserver (Modern Web Guidance fallback)
+  useEffect(() => {
+    const node = headerWrapperRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        node.classList.toggle('is-stuck', entry.boundingClientRect.top <= 14);
+      },
+      {
+        threshold: [1],
+        rootMargin: '-13px 0px 0px 0px',
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isHydrated]);
+
   if (!isHydrated) {
     return (
       <div
@@ -600,374 +704,316 @@ export default function Home() {
 
   return (
     <main className="container" style={{ minHeight: '100vh', paddingBottom: '5rem' }}>
-      {/* Authenticated Dashboard Header */}
-      <header
-        style={{
-          padding: '1.5rem 0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          borderBottom: '1px solid var(--border)',
-          marginBottom: '1rem',
-        }}
-      >
-        <motion.div
-          initial={{ opacity: 0, x: -15 }}
-          animate={{ opacity: 1, x: 0 }}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
-          onClick={resetToDiscovery}
-        >
+      {/* Authenticated Dashboard Floating Island Header */}
+      <div ref={headerWrapperRef} className="site-header-wrapper">
+        <header className="site-header">
+          {/* Brand Logo & Name */}
           <motion.div
-            whileHover={{ scale: 1.05 }}
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+            initial={{ opacity: 0, x: -15 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="site-header-brand"
+            onClick={resetToDiscovery}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                resetToDiscovery();
+              }
             }}
           >
-            <Sparkles color="white" size={20} />
+            <div className="site-header-logo">
+              <Sparkles color="white" size={19} />
+            </div>
+            <div className="site-header-title-group">
+              <div className="site-header-title-row">
+                <h1 className="site-header-title">
+                  Job<span className="text-gradient">Nexus</span>
+                </h1>
+                <span className="site-header-badge">
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />
+                  VERIFIED ATS
+                </span>
+              </div>
+              <p className="site-header-subtitle">
+                Direct ATS Feeds • Zero Ghost Jobs
+              </p>
+            </div>
           </motion.div>
-          <div>
-            <h1 style={{ fontSize: '1.45rem', fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text-primary)', lineHeight: 1.1 }}>
-              Job<span className="text-gradient">Nexus</span>
-            </h1>
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 500, letterSpacing: '0.04em' }}>
-              World of Work, Connected
-            </p>
-          </div>
-        </motion.div>
 
-        {/* Live Aggregation Status Pill + ThemeToggle + Auth Navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <ThemeToggle />
+          {/* Dynamic Live Aggregation Status Pill */}
           <motion.div
             key={searched ? `searched-${displayedJobs.length}` : `total-${formattedCount}`}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.2 }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.55rem',
-              background: 'var(--surface-card)',
-              padding: '0.42rem 0.95rem',
-              borderRadius: 9999,
-              border: '1px solid var(--border-card)',
-              boxShadow: 'var(--shadow-card)',
-              backdropFilter: 'blur(12px)',
-            }}
+            className="site-header-status"
             title={
               searched
-                ? `Showing ${displayedJobs.length} active roles filtered from ${formattedCount} live verified openings across ${sourcesCount} direct ATS feeds`
+                ? `Showing ${displayedJobs.length.toLocaleString()} active roles filtered from ${formattedCount} live verified openings across ${sourcesCount} direct ATS feeds`
                 : `Total ${formattedCount} live verified opportunities actively aggregated from ${sourcesCount} direct employer ATS feeds`
             }
           >
-            <span className="pulse-dot" />
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-primary)', fontWeight: 600, letterSpacing: '0.01em' }}>
-              {searched
-                ? `${displayedJobs.length} Roles Matched • ${formattedCount} Total Verified`
-                : `${formattedCount} Live Verified Roles`}
+            <span className="site-header-radar" />
+            <span>
+              <span className="desktop-only">
+                {searched
+                  ? `${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`
+                  : `${formattedCount} Live Verified Roles`}
+              </span>
+              <span className="mobile-only">
+                {searched
+                  ? `${displayedJobs.length.toLocaleString()} Matched • ${formattedCount} Total`
+                  : `${formattedCount} Live`}
+              </span>
             </span>
           </motion.div>
 
-          {/* Loading Skeleton during session restoration to prevent layout shift */}
-          {authStatus === 'initializing' && (
-            <div
-              style={{
-                width: 90,
-                height: 36,
-                borderRadius: 9999,
-                background: 'var(--surface-card)',
-                border: '1px solid var(--border-card)',
-                animation: 'pulse 1.5s infinite ease-in-out',
-              }}
-            />
-          )}
+          {/* Action Navigation Cluster (Uniform 36px Height, 10px Radius) */}
+          <div className="site-header-actions">
+            <ThemeToggle />
 
-          {/* Authenticated State: Saved Jobs button + User Profile Dropdown */}
-          {isAuthenticated && user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <button
-                type="button"
-                onClick={() => setActiveView(activeView === 'saved' ? 'all' : 'saved')}
-                title={activeView === 'saved' ? 'View all jobs' : 'View saved jobs'}
+            {/* Loading Skeleton during session restoration */}
+            {authStatus === 'initializing' && (
+              <div
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.45rem',
-                  padding: '0.42rem 0.85rem',
-                  borderRadius: 9999,
-                  background: activeView === 'saved' ? 'rgba(99, 102, 241, 0.2)' : 'var(--surface-card)',
-                  border: activeView === 'saved' ? '1px solid var(--primary-start)' : '1px solid var(--border-card)',
-                  color: activeView === 'saved' ? 'var(--primary-start)' : 'var(--text-primary)',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  boxShadow: 'var(--shadow-card)',
+                  width: 86,
+                  height: 36,
+                  borderRadius: 10,
+                  background: 'var(--surface-card)',
+                  border: '1px solid var(--border-card)',
+                  animation: 'pulse 1.5s infinite ease-in-out',
                 }}
-              >
-                <Bookmark size={14} fill={activeView === 'saved' ? 'currentColor' : 'none'} />
-                <span>Saved</span>
-                <span
-                  style={{
-                    background: activeView === 'saved' ? 'var(--primary-start)' : 'rgba(255, 255, 255, 0.12)',
-                    color: activeView === 'saved' ? '#ffffff' : 'var(--text-secondary)',
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    padding: '0.05rem 0.4rem',
-                    borderRadius: 9999,
-                  }}
-                >
-                  {savedJobs.length}
-                </span>
-              </button>
+              />
+            )}
 
-              {/* User Dropdown Capsule */}
-              <div ref={userMenuRef} style={{ position: 'relative' }}>
+            {/* Authenticated State: Saved Jobs button + User Profile Dropdown */}
+            {isAuthenticated && user && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <button
                   type="button"
-                  aria-haspopup="true"
-                  aria-expanded={isUserMenuOpen}
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.6rem',
-                    background: 'var(--surface-card)',
-                    padding: '0.35rem 0.75rem 0.35rem 0.45rem',
-                    borderRadius: 9999,
-                    border: '1px solid var(--border-card)',
-                    boxShadow: 'var(--shadow-card)',
-                    cursor: 'pointer',
-                  }}
+                  onClick={() => setActiveView(activeView === 'saved' ? 'all' : 'saved')}
+                  title={activeView === 'saved' ? 'View all jobs' : 'View saved jobs'}
+                  className={`site-header-btn ${activeView === 'saved' ? 'site-header-btn-active' : 'site-header-btn-ghost'}`}
                 >
-                  <div
+                  <Bookmark size={14} fill={activeView === 'saved' ? 'currentColor' : 'none'} />
+                  <span>Saved</span>
+                  <span
                     style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: '50%',
-                      background: user.picture
-                        ? `url(${user.picture}) center/cover no-repeat`
-                        : 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
-                      color: '#fff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.76rem',
+                      background: activeView === 'saved' ? 'var(--primary-start)' : 'var(--tag-bg)',
+                      color: activeView === 'saved' ? '#ffffff' : 'var(--text-secondary)',
+                      fontSize: '0.7rem',
                       fontWeight: 700,
-                      boxShadow: '0 2px 8px rgba(66, 133, 244, 0.35)',
+                      padding: '0.1rem 0.45rem',
+                      borderRadius: 6,
                     }}
                   >
-                    {!user.picture && user.initials}
-                  </div>
-                  <div style={{ textAlign: 'left', marginRight: '0.15rem' }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15 }}>
-                      {user.name.split(' ')[0]}
-                    </div>
-                  </div>
-                  <ChevronDown
-                    size={14}
-                    color="var(--text-secondary)"
-                    style={{
-                      transform: isUserMenuOpen ? 'rotate(180deg)' : 'none',
-                      transition: 'transform 0.2s ease',
-                    }}
-                  />
+                    {savedJobs.length}
+                  </span>
                 </button>
 
-                {/* Dropdown Menu */}
-                <AnimatePresence>
-                  {isUserMenuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                      transition={{ duration: 0.15 }}
+                {/* User Dropdown Capsule */}
+                <div ref={userMenuRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    aria-haspopup="true"
+                    aria-expanded={isUserMenuOpen}
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    className="site-header-user-btn"
+                  >
+                    <div
+                      className="site-header-avatar"
                       style={{
-                        position: 'absolute',
-                        right: 0,
-                        top: 'calc(100% + 8px)',
-                        width: 230,
-                        background: 'var(--surface-card)',
-                        border: '1px solid var(--border-card)',
-                        borderRadius: 14,
-                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
-                        backdropFilter: 'blur(16px)',
-                        padding: '0.5rem',
-                        zIndex: 250,
+                        background: user.picture
+                          ? `url(${user.picture}) center/cover no-repeat`
+                          : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                       }}
                     >
-                      {/* User Identity Header */}
-                      <div style={{ padding: '0.5rem 0.6rem 0.65rem', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                          {user.name}
+                      {!user.picture && user.initials}
+                    </div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {user.name.split(' ')[0]}
+                    </span>
+                    <ChevronDown
+                      size={13}
+                      color="var(--text-secondary)"
+                      style={{
+                        transform: isUserMenuOpen ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      }}
+                    />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  <AnimatePresence>
+                    {isUserMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 'calc(100% + 8px)',
+                          width: 240,
+                          background: 'var(--surface-card)',
+                          border: '1px solid var(--border-card)',
+                          borderRadius: 14,
+                          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+                          backdropFilter: 'blur(16px)',
+                          WebkitBackdropFilter: 'blur(16px)',
+                          padding: '0.5rem',
+                          zIndex: 350,
+                        }}
+                      >
+                        {/* User Identity Header */}
+                        <div style={{ padding: '0.55rem 0.65rem 0.7rem', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {user.name}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                            {user.email}
+                          </div>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              marginTop: '0.35rem',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              background: user.provider === 'google' ? 'rgba(66, 133, 244, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                              color: user.provider === 'google' ? '#60a5fa' : 'var(--primary-start)',
+                              padding: '0.12rem 0.45rem',
+                              borderRadius: 4,
+                            }}
+                          >
+                            {user.provider === 'google' ? 'Google Account' : 'Verified Member'}
+                          </span>
                         </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
-                          {user.email}
+
+                        {/* Menu Actions */}
+                        <div style={{ padding: '0.35rem 0' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveView('saved');
+                              setIsUserMenuOpen(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.6rem',
+                              padding: '0.55rem 0.65rem',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: activeView === 'saved' ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.82rem',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <Bookmark size={15} color="var(--primary-start)" />
+                            <span>Saved Jobs ({savedJobs.length})</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsProfileModalOpen(true);
+                              setIsUserMenuOpen(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.6rem',
+                              padding: '0.55rem 0.65rem',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.82rem',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <UserIcon size={15} color="var(--text-secondary)" />
+                            <span>Account Profile</span>
+                          </button>
                         </div>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            marginTop: '0.35rem',
-                            fontSize: '0.65rem',
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            background: user.provider === 'google' ? 'rgba(66, 133, 244, 0.15)' : 'rgba(99, 102, 241, 0.15)',
-                            color: user.provider === 'google' ? '#60a5fa' : 'var(--primary-start)',
-                            padding: '0.12rem 0.45rem',
-                            borderRadius: 4,
-                          }}
-                        >
-                          {user.provider === 'google' ? 'Google Account' : 'Verified Member'}
-                        </span>
-                      </div>
 
-                      {/* Menu Actions */}
-                      <div style={{ padding: '0.35rem 0' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveView('saved');
-                            setIsUserMenuOpen(false);
-                          }}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.6rem',
-                            padding: '0.55rem 0.65rem',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: activeView === 'saved' ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                            color: 'var(--text-primary)',
-                            fontSize: '0.82rem',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                        >
-                          <Bookmark size={15} color="var(--primary-start)" />
-                          <span>Saved Jobs ({savedJobs.length})</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsProfileModalOpen(true);
-                            setIsUserMenuOpen(false);
-                          }}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.6rem',
-                            padding: '0.55rem 0.65rem',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: 'transparent',
-                            color: 'var(--text-primary)',
-                            fontSize: '0.82rem',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                        >
-                          <UserIcon size={15} color="var(--text-secondary)" />
-                          <span>Account Profile</span>
-                        </button>
-                      </div>
-
-                      {/* Sign Out Action */}
-                      <div style={{ paddingTop: '0.35rem', borderTop: '1px solid var(--border)' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsUserMenuOpen(false);
-                            logout();
-                          }}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.6rem',
-                            padding: '0.55rem 0.65rem',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: 'transparent',
-                            color: '#ef4444',
-                            fontSize: '0.82rem',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                        >
-                          <LogOut size={15} color="#ef4444" />
-                          <span>Sign Out</span>
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                        {/* Sign Out Action */}
+                        <div style={{ paddingTop: '0.35rem', borderTop: '1px solid var(--border)' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              logout();
+                            }}
+                            style={{
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.6rem',
+                              padding: '0.55rem 0.65rem',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#ef4444',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <LogOut size={15} color="#ef4444" />
+                            <span>Sign Out</span>
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Anonymous State: Standard Sign In CTA */}
-          {authStatus === 'anonymous' && (
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={() => openAuthModal()}
-              className="btn-primary"
-              style={{
-                padding: '0.42rem 1.05rem',
-                borderRadius: 9999,
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-              }}
-            >
-              <UserIcon size={14} />
-              <span>Sign In</span>
-            </motion.button>
-          )}
-        </div>
-      </header>
+            {/* Anonymous State: Standard Sign In CTA */}
+            {authStatus === 'anonymous' && (
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={() => openAuthModal()}
+                className="site-header-btn site-header-btn-primary"
+              >
+                <UserIcon size={14} />
+                <span>Sign In</span>
+              </motion.button>
+            )}
+          </div>
+        </header>
+      </div>
 
       {/* Hero Section */}
       <section style={{ margin: '3.2rem 0 2rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
         <motion.div
+          key={searched ? `hero-searched-${displayedJobs.length}` : `hero-total-${formattedCount}`}
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.45rem',
-            padding: '0.35rem 0.95rem',
-            borderRadius: 9999,
-            background: 'rgba(99, 102, 241, 0.08)',
-            border: '1px solid rgba(99, 102, 241, 0.22)',
-            color: '#a5b4fc',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            marginBottom: '1.25rem',
-          }}
+          className="hero-ats-badge"
         >
-          <Sparkles size={13} color="#818cf8" />
-          <span>Verified Tech Career Platform</span>
+          <Sparkles size={14} className="hero-ats-badge-icon" />
+          <span className="hero-ats-badge-accent">
+            {searched ? `${displayedJobs.length.toLocaleString()} Roles Matched` : `${formattedCount} Live Roles`}
+          </span>
+          <span className="hero-ats-badge-bullet">•</span>
+          <span className="hero-ats-badge-secondary">
+            {searched ? `${formattedCount} Total Verified` : `${sourcesCount} Verified Public Feeds &amp; ATS`}
+          </span>
         </motion.div>
 
         <motion.h2
@@ -1683,15 +1729,47 @@ export default function Home() {
                     {selectedWorkplaceObj.label}
                   </span>
                 </div>
-                <ChevronDown
-                  size={14}
-                  color="var(--text-secondary)"
-                  style={{
-                    transform: showWorkplaceDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s ease',
-                    flexShrink: 0,
-                  }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                  {remote && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRemote('');
+                        executeSearch(query, location, type, level, selectedRole, '');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setRemote('');
+                          executeSearch(query, location, type, level, selectedRole, '');
+                        }
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        padding: 2,
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: 'var(--text-secondary)',
+                      }}
+                      title="Clear workplace filter"
+                    >
+                      <X size={13} />
+                    </span>
+                  )}
+                  <ChevronDown
+                    size={14}
+                    color="var(--text-secondary)"
+                    style={{
+                      transform: showWorkplaceDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s ease',
+                      flexShrink: 0,
+                    }}
+                  />
+                </div>
               </button>
 
               <AnimatePresence>
@@ -1803,15 +1881,47 @@ export default function Home() {
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {selectedTypeObj.label}
                 </span>
-                <ChevronDown
-                  size={14}
-                  color="var(--text-secondary)"
-                  style={{
-                    transform: showTypeDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s ease',
-                    flexShrink: 0,
-                  }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                  {type && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setType('');
+                        executeSearch(query, location, '', level, selectedRole, remote);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setType('');
+                          executeSearch(query, location, '', level, selectedRole, remote);
+                        }
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        padding: 2,
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: 'var(--text-secondary)',
+                      }}
+                      title="Clear employment type filter"
+                    >
+                      <X size={13} />
+                    </span>
+                  )}
+                  <ChevronDown
+                    size={14}
+                    color="var(--text-secondary)"
+                    style={{
+                      transform: showTypeDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s ease',
+                      flexShrink: 0,
+                    }}
+                  />
+                </div>
               </button>
 
               <AnimatePresence>
@@ -1920,15 +2030,47 @@ export default function Home() {
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {selectedLevelObj.label}
                 </span>
-                <ChevronDown
-                  size={14}
-                  color="var(--text-secondary)"
-                  style={{
-                    transform: showLevelDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s ease',
-                    flexShrink: 0,
-                  }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                  {level && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLevel('');
+                        executeSearch(query, location, type, '', selectedRole, remote);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setLevel('');
+                          executeSearch(query, location, type, '', selectedRole, remote);
+                        }
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        padding: 2,
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: 'var(--text-secondary)',
+                      }}
+                      title="Clear seniority filter"
+                    >
+                      <X size={13} />
+                    </span>
+                  )}
+                  <ChevronDown
+                    size={14}
+                    color="var(--text-secondary)"
+                    style={{
+                      transform: showLevelDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s ease',
+                      flexShrink: 0,
+                    }}
+                  />
+                </div>
               </button>
 
               <AnimatePresence>
@@ -2018,6 +2160,251 @@ export default function Home() {
               </button>
             )}
           </div>
+
+          {/* Active Filter Chips Bar */}
+          {(query || location || remote || selectedRole || type || level) && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                flexWrap: 'wrap',
+                paddingTop: '0.5rem',
+                borderTop: '1px solid rgba(255, 255, 255, 0.04)',
+              }}
+            >
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '0.15rem' }}>
+                Active:
+              </span>
+
+              {query && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.22rem 0.6rem',
+                    borderRadius: 9999,
+                    background: 'rgba(99, 102, 241, 0.15)',
+                    border: '1px solid rgba(99, 102, 241, 0.35)',
+                    color: 'var(--primary-start)',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>&ldquo;{query}&rdquo;</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery('');
+                      executeSearch('', location, type, level, selectedRole, remote);
+                    }}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
+                    title="Remove keyword filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              {location && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.22rem 0.6rem',
+                    borderRadius: 9999,
+                    background: 'rgba(56, 189, 248, 0.15)',
+                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                    color: 'var(--accent-cyan)',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <MapPin size={11} />
+                  <span>{location}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocation('');
+                      executeSearch(query, '', type, level, selectedRole, remote);
+                    }}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
+                    title="Remove location filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              {selectedRole && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.22rem 0.6rem',
+                    borderRadius: 9999,
+                    background: 'rgba(168, 85, 247, 0.15)',
+                    border: '1px solid rgba(168, 85, 247, 0.35)',
+                    color: 'var(--accent-violet)',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Briefcase size={11} />
+                  <span>{selectedRoleLabel}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleClearRole()}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
+                    title="Remove role filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              {remote && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.22rem 0.6rem',
+                    borderRadius: 9999,
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    color: 'var(--accent-emerald)',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>{selectedWorkplaceObj.icon}</span>
+                  <span>{selectedWorkplaceObj.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRemote('');
+                      executeSearch(query, location, type, level, selectedRole, '');
+                    }}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
+                    title="Remove workplace filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              {type && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.22rem 0.6rem',
+                    borderRadius: 9999,
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.35)',
+                    color: 'var(--accent-amber)',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>{selectedTypeObj.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setType('');
+                      executeSearch(query, location, '', level, selectedRole, remote);
+                    }}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
+                    title="Remove employment type filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              {level && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.22rem 0.6rem',
+                    borderRadius: 9999,
+                    background: 'rgba(244, 63, 94, 0.15)',
+                    border: '1px solid rgba(244, 63, 94, 0.35)',
+                    color: '#fda4af',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>{selectedLevelObj.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLevel('');
+                      executeSearch(query, location, type, '', selectedRole, remote);
+                    }}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
+                    title="Remove seniority filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.76rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: '0.2rem 0.4rem',
+                  textDecoration: 'underline',
+                }}
+              >
+                Reset all
+              </button>
+
+              {/* Dynamic Roles Matched pill in Search Console */}
+              {searched && (
+                <motion.div
+                  key={`console-matched-${displayedJobs.length}`}
+                  initial={{ opacity: 0, scale: 0.94 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    padding: '0.24rem 0.75rem',
+                    borderRadius: 9999,
+                    background: 'rgba(99, 102, 241, 0.12)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    color: '#c7d2fe',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.01em',
+                    marginLeft: 'auto',
+                  }}
+                >
+                  <span className="pulse-dot" />
+                  <span>
+                    {displayedJobs.length.toLocaleString()} Roles Matched • {formattedCount} Total Verified
+                  </span>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
         </motion.form>
 
         {/* Quick Popular Search Pills */}
@@ -2025,15 +2412,7 @@ export default function Home() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          style={{
-            maxWidth: 1000,
-            margin: '1.25rem auto 0',
-            display: 'flex',
-            gap: '0.5rem',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          className="quick-pills-container"
         >
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, marginRight: '0.25rem' }}>
             Popular Searches:
@@ -2080,8 +2459,53 @@ export default function Home() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {activeView === 'saved' ? `${savedJobs.length} Saved Positions` : `${displayedJobs.length} Verified Positions`}
+              {activeView === 'saved'
+                ? `${savedJobs.length} Saved Positions`
+                : displayedJobs.length > JOBS_BATCH_SIZE
+                ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
+                : `${displayedJobs.length.toLocaleString()} Verified Positions`}
             </span>
+            {activeView !== 'saved' && (
+              <motion.div
+                key={`toolbar-matched-${displayedJobs.length}`}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.28rem 0.8rem',
+                  borderRadius: 9999,
+                  background: 'rgba(99, 102, 241, 0.12)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.15)',
+                }}
+              >
+                <span className="pulse-dot" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c7d2fe', letterSpacing: '0.01em' }}>
+                  {displayedJobs.length.toLocaleString()} Roles Matched • {formattedCount} Total Verified
+                </span>
+              </motion.div>
+            )}
+            {displayedJobs.length > JOBS_BATCH_SIZE && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  padding: '0.2rem 0.55rem',
+                  borderRadius: 9999,
+                  background: 'rgba(99, 102, 241, 0.12)',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  color: '#a5b4fc',
+                }}
+              >
+                <Zap size={11} />
+                <span>Auto-loading on scroll</span>
+              </span>
+            )}
             {activeView === 'saved' ? (
               <button
                 type="button"
@@ -2244,16 +2668,91 @@ export default function Home() {
               </motion.button>
             </div>
           ) : (
-            <motion.div
-              layout
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}
-            >
-              <AnimatePresence mode="popLayout">
-                {savedJobs.map((job, index) => (
+            <>
+              <div
+                className="job-grid"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                  gap: '1.5rem',
+                  overflowAnchor: 'auto',
+                }}
+              >
+                {visibleJobs.map((job, index) => (
                   <JobCard key={job.id || `saved-${index}`} job={job} index={index} />
                 ))}
-              </AnimatePresence>
-            </motion.div>
+              </div>
+
+              {hasMore && (
+                <div
+                  ref={sentinelRef}
+                  style={{
+                    marginTop: '2.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.85rem',
+                    padding: '1.75rem 1rem',
+                    borderRadius: 16,
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px dashed rgba(255, 255, 255, 0.12)',
+                  }}
+                >
+                  {isLoadingMore ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#a5b4fc', fontSize: '0.92rem', fontWeight: 600 }}>
+                        <Loader2 size={18} className="animate-spin" color="var(--accent-indigo)" />
+                        <span>Loading more saved roles...</span>
+                      </div>
+                      <div
+                        style={{
+                          width: 200,
+                          height: 4,
+                          borderRadius: 9999,
+                          background: 'rgba(99, 102, 241, 0.2)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          className="skeleton-shimmer"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            background: 'linear-gradient(90deg, transparent, #818cf8, transparent)',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        <Loader2 size={16} className="animate-spin" color="var(--accent-indigo)" />
+                        <span>Scroll to load more or click below</span>
+                      </div>
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        type="button"
+                        onClick={loadMore}
+                        className="btn-secondary"
+                        style={{
+                          fontSize: '0.84rem',
+                          padding: '0.6rem 1.4rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                        }}
+                      >
+                        <ArrowDown size={14} />
+                        <span>
+                          Load Next {Math.min(JOBS_BATCH_SIZE, displayedJobs.length - visibleJobs.length)} Roles
+                        </span>
+                      </motion.button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
           )
         ) : searched && displayedJobs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
@@ -2269,11 +2768,32 @@ export default function Home() {
             >
               <AlertCircle size={36} color="var(--error)" />
             </div>
-            <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>No active public listings found</h3>
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>No active verified listings found</h3>
             <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
               We couldn&apos;t verify any active public links matching your exact combination. Try broadening your keywords or resetting filters.
             </p>
-            <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <div style={{ marginTop: '2rem', display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={clearAllFilters}
+                className="btn-primary"
+              >
+                Clear All Filters
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  clearAllFilters();
+                  setRemote('remote');
+                  executeSearch('', '', '', '', '', 'remote');
+                }}
+                className="btn-secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <span>🏠 Explore Remote Roles</span>
+              </motion.button>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -2284,27 +2804,144 @@ export default function Home() {
                 <Compass size={15} />
                 <span>Return to Discovery</span>
               </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={clearAllFilters}
-                className="btn-primary"
-              >
-                Clear All Filters
-              </motion.button>
             </div>
           </div>
         ) : searched && displayedJobs.length > 0 ? (
-          <motion.div
-            layout
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}
-          >
-            <AnimatePresence mode="popLayout">
-              {displayedJobs.map((job, index) => (
+          <>
+            <div
+              className="job-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                gap: '1.5rem',
+                overflowAnchor: 'auto',
+              }}
+            >
+              {visibleJobs.map((job, index) => (
                 <JobCard key={job.id || `job-${index}`} job={job} index={index} />
               ))}
-            </AnimatePresence>
-          </motion.div>
+            </div>
+
+            {/* Lazy Load Sentinel & Infinite Controls */}
+            {hasMore ? (
+              <div
+                ref={sentinelRef}
+                style={{
+                  marginTop: '2.5rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.85rem',
+                  padding: '1.75rem 1rem',
+                  borderRadius: 16,
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px dashed rgba(255, 255, 255, 0.12)',
+                }}
+              >
+                {isLoadingMore ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#a5b4fc', fontSize: '0.92rem', fontWeight: 600 }}>
+                      <Loader2 size={18} className="animate-spin" color="var(--accent-indigo)" />
+                      <span>Loading more verified openings...</span>
+                    </div>
+                    <div
+                      style={{
+                        width: 200,
+                        height: 4,
+                        borderRadius: 9999,
+                        background: 'rgba(99, 102, 241, 0.2)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        className="skeleton-shimmer"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          background: 'linear-gradient(90deg, transparent, #818cf8, transparent)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      <Loader2 size={16} className="animate-spin" color="var(--accent-indigo)" />
+                      <span>Scroll to auto-load or click below</span>
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      type="button"
+                      onClick={loadMore}
+                      className="btn-secondary"
+                      style={{
+                        fontSize: '0.84rem',
+                        padding: '0.6rem 1.4rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <ArrowDown size={14} />
+                      <span>
+                        Load Next {Math.min(JOBS_BATCH_SIZE, displayedJobs.length - visibleJobs.length)} Roles ({displayedJobs.length - visibleJobs.length} remaining)
+                      </span>
+                    </motion.button>
+                  </>
+                )}
+              </div>
+            ) : displayedJobs.length > JOBS_BATCH_SIZE ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  marginTop: '2.5rem',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.8rem',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.45rem 1.1rem',
+                    borderRadius: 9999,
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    color: '#34d399',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Check size={14} />
+                  <span>All {displayedJobs.length} Verified Roles Loaded</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  <ArrowUp size={13} />
+                  <span>Back to top</span>
+                </button>
+              </motion.div>
+            ) : null}
+          </>
         ) : (
           /* Standard Discovery Section when not searched yet */
           <div style={{ marginTop: '0.5rem', paddingBottom: '3rem' }}>
@@ -2430,13 +3067,27 @@ export default function Home() {
             {/* Verified Public Network Trust Strip */}
             <div style={{ marginTop: '3rem', textAlign: 'center' }}>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1.2rem' }}>
-                AGGREGATING DIRECTLY FROM VERIFIED PUBLIC SOURCES & EMPLOYER ATS BOARDS
+                AGGREGATING DIRECTLY FROM 9 VERIFIED PUBLIC PORTAL FEEDS &amp; ATS
               </p>
               <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
-                {['Greenhouse ATS', 'Ashby ATS', 'Himalayas', 'WeWorkRemotely', 'Jobicy', 'RemoteOK', 'Remotive', 'Arbeitnow'].map((source, sIdx) => (
+                {[
+                  { name: 'Greenhouse ATS', isIndia: false },
+                  { name: 'Ashby ATS', isIndia: false },
+                  { name: 'National Career Service (NCS)', isIndia: true },
+                  { name: 'Himalayas', isIndia: false },
+                  { name: 'WeWorkRemotely', isIndia: false },
+                  { name: 'Jobicy', isIndia: false },
+                  { name: 'RemoteOK', isIndia: false },
+                  { name: 'Remotive', isIndia: false },
+                  { name: 'Arbeitnow', isIndia: false },
+                ].map((source, sIdx) => (
                   <span key={sIdx} className="trust-badge">
-                    <ShieldCheck size={13} color="var(--accent-emerald)" />
-                    <span>{source}</span>
+                    {source.isIndia ? (
+                      <span style={{ fontSize: '0.85rem' }}>🇮🇳</span>
+                    ) : (
+                      <ShieldCheck size={13} color="var(--accent-emerald)" />
+                    )}
+                    <span>{source.name}</span>
                   </span>
                 ))}
               </div>
@@ -2477,6 +3128,42 @@ export default function Home() {
           >
             <ArrowUp size={20} />
           </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Glassmorphic Scroll Loader Pill */}
+      <AnimatePresence>
+        {isLoadingMore && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              position: 'fixed',
+              bottom: '2rem',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 100,
+              background: 'rgba(15, 23, 42, 0.92)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(99, 102, 241, 0.45)',
+              borderRadius: 9999,
+              padding: '0.65rem 1.4rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.35)',
+              color: '#f8fafc',
+              fontSize: '0.86rem',
+              fontWeight: 600,
+              pointerEvents: 'none',
+            }}
+          >
+            <Loader2 size={16} className="animate-spin" color="#818cf8" />
+            <span>Loading verified openings...</span>
+          </motion.div>
         )}
       </AnimatePresence>
 
