@@ -12,6 +12,7 @@ import {
 export interface ToastMessage {
   id: string;
   type: 'success' | 'error' | 'info';
+  title?: string;
   message: string;
 }
 
@@ -20,106 +21,139 @@ interface FuturisticToastProps {
   onDismiss: () => void;
 }
 
-export default function FuturisticToast({ toast, onDismiss }: FuturisticToastProps) {
-  if (!toast) return null;
-
+function resolveToastMeta(toast: ToastMessage) {
   const isSuccess = toast.type === 'success';
   const isError = toast.type === 'error';
+  const text = (toast.message || '').toLowerCase();
 
-  // Cybernetic Color Palette Tokens
+  let title = toast.title;
+  let badge = 'UPDATE';
+
+  if (!title) {
+    if (isSuccess) {
+      if (text.includes('saved')) {
+        title = 'Job Saved';
+        badge = 'SAVED';
+      } else if (text.includes('welcome') || text.includes('signed in')) {
+        title = 'Welcome Back';
+        badge = 'AUTHENTICATED';
+      } else if (text.includes('account created')) {
+        title = 'Account Created';
+        badge = 'VERIFIED';
+      } else if (text.includes('copied')) {
+        title = 'Link Copied';
+        badge = 'CLIPBOARD';
+      } else if (text.includes('resum')) {
+        title = 'Application Resumed';
+        badge = 'DIRECT ATS';
+      } else {
+        title = 'Success';
+        badge = 'COMPLETED';
+      }
+    } else if (isError) {
+      if (text.includes('auth') || text.includes('credential')) {
+        title = 'Authentication Notice';
+        badge = 'ALERT';
+      } else if (text.includes('save')) {
+        title = 'Save Failed';
+        badge = 'ERROR';
+      } else {
+        title = 'Attention Needed';
+        badge = 'NOTICE';
+      }
+    } else {
+      // info
+      if (text.includes('signed out') || text.includes('logged out') || text.includes('guest')) {
+        title = 'Signed Out';
+        badge = 'GUEST BROWSING';
+      } else if (text.includes('removed')) {
+        title = 'Job Removed';
+        badge = 'COLLECTION';
+      } else if (text.includes('opening') || text.includes('portal')) {
+        title = 'Opening Career Portal';
+        badge = 'DIRECT ATS';
+      } else {
+        title = 'Notification';
+        badge = 'NOTICE';
+      }
+    }
+  }
+
   const config = isSuccess
     ? {
-        badge: 'SYSTEM // VERIFIED',
         accent: '#10b981',
-        accentGlow: 'rgba(16, 185, 129, 0.35)',
-        accentSecondary: '#06b6d4',
-        borderColor: 'rgba(16, 185, 129, 0.45)',
-        iconBg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 182, 212, 0.12) 100%)',
-        boxShadow:
-          '0 20px 48px -10px rgba(0, 0, 0, 0.7), 0 0 35px rgba(16, 185, 129, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+        accentBg: 'rgba(16, 185, 129, 0.12)',
+        borderColor: 'rgba(16, 185, 129, 0.35)',
+        iconGlow: 'rgba(16, 185, 129, 0.25)',
+        badgeColor: '#10b981',
         beaconClass: 'jn-beacon-success',
         Icon: CheckCircle2,
       }
     : isError
     ? {
-        badge: 'SYSTEM // ALERT',
         accent: '#f43f5e',
-        accentGlow: 'rgba(244, 63, 94, 0.38)',
-        accentSecondary: '#fb7185',
-        borderColor: 'rgba(244, 63, 94, 0.5)',
-        iconBg: 'linear-gradient(135deg, rgba(244, 63, 94, 0.25) 0%, rgba(225, 29, 72, 0.12) 100%)',
-        boxShadow:
-          '0 20px 48px -10px rgba(0, 0, 0, 0.7), 0 0 35px rgba(244, 63, 94, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+        accentBg: 'rgba(244, 63, 94, 0.12)',
+        borderColor: 'rgba(244, 63, 94, 0.35)',
+        iconGlow: 'rgba(244, 63, 94, 0.25)',
+        badgeColor: '#f43f5e',
         beaconClass: 'jn-beacon-error',
         Icon: AlertTriangle,
       }
     : {
-        badge: 'NEXUS // UPDATE',
         accent: '#6366f1',
-        accentGlow: 'rgba(99, 102, 241, 0.35)',
-        accentSecondary: '#38bdf8',
-        borderColor: 'rgba(99, 102, 241, 0.45)',
-        iconBg: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(56, 189, 248, 0.14) 100%)',
-        boxShadow:
-          '0 20px 48px -10px rgba(0, 0, 0, 0.7), 0 0 35px rgba(99, 102, 241, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+        accentBg: 'rgba(99, 102, 241, 0.12)',
+        borderColor: 'rgba(99, 102, 241, 0.35)',
+        iconGlow: 'rgba(99, 102, 241, 0.25)',
+        badgeColor: '#6366f1',
         beaconClass: 'jn-beacon-info',
         Icon: Sparkles,
       };
 
-  const { Icon } = config;
+  return { title, badge, ...config };
+}
+
+export default function FuturisticToast({ toast, onDismiss }: FuturisticToastProps) {
+  if (!toast) return null;
+
+  const { title, badge, accent, accentBg, borderColor, Icon, beaconClass } =
+    resolveToastMeta(toast);
 
   return (
     <AnimatePresence>
-      <div
-        style={{
-          position: 'fixed',
-          top: 24,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 999999,
-          pointerEvents: 'none',
-          display: 'flex',
-          justifyContent: 'center',
-          width: '100%',
-          maxWidth: 520,
-          padding: '0 1rem',
-        }}
-      >
+      <div className="jn-toast-container">
         <motion.div
           key={toast.id}
-          initial={{ opacity: 0, y: -36, scale: 0.9, filter: 'blur(10px)' }}
-          animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+          initial={{ opacity: 0, y: 24, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{
             opacity: 0,
-            y: -22,
-            scale: 0.94,
-            filter: 'blur(8px)',
-            transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
+            y: 16,
+            scale: 0.96,
+            transition: { duration: 0.18, ease: 'easeOut' },
           }}
           transition={{
             type: 'spring',
             stiffness: 420,
             damping: 28,
-            mass: 0.85,
+            mass: 0.8,
           }}
-          whileHover={{ scale: 1.015 }}
+          whileHover={{ scale: 1.01 }}
           drag="y"
           dragConstraints={{ top: 0, bottom: 0 }}
           onDragEnd={(_, info) => {
-            if (info.offset.y < -20) onDismiss();
+            if (info.offset.y > 20 || info.offset.y < -20) onDismiss();
           }}
           style={{
             pointerEvents: 'auto',
             position: 'relative',
             width: '100%',
             overflow: 'hidden',
-            borderRadius: 18,
-            background:
-              'var(--toast-bg, linear-gradient(135deg, rgba(13, 18, 33, 0.94) 0%, rgba(9, 13, 24, 0.97) 100%))',
-            backdropFilter: 'blur(24px) saturate(200%)',
-            WebkitBackdropFilter: 'blur(24px) saturate(200%)',
-            border: `1px solid ${config.borderColor}`,
-            boxShadow: config.boxShadow,
+            borderRadius: 14,
+            background: 'var(--toast-bg)',
+            border: '1px solid var(--toast-border)',
+            boxShadow: 'var(--toast-shadow)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             display: 'flex',
             flexDirection: 'column',
             cursor: 'grab',
@@ -127,7 +161,7 @@ export default function FuturisticToast({ toast, onDismiss }: FuturisticToastPro
           role="status"
           aria-live="polite"
         >
-          {/* Top Holographic Scanning Laser Beam */}
+          {/* Subtle Top Accent Line */}
           <div
             style={{
               position: 'absolute',
@@ -135,149 +169,138 @@ export default function FuturisticToast({ toast, onDismiss }: FuturisticToastPro
               left: 0,
               right: 0,
               height: 2.5,
-              background: `linear-gradient(90deg, transparent, ${config.accent}, ${config.accentSecondary}, transparent)`,
-              animation: 'jn-laser-sweep 3s ease-in-out infinite',
-              opacity: 0.9,
+              background: `linear-gradient(90deg, ${accent}, rgba(99, 102, 241, 0.4), transparent)`,
+              opacity: 0.95,
             }}
           />
 
-          {/* Toast Body Layout */}
+          {/* Toast Content Layout */}
           <div
             style={{
               display: 'flex',
               alignItems: 'flex-start',
-              gap: '0.9rem',
-              padding: '0.9rem 1.15rem 0.85rem 1rem',
+              gap: '0.85rem',
+              padding: '0.85rem 1rem 0.8rem 0.95rem',
             }}
           >
-            {/* Holographic Glowing Icon Pod */}
+            {/* Status Icon Pod */}
             <div
               style={{
                 flexShrink: 0,
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                background: config.iconBg,
-                border: `1px solid ${config.borderColor}`,
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: accentBg,
+                border: `1px solid ${borderColor}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: config.accent,
-                boxShadow: `0 0 16px ${config.accentGlow}`,
+                color: accent,
                 marginTop: 2,
               }}
             >
-              <Icon size={21} strokeWidth={2.4} />
+              <Icon size={18} strokeWidth={2.4} />
             </div>
 
-            {/* Content Section */}
+            {/* Contextual Text Content */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              {/* Futuristic Cyber Subhead with Pulsing Beacon */}
+              {/* Header Meta: Dot + Badge + Title */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.45rem',
-                  marginBottom: '0.25rem',
+                  marginBottom: '0.2rem',
                 }}
               >
-                {/* Live Activity Radar Beacon */}
                 <div
-                  className={config.beaconClass}
+                  className={beaconClass}
                   style={{
-                    width: 7,
-                    height: 7,
+                    width: 6,
+                    height: 6,
                     borderRadius: '50%',
-                    background: config.accent,
-                    boxShadow: `0 0 8px ${config.accent}`,
+                    background: accent,
                   }}
                 />
-
-                {/* Monospace System Badge */}
                 <span
                   style={{
-                    fontFamily: 'var(--font-mono), monospace',
-                    fontSize: '0.68rem',
+                    fontSize: '0.66rem',
                     fontWeight: 700,
-                    letterSpacing: '0.12em',
-                    color: config.accent,
+                    letterSpacing: '0.08em',
+                    color: accent,
                     textTransform: 'uppercase',
                   }}
                 >
-                  {config.badge}
+                  {badge}
                 </span>
-
                 <span
                   style={{
-                    fontSize: '0.65rem',
-                    color: 'rgba(255, 255, 255, 0.4)',
-                    fontFamily: 'var(--font-mono), monospace',
-                    marginLeft: 'auto',
-                    letterSpacing: '0.05em',
+                    fontSize: '0.88rem',
+                    fontWeight: 650,
+                    color: 'var(--toast-title, var(--text-primary))',
+                    letterSpacing: '-0.01em',
+                    marginLeft: '0.25rem',
                   }}
                 >
-                  TRANSMISSION ACTIVE
+                  {title}
                 </span>
               </div>
 
-              {/* Message Payload */}
+              {/* Informative Body Text */}
               <p
                 style={{
                   margin: 0,
-                  fontSize: '0.88rem',
-                  fontWeight: 550,
+                  fontSize: '0.82rem',
+                  fontWeight: 450,
                   lineHeight: 1.45,
-                  color: 'var(--text-primary, #ffffff)',
+                  color: 'var(--toast-body, var(--text-secondary))',
                   wordBreak: 'break-word',
-                  letterSpacing: '-0.01em',
                 }}
               >
                 {toast.message}
               </p>
             </div>
 
-            {/* Futuristic Dismiss Button */}
+            {/* Minimalist Close Button */}
             <button
               type="button"
               onClick={onDismiss}
               aria-label="Dismiss notification"
               style={{
                 flexShrink: 0,
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                color: 'rgba(255, 255, 255, 0.65)',
-                width: 26,
-                height: 26,
-                borderRadius: 8,
+                background: 'var(--toast-close-bg)',
+                border: '1px solid transparent',
+                color: 'var(--toast-close)',
+                width: 24,
+                height: 24,
+                borderRadius: 6,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                transition: 'all 0.15s ease',
                 padding: 0,
-                marginLeft: '0.2rem',
+                marginLeft: '0.15rem',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#ffffff';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.16)';
-                e.currentTarget.style.transform = 'rotate(90deg)';
+                e.currentTarget.style.color = 'var(--toast-close-hover)';
+                e.currentTarget.style.borderColor = 'var(--toast-border)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.65)';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                e.currentTarget.style.transform = 'rotate(0deg)';
+                e.currentTarget.style.color = 'var(--toast-close)';
+                e.currentTarget.style.borderColor = 'transparent';
               }}
             >
-              <X size={14} strokeWidth={2.2} />
+              <X size={13} strokeWidth={2.4} />
             </button>
           </div>
 
-          {/* Depleting High-Energy Countdown Bar */}
+          {/* Clean Progress Deplete Bar */}
           <div
             style={{
               width: '100%',
-              height: 2.5,
-              background: 'rgba(255, 255, 255, 0.08)',
+              height: 2,
+              background: 'rgba(125, 125, 125, 0.1)',
               overflow: 'hidden',
             }}
           >
@@ -286,8 +309,7 @@ export default function FuturisticToast({ toast, onDismiss }: FuturisticToastPro
               style={{
                 width: '100%',
                 height: '100%',
-                background: `linear-gradient(90deg, ${config.accent}, ${config.accentSecondary})`,
-                boxShadow: `0 0 10px ${config.accent}`,
+                background: accent,
               }}
             />
           </div>

@@ -60,6 +60,7 @@ export type AuthIntent = PendingAction;
 interface ToastMessage {
   id: string;
   type: 'success' | 'error' | 'info';
+  title?: string;
   message: string;
 }
 
@@ -101,7 +102,7 @@ interface AuthContextType {
   toggleSaveJob: (job: Partial<SavedJob> & { id: string; title: string; company?: string; url?: string; [key: string]: unknown }) => Promise<boolean>;
   isJobSaved: (jobId: string) => boolean;
   clearToast: () => void;
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  showToast: (message: string, type?: 'success' | 'error' | 'info', title?: string) => void;
   logout: () => Promise<void>;
 }
 
@@ -119,12 +120,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success', title?: string) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToast({ id, type, message });
+    setToast({ id, type, message, title });
     setTimeout(() => {
       setToast((curr) => (curr?.id === id ? null : curr));
-    }, 3800);
+    }, 4200);
   }, []);
 
   const clearToast = useCallback(() => {
@@ -462,7 +463,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       setUser(data.user);
       setStatus('authenticated');
-      showToast(`Welcome back, ${data.user.name}!`, 'success');
+      showToast(
+        `Welcome back, ${data.user.name}! Full company details and direct ATS application links are unlocked.`,
+        'success',
+        'Welcome Back'
+      );
       await handlePostAuthAction(data.user);
     },
     [handlePostAuthAction, showToast]
@@ -491,7 +496,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const resData = await res.json();
       setUser(resData.user);
       setStatus('authenticated');
-      showToast(`Account created! Welcome to JobNexus, ${resData.user.name}.`, 'success');
+      showToast(
+        `Welcome to JobNexus, ${resData.user.name}! Your account is ready and direct ATS application links are unlocked.`,
+        'success',
+        'Account Created'
+      );
       await handlePostAuthAction(resData.user);
     },
     [handlePostAuthAction, showToast]
@@ -581,7 +590,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSavedJobs([]);
     setStatus('anonymous');
     setPendingIntent(null);
-    showToast('Signed out successfully. Happy job hunting!', 'info');
+    showToast(
+      'Browsing in guest mode. Company names and direct application links are now masked.',
+      'info',
+      'Signed Out'
+    );
   }, [showToast]);
 
   return (

@@ -100,27 +100,43 @@ describe('Provider Adapters Unit Tests', () => {
     });
   });
 
-  describe('Greenhouse & Ashby ATS Adapters', () => {
+  describe('Greenhouse, Ashby & Lever ATS Adapters', () => {
     it('initializes Greenhouse adapter with default verified employer boards', () => {
       const gh = new GreenhouseAdapter();
       assert.strictEqual(gh.name, 'Greenhouse ATS');
+      assert.strictEqual(gh.id, 'greenhouse');
     });
 
     it('initializes Ashby adapter with default verified employer boards', () => {
       const ashby = new AshbyAdapter();
       assert.strictEqual(ashby.name, 'Ashby ATS');
+      assert.strictEqual(ashby.id, 'ashby');
+    });
+
+    it('initializes Lever adapter with default verified employer boards', async () => {
+      const { LeverAdapter } = await import('../adapters/ats/lever.adapter');
+      const lever = new LeverAdapter();
+      assert.strictEqual(lever.name, 'Lever ATS');
+      assert.strictEqual(lever.id, 'lever');
     });
   });
 
   describe('National Career Service (NCS) Adapter', () => {
-    it('initializes NCS adapter and fetches valid normalized jobs with Indian eligibility', async () => {
-      const { NcsAdapter } = await import('../adapters/ncs/ncs.adapter');
-      const ncs = new NcsAdapter();
+    it('initializes NCS adapter and fetches valid normalized jobs with Indian eligibility via fixture', async () => {
+      const { NcsAdapter, VERIFIED_NCS_VACANCIES } = await import('../adapters/ncs/ncs.adapter');
+      const ncs = new NcsAdapter(VERIFIED_NCS_VACANCIES);
       assert.strictEqual(ncs.name, 'National Career Service');
       assert.strictEqual(ncs.id, 'ncs');
       const jobs = await ncs.fetchJobs();
       assert.ok(jobs.length > 0);
       assert.strictEqual(jobs.every((j) => j.isIndiaEligible === true), true);
+    });
+
+    it('quarantines unverifiable synthetic listings when unconfigured in production', async () => {
+      const { NcsAdapter } = await import('../adapters/ncs/ncs.adapter');
+      const prodNcs = new NcsAdapter();
+      const jobs = await prodNcs.fetchJobs();
+      assert.strictEqual(jobs.length, 0, 'Must never produce synthetic mock vacancies in production');
     });
   });
 });

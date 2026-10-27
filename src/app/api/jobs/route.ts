@@ -9,6 +9,7 @@ import {
   maskJobForAnonymous,
   maskJobsForAnonymous,
 } from '@/modules/jobs/domain/job.masking';
+import { buildExternalPlatformSearchLinks } from '@/modules/jobs/domain/job.links';
 
 // Re-export Job interface for backward compatibility with existing imports
 export type Job = LegacyJob;
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
       count: shapedJobs.length,
       sources: result.sources,
       diagnostics: result.diagnostics,
+      externalDiscovery: buildExternalPlatformSearchLinks({ query, location }),
     });
   } catch (error) {
     console.error('[JobNexus API Error]:', error);

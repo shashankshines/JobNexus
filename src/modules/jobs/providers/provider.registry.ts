@@ -7,6 +7,7 @@ import { HimalayasAdapter } from '../adapters/himalayas/himalayas.adapter';
 import { WeWorkRemotelyAdapter } from '../adapters/weworkremotely/weworkremotely.adapter';
 import { GreenhouseAdapter } from '../adapters/ats/greenhouse.adapter';
 import { AshbyAdapter } from '../adapters/ats/ashby.adapter';
+import { LeverAdapter } from '../adapters/ats/lever.adapter';
 import { NcsAdapter } from '../adapters/ncs/ncs.adapter';
 
 export class ProviderRegistry {
@@ -19,6 +20,7 @@ export class ProviderRegistry {
     new WeWorkRemotelyAdapter(),
     new GreenhouseAdapter(),
     new AshbyAdapter(),
+    new LeverAdapter(),
     new NcsAdapter(),
   ];
 

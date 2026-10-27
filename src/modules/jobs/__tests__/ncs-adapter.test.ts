@@ -18,8 +18,14 @@ describe('National Career Service (NCS) Adapter Suite', () => {
     assert.strictEqual(adapter.timeoutMs, 6000);
   });
 
-  it('fetches verified Indian public sector, ministry, and apprenticeship vacancies', async () => {
-    const adapter = new NcsAdapter();
+  it('quarantines synthetic data: returns empty array in production when unconfigured', async () => {
+    const adapter = new NcsAdapter(); // No test fixture injected
+    const jobs = await adapter.fetchJobs();
+    assert.strictEqual(jobs.length, 0, 'Production must never serve unverifiable synthetic vacancies');
+  });
+
+  it('fetches verified Indian public sector, ministry, and apprenticeship vacancies with injected fixture', async () => {
+    const adapter = new NcsAdapter(VERIFIED_NCS_VACANCIES);
     const jobs = await adapter.fetchJobs();
 
     assert.ok(Array.isArray(jobs));
@@ -38,7 +44,7 @@ describe('National Career Service (NCS) Adapter Suite', () => {
   });
 
   it('accurately maps Indian tech hubs (Bengaluru, Pune, Delhi NCR, Hyderabad, Mumbai, Nagpur)', async () => {
-    const adapter = new NcsAdapter();
+    const adapter = new NcsAdapter(VERIFIED_NCS_VACANCIES);
     const jobs = await adapter.fetchJobs();
 
     const blrJob = jobs.find((j) => j.location.includes('Bengaluru'));
@@ -53,7 +59,7 @@ describe('National Career Service (NCS) Adapter Suite', () => {
   });
 
   it('preserves Indian salary formats (LPA, Lakhs, INR / month)', async () => {
-    const adapter = new NcsAdapter();
+    const adapter = new NcsAdapter(VERIFIED_NCS_VACANCIES);
     const jobs = await adapter.fetchJobs();
 
     const nicJob = jobs.find((j) => j.company.includes('NIC'));
@@ -62,11 +68,11 @@ describe('National Career Service (NCS) Adapter Suite', () => {
 
     const drdoJob = jobs.find((j) => j.company.includes('DRDO'));
     assert.ok(drdoJob);
-    assert.strictEqual(drdoJob.salary, '₹35,00,0 / month'.replace('35,00,0', '35,000') || '₹35,000 / month');
+    assert.strictEqual(drdoJob.salary, '₹35,000 / month');
   });
 
   it('normalizes apprenticeship roles with proper employmentType and Entry seniority', async () => {
-    const adapter = new NcsAdapter();
+    const adapter = new NcsAdapter(VERIFIED_NCS_VACANCIES);
     const jobs = await adapter.fetchJobs();
 
     const apprenticeJobs = jobs.filter((j) => j.employmentType === 'Apprenticeship');
@@ -79,7 +85,7 @@ describe('National Career Service (NCS) Adapter Suite', () => {
   });
 
   it('complies strictly with anonymous user data masking', async () => {
-    const adapter = new NcsAdapter();
+    const adapter = new NcsAdapter(VERIFIED_NCS_VACANCIES);
     const [rawJob] = await adapter.fetchJobs();
 
     const legacyJob = toLegacyJob(rawJob);

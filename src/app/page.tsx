@@ -478,7 +478,7 @@ export default function Home() {
     executeSearch(query, location, type, level, roleVal, nextRemote);
   };
 
-  const handleClearRole = (e?: React.MouseEvent) => {
+  const handleClearRole = (e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
     setSelectedRole('');
     setShowRoleDropdown(false);
@@ -1480,7 +1480,7 @@ export default function Home() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          handleClearRole(e as any);
+                          handleClearRole(e);
                         }
                       }}
                       style={{
@@ -2462,8 +2462,8 @@ export default function Home() {
               {activeView === 'saved'
                 ? `${savedJobs.length} Saved Positions`
                 : displayedJobs.length > JOBS_BATCH_SIZE
-                ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
-                : `${displayedJobs.length.toLocaleString()} Verified Positions`}
+                  ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
+                  : `${displayedJobs.length.toLocaleString()} Verified Positions`}
             </span>
             {activeView !== 'saved' && (
               <motion.div
@@ -2953,9 +2953,9 @@ export default function Home() {
                   gap: '0.5rem',
                   padding: '0.35rem 0.9rem',
                   borderRadius: 9999,
-                  background: 'rgba(99, 102, 241, 0.1)',
+                  background: 'rgba(99, 102, 241, 0.2)',
                   border: '1px solid rgba(99, 102, 241, 0.25)',
-                  color: '#a5b4fc',
+                  color: '#687ff0ff',
                   fontSize: '0.8rem',
                   fontWeight: 600,
                   marginBottom: '1rem',

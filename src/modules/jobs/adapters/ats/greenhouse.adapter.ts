@@ -9,8 +9,13 @@ import {
   normalizeLocation,
   normalizeSeniority,
 } from '../../domain/job.normalization';
+import {
+  EmployerConfig,
+  globalEmployerRegistry,
+  isValidEmployerSlug,
+} from '../../providers/employer.registry';
 
-interface GreenhouseJobRaw {
+export interface GreenhouseJobRaw {
   id: number;
   title?: string;
   absolute_url?: string;
@@ -20,24 +25,32 @@ interface GreenhouseJobRaw {
   updated_at?: string;
 }
 
-interface GreenhouseBoardResponse {
+export interface GreenhouseBoardResponse {
   jobs?: GreenhouseJobRaw[];
 }
 
 export class GreenhouseAdapter implements JobProvider {
   readonly id = 'greenhouse';
   readonly name = 'Greenhouse ATS';
-  private readonly defaultBoards: Array<{ slug: string; companyName: string }> = [
-    { slug: 'canonical', companyName: 'Canonical' },
-    { slug: 'automattic', companyName: 'Automattic' },
-    { slug: 'gitlab', companyName: 'GitLab' },
-  ];
+
+  constructor(
+    private readonly employers?: EmployerConfig[],
+    private readonly testFixtures?: Record<string, GreenhouseJobRaw[]>
+  ) {}
+
+  private getActiveEmployers(): EmployerConfig[] {
+    if (this.employers && this.employers.length > 0) {
+      return this.employers.filter((e) => e.active);
+    }
+    return globalEmployerRegistry.getByAts('greenhouse');
+  }
 
   async fetchJobs(): Promise<NormalizedJob[]> {
+    const employers = this.getActiveEmployers();
     const allJobs: NormalizedJob[] = [];
 
     const results = await Promise.allSettled(
-      this.defaultBoards.map((board) => this.fetchBoardJobs(board.slug, board.companyName))
+      employers.map((emp) => this.fetchBoardJobs(emp))
     );
 
     for (const res of results) {
@@ -49,32 +62,47 @@ export class GreenhouseAdapter implements JobProvider {
     return allJobs;
   }
 
-  async fetchBoardJobs(boardSlug: string, companyName: string): Promise<NormalizedJob[]> {
-    const url = `https://boards-api.greenhouse.io/v1/boards/${boardSlug}/jobs`;
-    const res = await fetchWithTimeout(
-      url,
-      {
-        headers: {
-          'User-Agent': 'JobNexus/1.0 (Public Job Search Platform)',
-          Accept: 'application/json',
-        },
-        cache: 'no-store',
-      },
-      6000
-    );
+  async fetchBoardJobs(employer: EmployerConfig): Promise<NormalizedJob[]> {
+    const { slug, name: companyName } = employer;
 
-    if (!res.ok) {
-      throw new Error(`Greenhouse board ${boardSlug} returned HTTP status ${res.status}`);
+    // SSRF & path traversal guard
+    if (!isValidEmployerSlug(slug)) {
+      console.warn(`[GreenhouseAdapter] Rejected unsafe board slug "${slug}"`);
+      return [];
     }
 
-    const data: GreenhouseBoardResponse = await res.json();
-    if (!data.jobs || !Array.isArray(data.jobs)) {
-      return [];
+    let jobsList: GreenhouseJobRaw[] = [];
+
+    if (this.testFixtures && this.testFixtures[slug]) {
+      jobsList = this.testFixtures[slug];
+    } else {
+      const url = `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`;
+      const res = await fetchWithTimeout(
+        url,
+        {
+          headers: {
+            'User-Agent': 'JobNexus/1.0 (Public Global Job Search Platform)',
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+        },
+        6000
+      );
+
+      if (!res.ok) {
+        throw new Error(`Greenhouse board ${slug} returned HTTP status ${res.status}`);
+      }
+
+      const data: GreenhouseBoardResponse = await res.json();
+      if (!data.jobs || !Array.isArray(data.jobs)) {
+        return [];
+      }
+      jobsList = data.jobs;
     }
 
     const normalized: NormalizedJob[] = [];
 
-    for (const raw of data.jobs) {
+    for (const raw of jobsList) {
       if (!raw.title || !raw.absolute_url || !isValidHttpUrl(raw.absolute_url)) {
         continue;
       }
@@ -83,7 +111,12 @@ export class GreenhouseAdapter implements JobProvider {
       const rawLocation = raw.location?.name || 'Worldwide';
       const locInfo = normalizeLocation(rawLocation);
 
-      const idHash = crypto.createHash('sha256').update(`${boardSlug}:${raw.id}`).digest('hex').slice(0, 16);
+      const idHash = crypto
+        .createHash('sha256')
+        .update(`gh:${slug}:${raw.id}`)
+        .digest('hex')
+        .slice(0, 16);
+
       const safeId = `gh-${idHash}`;
       const job: NormalizedJob = {
         id: safeId,
