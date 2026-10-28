@@ -149,11 +149,18 @@ export function useElapsedJobCounter({
     const scrollY = window.scrollY;
     const docHeight = document.documentElement.scrollHeight;
 
-    // Collect tops of cards with data-job-card-index
+    const readingLine = viewportHeight * 0.65;
+
+    // Collect tops of cards with data-job-card-index, terminating early once below readingLine
+    // to avoid layout thrashing across large datasets
     const cardNodes = container.querySelectorAll<HTMLElement>('[data-job-card-index]');
     const cardTops: number[] = [];
     for (let i = 0; i < cardNodes.length; i++) {
-      cardTops.push(cardNodes[i].getBoundingClientRect().top);
+      const top = cardNodes[i].getBoundingClientRect().top;
+      cardTops.push(top);
+      if (top > readingLine + 250) {
+        break;
+      }
     }
 
     const result = calculateElapsedProgress(
@@ -165,10 +172,11 @@ export function useElapsedJobCounter({
       docHeight
     );
 
-    setIsScrollingCards(result.isScrollingCards);
-    setRawElapsedCount(result.rawElapsedCount);
-    setProgressPercent(result.progressPercent);
-    setIsAllViewed(result.isAllViewed);
+    // Guard state updates: only invoke React re-renders when values actually change
+    setIsScrollingCards((prev) => (prev !== result.isScrollingCards ? result.isScrollingCards : prev));
+    setRawElapsedCount((prev) => (prev !== result.rawElapsedCount ? result.rawElapsedCount : prev));
+    setProgressPercent((prev) => (Math.abs(prev - result.progressPercent) >= 0.5 ? result.progressPercent : prev));
+    setIsAllViewed((prev) => (prev !== result.isAllViewed ? result.isAllViewed : prev));
   }, [isActive, totalJobs, gridRef]);
 
   // Set up passive scroll & resize listener

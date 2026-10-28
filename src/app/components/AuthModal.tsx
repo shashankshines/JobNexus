@@ -22,6 +22,7 @@ import {
   validatePasswordResetRequest,
   validatePasswordResetExecution,
 } from '@/modules/jobs/domain/auth.validation';
+import JobNexusLogo from './JobNexusLogo';
 
 export default function AuthModal() {
   const {
@@ -402,33 +403,56 @@ export default function AuthModal() {
             <div style={{ textAlign: 'center', marginBottom: '1.4rem' }}>
               <div
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 14,
-                  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  width: 56,
+                  height: 56,
+                  borderRadius: 16,
+                  background: 'rgba(99, 102, 241, 0.12)',
+                  border: '1px solid rgba(99, 102, 241, 0.35)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   margin: '0 auto 1rem',
-                  boxShadow: '0 4px 18px rgba(99, 102, 241, 0.45)',
+                  boxShadow: 'none',
+                  filter: 'none',
                 }}
               >
-                <Sparkles size={24} color="#ffffff" />
+                <JobNexusLogo variant="mark" size={40} priority />
               </div>
 
-              {/* Exact Heading & Supporting Text required by specification */}
+              {/* Exact Heading & Supporting Text styled with official JobNexus branding */}
               <h2
                 id="auth-modal-title"
                 style={{
-                  fontSize: '1.5rem',
+                  fontSize: '1.55rem',
                   fontWeight: 800,
                   color: 'var(--text-primary, #ffffff)',
-                  marginBottom: '0.35rem',
-                  letterSpacing: '-0.02em',
+                  marginBottom: '0.3rem',
+                  letterSpacing: '-0.025em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  flexWrap: 'wrap',
                 }}
               >
-                Welcome to JobNexus
+                <span>Welcome to</span>
+                <span className="auth-modal-brand-name" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <span>Job</span>
+                  <span className="text-gradient">Nexus</span>
+                </span>
               </h2>
+              <p
+                style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-muted, #94a3b8)',
+                  margin: '0 auto 0.6rem',
+                }}
+              >
+                Discover • Apply • Grow
+              </p>
               <p
                 style={{
                   fontSize: '0.9rem',
@@ -1273,7 +1297,7 @@ export default function AuthModal() {
                 lineHeight: 1.5,
               }}
             >
-              By continuing, you agree to JobNexus&apos;{' '}
+              By continuing, you agree to <strong style={{ color: 'var(--text-primary, #ffffff)', fontWeight: 600 }}>Job<span className="text-gradient">Nexus</span></strong>&apos;{' '}
               <button
                 type="button"
                 onClick={() => setShowTermsModal('terms')}
@@ -1371,11 +1395,11 @@ export default function AuthModal() {
               <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 {showTermsModal === 'terms' ? (
                   <>
-                    JobNexus provides a verified ATS career discovery engine. By creating an account or signing in with Google, you agree to access verified job boards responsibly, respect employer direct application gateways, and keep your account credentials secure.
+                    <strong style={{ color: 'var(--text-primary)' }}>Job<span className="text-gradient">Nexus</span></strong> provides a verified ATS career discovery engine. By creating an account or signing in with Google, you agree to access verified job boards responsibly, respect employer direct application gateways, and keep your account credentials secure.
                   </>
                 ) : (
                   <>
-                    Your privacy is protected. JobNexus never sells candidate information or stores OAuth tokens in vulnerable client-side storage. Authenticated sessions are managed via secure httpOnly cookies, and saved jobs are kept strictly confidential to your account.
+                    Your privacy is protected. <strong style={{ color: 'var(--text-primary)' }}>Job<span className="text-gradient">Nexus</span></strong> never sells candidate information or stores OAuth tokens in vulnerable client-side storage. Authenticated sessions are managed via secure httpOnly cookies, and saved jobs are kept strictly confidential to your account.
                   </>
                 )}
               </p>

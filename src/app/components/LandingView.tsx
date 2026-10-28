@@ -23,6 +23,7 @@ import { useAuth, AuthIntent, AuthMode } from '../context/AuthContext';
 import { useJobStats } from '@/modules/jobs/hooks/useJobStats';
 import JobCard from './JobCard';
 import ThemeToggle from './ThemeToggle';
+import JobNexusLogo from './JobNexusLogo';
 
 const PREVIEW_VERIFIED_JOBS = [
   {
@@ -235,6 +236,12 @@ export default function LandingView() {
   const { formattedCount, sourcesCount } = useJobStats();
   const [searchKeywords, setSearchKeywords] = useState('');
   const [searchLocation, setSearchLocation] = useState('');
+  const [activeLandingWorkplace, setActiveLandingWorkplace] = useState('');
+
+  const displayedPreviewJobs = useMemo(() => {
+    if (!activeLandingWorkplace) return PREVIEW_VERIFIED_JOBS;
+    return PREVIEW_VERIFIED_JOBS.filter((job) => job.workplaceType === activeLandingWorkplace);
+  }, [activeLandingWorkplace]);
 
   const platformMetrics = useMemo(
     () => [
@@ -293,19 +300,8 @@ export default function LandingView() {
         >
           {/* Brand Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 10,
-                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
-              }}
-            >
-              <Sparkles color="white" size={20} />
+            <div className="site-header-logo">
+              <JobNexusLogo variant="mark" size={26} priority />
             </div>
             <div>
               <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
@@ -515,7 +511,7 @@ export default function LandingView() {
             </p>
           </div>
 
-          {/* Interactive Gated Workplace Selector */}
+          {/* Interactive Gated Workplace Selector with Sliding Tabs */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}>
             <div
               style={{
@@ -528,47 +524,69 @@ export default function LandingView() {
                 boxShadow: 'var(--shadow-sm)',
                 maxWidth: 620,
                 width: '100%',
+                position: 'relative',
               }}
             >
               {[
-                { label: '🌐 All Jobs', remoteParam: '' },
-                { label: '🏠 Fully Remote', remoteParam: 'remote' },
-                { label: '🔄 Hybrid Teams', remoteParam: 'hybrid' },
-                { label: '🏢 On-site Hubs', remoteParam: 'onsite' },
-              ].map((item, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() =>
-                    handleGatedAction(
-                      `🔒 Sign in to your account to explore ${item.label} engineering roles.`,
-                      { type: 'workplace', remote: item.remoteParam }
-                    )
-                  }
-                  style={{
-                    flex: 1,
-                    padding: '0.6rem 0.5rem',
-                    background: 'transparent',
-                    border: '1px solid transparent',
-                    color: 'var(--text-secondary)',
-                    borderRadius: 10,
-                    fontSize: '0.84rem',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'var(--text-primary)';
-                    e.currentTarget.style.background = 'var(--surface-hover)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = 'var(--text-secondary)';
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
+                { id: 'all', label: '🌐 All Jobs', remoteParam: '' },
+                { id: 'remote', label: '🏠 Fully Remote', remoteParam: 'remote' },
+                { id: 'hybrid', label: '🔄 Hybrid Teams', remoteParam: 'hybrid' },
+                { id: 'onsite', label: '🏢 On-site Hubs', remoteParam: 'onsite' },
+              ].map((item) => {
+                const isActive = activeLandingWorkplace === item.remoteParam;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveLandingWorkplace(item.remoteParam);
+                      handleGatedAction(
+                        `🔒 Sign in to your account to explore ${item.label} engineering roles.`,
+                        { type: 'workplace', remote: item.remoteParam }
+                      );
+                    }}
+                    style={{
+                      position: 'relative',
+                      flex: 1,
+                      padding: '0.6rem 0.5rem',
+                      background: 'transparent',
+                      border: '1px solid transparent',
+                      color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      borderRadius: 10,
+                      fontSize: '0.84rem',
+                      fontWeight: isActive ? 600 : 500,
+                      cursor: 'pointer',
+                      transition: 'color 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      whiteSpace: 'nowrap',
+                      outline: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeLandingWorkplaceTab"
+                        className="workplace-active-slide-indicator"
+                        transition={{
+                          type: 'spring',
+                          stiffness: 480,
+                          damping: 36,
+                        }}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          borderRadius: 10,
+                          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(139, 92, 246, 0.28))',
+                          border: '1px solid rgba(99, 102, 241, 0.5)',
+                          zIndex: 1,
+                        }}
+                      />
+                    )}
+                    <span style={{ position: 'relative', zIndex: 2 }}>{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -722,7 +740,7 @@ export default function LandingView() {
 
             {/* Grid of Verified Job Cards with Gated Apply & Share */}
             <div className="job-grid">
-              {PREVIEW_VERIFIED_JOBS.map((job, index) => (
+              {displayedPreviewJobs.map((job, index) => (
                 <JobCard key={job.id || `preview-${index}`} job={job} index={index} />
               ))}
             </div>
@@ -1118,19 +1136,7 @@ export default function LandingView() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 8,
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Sparkles color="white" size={14} />
-            </div>
+            <JobNexusLogo variant="mark" size={22} />
             <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
               Job<span className="text-gradient">Nexus</span>
             </span>

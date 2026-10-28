@@ -69,7 +69,7 @@ interface JobCardProps {
   index: number;
 }
 
-export default function JobCard({ job, index }: JobCardProps) {
+function JobCardComponent({ job, index }: JobCardProps) {
   const { isAuthenticated, isJobSaved, toggleSaveJob, openAuthModal, showToast } = useAuth();
   const [copied, setCopied] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>(job.url || '');
@@ -640,3 +640,6 @@ export default function JobCard({ job, index }: JobCardProps) {
     </motion.div>
   );
 }
+
+const JobCard = React.memo(JobCardComponent);
+export default JobCard;

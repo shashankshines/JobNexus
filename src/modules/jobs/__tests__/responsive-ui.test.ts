@@ -93,6 +93,12 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
       assert.ok(pageContent.includes('className="workplace-pills-bar"'), 'page.tsx must use workplace-pills-bar');
       assert.ok(pageContent.includes('className="workplace-pill-btn"'), 'page.tsx must use workplace-pill-btn');
     });
+
+    it('implements fluid spring sliding animation effect on landing page workplace tabs', () => {
+      assert.ok(pageContent.includes('layoutId="activeWorkplaceSlidePill"'), 'page.tsx must use layoutId for sliding tab animation');
+      assert.ok(landingContent.includes('layoutId="activeLandingWorkplaceTab"'), 'LandingView must use layoutId for sliding tab animation');
+      assert.ok(cssContent.includes('.workplace-active-slide-indicator'), 'globals.css must define .workplace-active-slide-indicator');
+    });
   });
 
   describe('Horizontal Swipe & Touch Scroll Targets', () => {
@@ -147,6 +153,92 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
       assert.ok(pageContent.includes('className="count-main"'), 'page.tsx must use count-main for essential count');
       assert.ok(pageContent.includes('className="count-secondary"'), 'page.tsx must use count-secondary for auxiliary text');
       assert.ok(cssContent.includes('.count-secondary'), 'globals.css must support count-secondary token');
+    });
+  });
+
+  describe('Brand Logo Assets & Responsive UI System Suite', () => {
+    const brandDir = path.resolve(__dirname, '../../../../public/brand');
+    const authPath = path.resolve(__dirname, '../../../app/components/AuthModal.tsx');
+    const authContent = fs.readFileSync(authPath, 'utf-8');
+    const logoComponentPath = path.resolve(__dirname, '../../../app/components/JobNexusLogo.tsx');
+    const logoComponentContent = fs.readFileSync(logoComponentPath, 'utf-8');
+
+    it('maintains streamlined canonical responsive brand assets and deletes extra versions', () => {
+      const canonicalBrandFiles = [
+        'jobnexus-mark.png',
+        'jobnexus-logo.png',
+      ];
+
+      for (const file of canonicalBrandFiles) {
+        const fullPath = path.join(brandDir, file);
+        assert.ok(fs.existsSync(fullPath), `Asset ${file} must exist in public/brand`);
+        const stats = fs.statSync(fullPath);
+        assert.ok(stats.size > 100, `Asset ${file} must have valid non-empty file size`);
+      }
+
+      // Verify all redundant/extra versions have been deleted
+      const extraVersions = [
+        'jobnexus-icon-512.png',
+        'jobnexus-icon-192.png',
+        'jobnexus-icon-64.png',
+        'jobnexus-icon-32.png',
+        'jobnexus-full-dark.png',
+        'jobnexus-full-light.png',
+        'jobnexus-horizontal-dark.png',
+        'jobnexus-horizontal-light.png',
+      ];
+      for (const extra of extraVersions) {
+        assert.ok(!fs.existsSync(path.join(brandDir, extra)), `Extra asset ${extra} must be deleted`);
+      }
+
+      // Verify only canonical brand files exist in public/brand
+      const filesInBrand = fs.readdirSync(brandDir).filter((f) => !f.startsWith('.'));
+      assert.strictEqual(filesInBrand.length, 2, 'Must have exactly 2 canonical logos in public/brand');
+    });
+
+    it('provides Next.js App Router metadata icons and favicon', () => {
+      const appIcon = path.resolve(__dirname, '../../../app/icon.png');
+      const appleIcon = path.resolve(__dirname, '../../../app/apple-icon.png');
+      const appFavicon = path.resolve(__dirname, '../../../app/favicon.ico');
+      const publicFavicon = path.resolve(__dirname, '../../../../public/favicon.ico');
+
+      assert.ok(fs.existsSync(appIcon), 'App router icon.png must exist');
+      assert.ok(fs.existsSync(appleIcon), 'App router apple-icon.png must exist');
+      assert.ok(fs.existsSync(appFavicon), 'App router favicon.ico must exist');
+      assert.ok(fs.existsSync(publicFavicon), 'Public favicon.ico must exist');
+    });
+
+    it('implements JobNexusLogo component with all required variants and high-DPI scaling', () => {
+      assert.ok(logoComponentContent.includes("variant?: 'mark' | 'inline' | 'full' | 'banner'"), 'Must support all variants');
+      assert.ok(logoComponentContent.includes('jobnexus-mark.png'), 'Must reference crisp jN ribbon mark');
+      assert.ok(logoComponentContent.includes('jobnexus-logo.png'), 'Must reference canonical master full logo');
+      assert.ok(logoComponentContent.includes('export { JobNexusLogo }'), 'Must provide named export');
+    });
+
+    it('integrates JobNexusLogo into the sticky header, landing header, auth modal, and footer', () => {
+      assert.ok(pageContent.includes('<JobNexusLogo variant="mark"'), 'page.tsx sticky header must use JobNexusLogo');
+      assert.ok(landingContent.includes('<JobNexusLogo variant="mark"'), 'LandingView must use JobNexusLogo in header');
+      assert.ok(authContent.includes('<JobNexusLogo variant="mark"'), 'AuthModal must use JobNexusLogo');
+      assert.ok(authContent.includes('Job<span className="text-gradient">Nexus</span>'), 'AuthModal brand name must match brand styling');
+      assert.ok(authContent.includes('Discover • Apply • Grow'), 'AuthModal must feature the brand tagline');
+      assert.ok(pageContent.includes('Discover • Apply • Grow'), 'page.tsx sticky header must feature Discover • Apply • Grow');
+      assert.ok(logoComponentContent.includes('Discover • Apply • Grow'), 'JobNexusLogo must feature Discover • Apply • Grow');
+      assert.ok(pageContent.includes('className="site-footer"'), 'page.tsx must feature responsive brand footer');
+    });
+
+    it('defines .site-header-logo styling in globals.css with pedestal background, subtle border, and responsive dimensioning', () => {
+      assert.ok(cssContent.includes('.site-header-logo {'), 'globals.css must define .site-header-logo');
+      assert.ok(cssContent.includes('.site-header-logo:hover'), 'globals.css must provide hover micro-animation');
+      assert.ok(cssContent.includes('jobnexus-logo-dark'), 'globals.css must have theme visibility rules for dark mode');
+      assert.ok(cssContent.includes('jobnexus-logo-light'), 'globals.css must have theme visibility rules for light mode');
+    });
+
+    it('ensures all logos across the platform have zero filter, zero drop-shadow, and zero shadow effects', () => {
+      assert.ok(!logoComponentContent.includes('drop-shadow'), 'JobNexusLogo must not contain drop-shadow filters');
+      assert.ok(!authContent.includes('boxShadow: \'0 8px 24px'), 'AuthModal logo pedestal must not contain box shadow');
+      assert.ok(cssContent.includes('.jobnexus-mark-img'), 'globals.css must target logo elements');
+      assert.ok(cssContent.includes('filter: none !important;'), 'globals.css must enforce zero filter on logos');
+      assert.ok(cssContent.includes('box-shadow: none !important;'), 'globals.css must enforce zero box-shadow on logos');
     });
   });
 });
