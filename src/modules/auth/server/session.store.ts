@@ -5,6 +5,7 @@
  */
 
 import crypto from 'node:crypto';
+import { DurableStore } from '@/modules/storage/durable.store';
 
 export interface UserRecord {
   id: string;
@@ -36,6 +37,7 @@ export interface SavedJobItem {
 }
 
 export interface SessionRecord {
+  id?: string;
   sessionId: string;
   userId: string;
   createdAt: number;
@@ -46,10 +48,10 @@ export const SESSION_COOKIE_NAME = 'jobnexus_session_v1';
 export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 Days
 
 interface GlobalAuthRegistry {
-  users: Map<string, UserRecord>;
-  usersByEmail: Map<string, string>;
-  sessions: Map<string, SessionRecord>;
-  passwordHashes: Map<string, string>;
+  users: DurableStore<UserRecord>;
+  usersByEmail: DurableStore<{ id: string; userId: string }>;
+  sessions: DurableStore<SessionRecord>;
+  passwordHashes: DurableStore<{ id: string; hash: string }>;
   rateLimitMap: Map<string, { count: number; resetAt: number }>;
 }
 
@@ -59,10 +61,10 @@ const globalForAuth = globalThis as unknown as {
 
 if (!globalForAuth.__jobnexus_auth_registry) {
   globalForAuth.__jobnexus_auth_registry = {
-    users: new Map<string, UserRecord>(),
-    usersByEmail: new Map<string, string>(),
-    sessions: new Map<string, SessionRecord>(),
-    passwordHashes: new Map<string, string>(),
+    users: new DurableStore<UserRecord>('auth_users'),
+    usersByEmail: new DurableStore<{ id: string; userId: string }>('auth_users_by_email'),
+    sessions: new DurableStore<SessionRecord>('auth_sessions'),
+    passwordHashes: new DurableStore<{ id: string; hash: string }>('auth_password_hashes'),
     rateLimitMap: new Map<string, { count: number; resetAt: number }>(),
   };
 }
@@ -139,6 +141,7 @@ export function createSession(userId: string): {
   const expiresAt = now + SESSION_MAX_AGE_MS;
 
   sessions.set(sessionId, {
+    id: sessionId,
     sessionId,
     userId,
     createdAt: now,
@@ -219,7 +222,7 @@ export function findOrCreateGoogleUser(profile: {
   email_verified?: boolean;
 }): UserRecord {
   const cleanEmail = profile.email.trim().toLowerCase();
-  const existingUserId = usersByEmail.get(cleanEmail);
+  const existingUserId = usersByEmail.get(cleanEmail)?.userId;
 
   if (existingUserId && users.has(existingUserId)) {
     const existing = users.get(existingUserId)!;
@@ -231,6 +234,7 @@ export function findOrCreateGoogleUser(profile: {
     existing.name = profile.name || existing.name;
     existing.avatar = profile.picture || existing.avatar;
     existing.initials = computeInitials(existing.name);
+    users.set(existing.id, existing);
     return existing;
   }
 
@@ -248,7 +252,7 @@ export function findOrCreateGoogleUser(profile: {
   };
 
   users.set(newId, newUser);
-  usersByEmail.set(cleanEmail, newId);
+  usersByEmail.set(cleanEmail, { id: cleanEmail, userId: newId });
   return newUser;
 }
 
@@ -281,11 +285,11 @@ export function registerCredentialsUser(data: {
 
   if (data.password) {
     const salt = newId;
-    passwordHashes.set(newId, hashPassword(data.password, salt));
+    passwordHashes.set(newId, { id: newId, hash: hashPassword(data.password, salt) });
   }
 
   users.set(newId, newUser);
-  usersByEmail.set(cleanEmail, newId);
+  usersByEmail.set(cleanEmail, { id: cleanEmail, userId: newId });
   return { user: newUser };
 }
 
@@ -298,7 +302,7 @@ export function verifyCredentialsUser(
   password?: string
 ): { user?: UserRecord; error?: string } {
   const cleanEmail = email.trim().toLowerCase();
-  const userId = usersByEmail.get(cleanEmail);
+  const userId = usersByEmail.get(cleanEmail)?.userId;
 
   if (!userId || !users.has(userId)) {
     return { error: 'Invalid email/username or password. Please try again.' };
@@ -312,7 +316,7 @@ export function verifyCredentialsUser(
   if (passwordHashes.has(userId)) {
     const salt = userId;
     const computedHash = hashPassword(password, salt);
-    if (computedHash !== passwordHashes.get(userId)) {
+    if (computedHash !== passwordHashes.get(userId)?.hash) {
       return { error: 'Invalid email/username or password. Please try again.' };
     }
   }
@@ -328,12 +332,12 @@ export function updateUserPassword(
   newPassword: string
 ): { success: boolean; error?: string } {
   const clean = identifier.trim().toLowerCase();
-  const userId = usersByEmail.get(clean);
+  const userId = usersByEmail.get(clean)?.userId;
   if (!userId || !users.has(userId)) {
     return { success: false, error: 'Account not found.' };
   }
   const salt = userId;
-  passwordHashes.set(userId, hashPassword(newPassword, salt));
+  passwordHashes.set(userId, { id: userId, hash: hashPassword(newPassword, salt) });
   return { success: true };
 }
 
@@ -403,6 +407,7 @@ export function saveJobForUser(
       savedAt: new Date().toISOString(),
     };
     user.savedJobs.unshift(item);
+    users.set(user.id, user);
   }
 
   return { saved: true, jobs: [...user.savedJobs] };
@@ -422,6 +427,9 @@ export function removeSavedJobForUser(
 
   const initialCount = user.savedJobs.length;
   user.savedJobs = user.savedJobs.filter((j) => j.id !== jobId);
+  if (user.savedJobs.length < initialCount) {
+    users.set(user.id, user);
+  }
   return { removed: user.savedJobs.length < initialCount, jobs: [...user.savedJobs] };
 }
 

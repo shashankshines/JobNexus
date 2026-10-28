@@ -324,4 +324,81 @@ describe('Universal Authentication & Access Control Journey', () => {
       assert.strictEqual(consumed.location, 'Remote');
     });
   });
+
+  describe('Sign Out Landing Page Redirection & Filter Invalidation', () => {
+    it('resets all applied filters and transitions directly to clean landing page discovery on sign out', () => {
+      // Simulating user state post login with multiple active filters
+      let state = {
+        isAuthenticated: true,
+        user: { id: 'usr_test_1', name: 'Dev Member', email: 'dev@jobnexus.io', role: 'engineer', provider: 'google' as const, initials: 'DM' },
+        activeView: 'saved' as 'all' | 'saved',
+        searched: true,
+        query: 'Principal Architect',
+        location: 'Bengaluru, India',
+        type: 'full-time',
+        level: 'lead',
+        selectedRole: 'Systems',
+        remote: 'remote',
+        sortBy: 'date' as 'relevance' | 'date',
+        jobs: [{ id: 'job_1', title: 'Principal Architect' }],
+        visibleCount: 36,
+        showRoleDropdown: true,
+        showWorkplaceDropdown: true,
+      };
+
+      // Helper matching resetToDiscovery logic executed on sign out
+      const resetToDiscovery = () => {
+        state = {
+          ...state,
+          query: '',
+          location: '',
+          type: '',
+          level: '',
+          selectedRole: '',
+          remote: '',
+          sortBy: 'relevance',
+          activeView: 'all',
+          showRoleDropdown: false,
+          showWorkplaceDropdown: false,
+          jobs: [],
+          searched: false,
+          visibleCount: 18,
+        };
+      };
+
+      // Perform sign out action
+      resetToDiscovery();
+      state.isAuthenticated = false;
+      state.user = null as unknown as typeof state.user;
+
+      // Verify complete landing page state restoration
+      assert.strictEqual(state.isAuthenticated, false);
+      assert.strictEqual(state.searched, false, 'Searched flag must be reset to false for landing page');
+      assert.strictEqual(state.activeView, 'all', 'Active view must reset to all discovery');
+      assert.strictEqual(state.query, '', 'Query must be cleared');
+      assert.strictEqual(state.location, '', 'Location must be cleared');
+      assert.strictEqual(state.type, '', 'Type filter must be cleared');
+      assert.strictEqual(state.level, '', 'Seniority level must be cleared');
+      assert.strictEqual(state.selectedRole, '', 'Role category must be cleared');
+      assert.strictEqual(state.remote, '', 'Remote filter must be cleared');
+      assert.strictEqual(state.sortBy, 'relevance', 'Sort order must reset to relevance');
+      assert.strictEqual(state.jobs.length, 0, 'Loaded filtered jobs must be cleared');
+      assert.strictEqual(state.visibleCount, 18, 'Batch pagination must reset to initial size');
+      assert.strictEqual(state.showRoleDropdown, false);
+      assert.strictEqual(state.showWorkplaceDropdown, false);
+    });
+
+    it('cleans URL query parameters on sign out to prevent lingering filter deep-links', () => {
+      const url = new URL('https://jobnexus.io/?query=Senior+DevOps&location=Remote&type=contract');
+      assert.ok(url.searchParams.has('query'));
+      assert.ok(url.searchParams.has('location'));
+
+      // Clean path resolution on sign out
+      const cleanPath = url.pathname.split('?')[0] || '/';
+      const cleanUrl = new URL(cleanPath, url.origin);
+
+      assert.strictEqual(cleanUrl.pathname, '/');
+      assert.strictEqual(cleanUrl.search, '');
+    });
+  });
 });

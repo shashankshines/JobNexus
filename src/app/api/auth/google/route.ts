@@ -102,11 +102,20 @@ export async function POST(request: Request) {
             }
           }
         } catch (err) {
-          console.warn('[Google Auth] Online tokeninfo verification failed, checking payload:', err);
+          console.warn('[Google Auth] Online tokeninfo verification failed:', err);
         }
       }
 
-      // If tokeninfo was offline or in test suite with mock JWT:
+      // Security enforcement: In production, NEVER accept unverified decoded JWTs.
+      // Must fail closed if Google tokeninfo cryptographic verification did not succeed.
+      if (!verifiedProfile && process.env.NODE_ENV === 'production') {
+        return NextResponse.json(
+          { error: 'Invalid or unverified Google authentication token. Verification failed.' },
+          { status: 401 }
+        );
+      }
+
+      // In isolated test environment, allow mock JWT parsing for offline test suites
       if (!verifiedProfile) {
         const decoded = parseJwtPayload(credential);
         if (decoded && decoded.email) {

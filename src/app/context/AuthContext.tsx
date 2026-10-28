@@ -6,6 +6,7 @@ import {
   validatePasswordResetExecution,
   getInitials,
 } from '@/modules/jobs/domain/auth.validation';
+import type { UserEntitlement } from '@/modules/billing/domain/subscription.types';
 
 export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'error';
 export type AuthMode = 'signin' | 'signup' | 'forgot-password';
@@ -76,6 +77,12 @@ interface AuthContextType {
   pendingIntent: PendingAction | null;
   savedJobs: SavedJob[];
   savedJobIds: Set<string>;
+  entitlement: UserEntitlement | null;
+  isPremium: boolean;
+  isPremiumOfferOpen: boolean;
+  openPremiumOfferModal: () => void;
+  closePremiumOfferModal: () => void;
+  refreshEntitlement: () => Promise<UserEntitlement | null>;
   toast: ToastMessage | null;
   openAuthModal: (prompt?: string, intent?: PendingAction, mode?: AuthMode) => void;
   setAuthMode: (mode: AuthMode) => void;
@@ -118,7 +125,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingAction | null>(null);
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
+  const [entitlement, setEntitlement] = useState<UserEntitlement | null>(null);
+  const [isPremiumOfferOpen, setIsPremiumOfferOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  const isPremium = useMemo(() => {
+    return Boolean(entitlement?.isPremium);
+  }, [entitlement]);
+
+  const openPremiumOfferModal = useCallback(() => {
+    setIsPremiumOfferOpen(true);
+  }, []);
+
+  const closePremiumOfferModal = useCallback(() => {
+    setIsPremiumOfferOpen(false);
+  }, []);
+
+  const refreshEntitlement = useCallback(async (): Promise<UserEntitlement | null> => {
+    try {
+      const res = await fetch('/api/billing/status', {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.entitlement) {
+          setEntitlement(data.entitlement);
+          return data.entitlement;
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Failed to fetch billing status:', err);
+    }
+    return null;
+  }, []);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success', title?: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -175,12 +214,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setStatus('authenticated');
             // Fetch user's saved jobs
             fetchSavedJobs();
+            // Fetch user's billing entitlement
+            const userEntitlement = await refreshEntitlement();
 
             if (typeof window !== 'undefined') {
               const urlParams = new URLSearchParams(window.location.search);
               if (urlParams.get('auth_success') === 'google') {
                 showToast(`Welcome back, ${data.user.name}!`, 'success');
                 window.history.replaceState({}, document.title, window.location.pathname);
+                if (!userEntitlement?.isPremium) {
+                  setIsPremiumOfferOpen(true);
+                }
               }
               const savedIntentStr = sessionStorage.getItem('jn_pending_intent');
               if (savedIntentStr) {
@@ -231,7 +275,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [fetchSavedJobs, showToast]);
+  }, [fetchSavedJobs, refreshEntitlement, showToast]);
 
   const openAuthModal = useCallback((prompt?: string, intent?: PendingAction, mode?: AuthMode) => {
     setAuthPromptMessage(prompt || null);
@@ -394,8 +438,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
+
+      // Authoritative Entitlement Check: Non-subscribers immediately see the Premium offer modal
+      try {
+        const ent = await refreshEntitlement();
+        if (!ent?.isPremium) {
+          setIsPremiumOfferOpen(true);
+        } else {
+          setIsPremiumOfferOpen(false);
+        }
+      } catch (err) {
+        console.warn('Failed to evaluate entitlement post auth:', err);
+      }
     },
-    [pendingIntent, closeAuthModal, showToast]
+    [pendingIntent, closeAuthModal, refreshEntitlement, showToast]
   );
 
   // Google Sign-In handler
@@ -588,8 +644,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setUser(null);
     setSavedJobs([]);
+    setEntitlement(null);
+    setIsPremiumOfferOpen(false);
     setStatus('anonymous');
     setPendingIntent(null);
+    if (typeof window !== 'undefined') {
+      const cleanPath = window.location.pathname.split('?')[0] || '/';
+      if (window.location.search || window.location.hash) {
+        window.history.replaceState({}, document.title, cleanPath);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     showToast(
       'Browsing in guest mode. Company names and direct application links are now masked.',
       'info',
@@ -611,6 +676,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pendingIntent,
         savedJobs,
         savedJobIds,
+        entitlement,
+        isPremium,
+        isPremiumOfferOpen,
+        openPremiumOfferModal,
+        closePremiumOfferModal,
+        refreshEntitlement,
         toast,
         openAuthModal,
         setAuthMode,

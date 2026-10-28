@@ -32,6 +32,7 @@ import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
 import FuturisticToast from './components/FuturisticToast';
 import JobNexusLogo from './components/JobNexusLogo';
+import { PremiumOfferModal } from './components/PremiumOfferModal';
 import { useAuth } from './context/AuthContext';
 import { useJobStats } from '@/modules/jobs/hooks/useJobStats';
 import { useElapsedJobCounter } from '@/modules/jobs/hooks/useElapsedJobCounter';
@@ -180,6 +181,12 @@ export default function Home() {
     consumePendingIntent,
     openAuthModal,
     savedJobs,
+    entitlement,
+    isPremium,
+    isPremiumOfferOpen,
+    openPremiumOfferModal,
+    closePremiumOfferModal,
+    refreshEntitlement,
     toast,
     clearToast,
     showToast,
@@ -188,6 +195,32 @@ export default function Home() {
   const [activeView, setActiveView] = useState<'all' | 'saved'>('all');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+
+  const handleCancelSubscription = async () => {
+    if (
+      !window.confirm(
+        'Are you sure you want to cancel auto-renewal? You will continue to have full JobNexus Premium access until the end of your paid billing cycle.'
+      )
+    ) {
+      return;
+    }
+    setIsCancellingSubscription(true);
+    try {
+      const res = await fetch('/api/billing/cancel', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        await refreshEntitlement();
+        showToast('Auto-renewal cancelled. You retain full Premium access through your current period.', 'info');
+      } else {
+        showToast(data.error || 'Failed to cancel subscription.', 'error');
+      }
+    } catch {
+      showToast('Network error while requesting cancellation.', 'error');
+    } finally {
+      setIsCancellingSubscription(false);
+    }
+  };
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [type, setType] = useState('');
@@ -283,17 +316,57 @@ export default function Home() {
     [query, location, type, level, selectedRole, remote, syncFromJobsCount]
   );
 
-  // When authentication status transitions (login or logout),
-  // refresh existing search results so masked/unmasked company identities update immediately.
+  const resetToDiscovery = useCallback(() => {
+    setQuery('');
+    setLocation('');
+    setType('');
+    setLevel('');
+    setSelectedRole('');
+    setRemote('');
+    setSortBy('relevance');
+    setActiveView('all');
+    setShowRoleDropdown(false);
+    setShowWorkplaceDropdown(false);
+    setShowTypeDropdown(false);
+    setShowLevelDropdown(false);
+    setShowJobDropdown(false);
+    setShowLocDropdown(false);
+    setRoleSearchQuery('');
+    setJobs([]);
+    setSearched(false);
+    setVisibleCount(JOBS_BATCH_SIZE);
+    if (typeof window !== 'undefined') {
+      const cleanUrl = window.location.pathname.split('?')[0] || '/';
+      window.history.replaceState({}, document.title, cleanUrl);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [JOBS_BATCH_SIZE]);
+
+  const handleSignOut = useCallback(() => {
+    setIsUserMenuOpen(false);
+    setIsProfileModalOpen(false);
+    resetToDiscovery();
+    logout();
+  }, [logout, resetToDiscovery]);
+
+  // When authentication status transitions (login or logout):
+  // - If user logs out (authenticated -> anonymous): immediately redirect to clean landing page, clearing all filters
+  // - If user logs in (anonymous -> authenticated): re-execute active search to immediately unmask company identities
   const prevAuthRef = useRef(isAuthenticated);
   useEffect(() => {
     if (prevAuthRef.current !== isAuthenticated) {
+      const wasAuthenticated = prevAuthRef.current;
       prevAuthRef.current = isAuthenticated;
-      if (searched || jobs.length > 0) {
-        executeSearch();
+
+      if (wasAuthenticated && !isAuthenticated) {
+        resetToDiscovery();
+      } else if (!wasAuthenticated && isAuthenticated) {
+        if (searched || jobs.length > 0) {
+          executeSearch();
+        }
       }
     }
-  }, [isAuthenticated, searched, jobs.length, executeSearch]);
+  }, [isAuthenticated, searched, jobs.length, executeSearch, resetToDiscovery]);
 
   // Seamlessly execute any search or application action triggered before login
   useEffect(() => {
@@ -442,22 +515,6 @@ export default function Home() {
     setSelectedRole('');
     setRemote('');
     executeSearch('', '', '', '', '', '');
-  };
-
-  const resetToDiscovery = () => {
-    setQuery('');
-    setLocation('');
-    setType('');
-    setLevel('');
-    setSelectedRole('');
-    setRemote('');
-    setShowRoleDropdown(false);
-    setShowWorkplaceDropdown(false);
-    setShowTypeDropdown(false);
-    setShowLevelDropdown(false);
-    setRoleSearchQuery('');
-    setJobs([]);
-    setSearched(false);
   };
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
@@ -998,18 +1055,59 @@ export default function Home() {
                               fontSize: '0.65rem',
                               fontWeight: 700,
                               textTransform: 'uppercase',
-                              background: user.provider === 'google' ? 'rgba(66, 133, 244, 0.15)' : 'rgba(99, 102, 241, 0.15)',
-                              color: user.provider === 'google' ? '#60a5fa' : 'var(--primary-start)',
+                              background: isPremium
+                                ? 'rgba(56, 189, 248, 0.15)'
+                                : user.provider === 'google'
+                                ? 'rgba(66, 133, 244, 0.15)'
+                                : 'rgba(99, 102, 241, 0.15)',
+                              color: isPremium
+                                ? '#38bdf8'
+                                : user.provider === 'google'
+                                ? '#60a5fa'
+                                : 'var(--primary-start)',
                               padding: '0.12rem 0.45rem',
                               borderRadius: 4,
                             }}
                           >
-                            {user.provider === 'google' ? 'Google Account' : 'Verified Member'}
+                            {isPremium
+                              ? '⭐ Premium Member'
+                              : user.provider === 'google'
+                              ? 'Google Account'
+                              : 'Verified Member'}
                           </span>
                         </div>
 
                         {/* Menu Actions */}
                         <div style={{ padding: '0.35rem 0' }}>
+                          {!isPremium && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsUserMenuOpen(false);
+                                openPremiumOfferModal();
+                              }}
+                              style={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.6rem',
+                                padding: '0.55rem 0.65rem',
+                                borderRadius: 8,
+                                border: 'none',
+                                background: 'rgba(99, 102, 241, 0.12)',
+                                color: '#818cf8',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                marginBottom: '0.25rem',
+                              }}
+                            >
+                              <Sparkles size={15} color="#818cf8" />
+                              <span>Upgrade to Premium (₹499)</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => {
@@ -1067,10 +1165,7 @@ export default function Home() {
                         <div style={{ paddingTop: '0.35rem', borderTop: '1px solid var(--border)' }}>
                           <button
                             type="button"
-                            onClick={() => {
-                              setIsUserMenuOpen(false);
-                              logout();
-                            }}
+                            onClick={handleSignOut}
                             style={{
                               width: '100%',
                               display: 'flex',
@@ -3547,7 +3642,7 @@ export default function Home() {
               </div>
 
               {/* Profile Details Grid */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
                   <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Saved Opportunities</span>
                   <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{savedJobs.length} roles</span>
@@ -3556,11 +3651,102 @@ export default function Home() {
                   <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Session Security</span>
                   <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#34d399' }}>HTTP-Only Secure Cookie</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Member Status</span>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-start)' }}>Active</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Membership Tier</span>
+                  <span
+                    style={{
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      color: isPremium ? '#38bdf8' : 'var(--text-primary)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                    }}
+                  >
+                    {isPremium ? '⭐ Premium (₹499/mo)' : 'Free Discovery'}
+                  </span>
                 </div>
+
+                {isPremium && entitlement?.subscription && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      {entitlement.subscription.cancelAtPeriodEnd ? 'Access Paid Through' : 'Next Renewal'}
+                    </span>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {new Date(entitlement.subscription.currentPeriodEnd).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {/* Subscription Actions */}
+              {isPremium ? (
+                <div style={{ marginBottom: '1.25rem', textAlign: 'center' }}>
+                  {entitlement?.subscription?.cancelAtPeriodEnd ? (
+                    <div
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        background: 'rgba(234, 179, 8, 0.1)',
+                        borderRadius: 8,
+                        border: '1px solid rgba(234, 179, 8, 0.25)',
+                        fontSize: '0.75rem',
+                        color: '#facc15',
+                      }}
+                    >
+                      Auto-renewal cancelled. Premium access remains active until the end of your billing cycle.
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleCancelSubscription}
+                      disabled={isCancellingSubscription}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#94a3b8',
+                        fontSize: '0.78rem',
+                        cursor: isCancellingSubscription ? 'wait' : 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {isCancellingSubscription ? 'Cancelling auto-renewal...' : 'Cancel Auto-Renewal'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileModalOpen(false);
+                      openPremiumOfferModal();
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 1rem',
+                      borderRadius: 10,
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.45rem',
+                      boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+                    }}
+                  >
+                    <span>Upgrade to Premium (₹499/mo)</span>
+                    <Sparkles size={14} />
+                  </button>
+                </div>
+              )}
 
               {/* Actions */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -3577,10 +3763,7 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsProfileModalOpen(false);
-                    logout();
-                  }}
+                  onClick={handleSignOut}
                   className="btn-secondary"
                   style={{ padding: '0.65rem 1rem', fontSize: '0.85rem', color: '#ef4444' }}
                 >
@@ -3591,6 +3774,18 @@ export default function Home() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Post-Login / On-Demand Premium Offer Modal */}
+      <PremiumOfferModal
+        isOpen={isPremiumOfferOpen}
+        onClose={closePremiumOfferModal}
+        onSubscriptionSuccess={async () => {
+          await refreshEntitlement();
+          showToast('Welcome to JobNexus Premium! Your subscription is active.', 'success');
+        }}
+        userEmail={user?.email}
+        userName={user?.name}
+      />
     </main>
 
     {/* Sleek Modern Platform Footer with Official Brand Lockup */}
