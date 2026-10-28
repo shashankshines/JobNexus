@@ -106,4 +106,48 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
       assert.ok(pageContent.includes('className="mobile-only"'), 'Must have mobile-only compact variant');
     });
   });
+
+  describe('Landscape View & Pulsating Green Dot Count Visibility Suite', () => {
+    it('defines landscape orientation media query for handheld viewports (<= 550px height)', () => {
+      assert.ok(
+        cssContent.includes('(orientation: landscape) and (max-height: 550px)'),
+        'Must define landscape orientation and constrained height media query'
+      );
+      assert.ok(
+        cssContent.includes('(max-height: 500px)'),
+        'Must define compact landscape height fallback'
+      );
+    });
+
+    it('activates .mobile-only and suppresses .desktop-only in landscape orientation', () => {
+      const match = cssContent.includes('(orientation: landscape) and (max-height: 550px)');
+      assert.ok(match, 'Landscape query must be present');
+      assert.ok(cssContent.includes('.desktop-only {\n    display: none !important;\n  }'));
+      assert.ok(cssContent.includes('.mobile-only {\n    display: inline-flex !important;\n  }'));
+    });
+
+    it('guarantees flex-shrink: 0 and min-width: fit-content on site-header-status and roles-matched-pill', () => {
+      assert.ok(cssContent.includes('.site-header-status {'), 'site-header-status must be defined');
+      assert.ok(cssContent.includes('.roles-matched-pill {'), 'roles-matched-pill must be defined');
+      assert.ok(cssContent.includes('min-width: fit-content;'), 'Pills must have min-width: fit-content to prevent count truncation');
+    });
+
+    it('guarantees flex-shrink: 0 on both green pulsating indicators (.site-header-radar and .pulse-dot)', () => {
+      assert.ok(cssContent.includes('.site-header-radar {'), 'site-header-radar must be defined');
+      assert.ok(cssContent.includes('.pulse-dot {'), 'pulse-dot must be defined');
+      assert.ok(cssContent.includes('flex-shrink: 0;'), 'Dots must not shrink under flex pressure');
+    });
+
+    it('hides header badge, subtitle, and saved label in landscape to maximize width for count visibility', () => {
+      assert.ok(cssContent.includes('.site-header-saved-label'), 'Should target site-header-saved-label');
+      assert.ok(pageContent.includes('className="site-header-saved-label"'), 'page.tsx must use site-header-saved-label');
+    });
+
+    it('implements structured count-main and count-secondary tokens in page.tsx for adaptive count formatting', () => {
+      assert.ok(pageContent.includes('className="count-main"'), 'page.tsx must use count-main for essential count');
+      assert.ok(pageContent.includes('className="count-secondary"'), 'page.tsx must use count-secondary for auxiliary text');
+      assert.ok(cssContent.includes('.count-secondary'), 'globals.css must support count-secondary token');
+    });
+  });
 });
+

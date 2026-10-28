@@ -790,13 +790,18 @@ export default function Home() {
                       <span className="elapsed-counter-of">of</span>
                       <span className="elapsed-counter-total">{displayedJobs.length.toLocaleString()}</span>
                       <span className="elapsed-counter-label">Roles Matched</span>
-                      <span className="elapsed-counter-dot">•</span>
-                      <span className="elapsed-counter-verified">
+                      <span className="elapsed-counter-dot count-secondary">•</span>
+                      <span className="elapsed-counter-verified count-secondary">
                         {isAllViewed ? 'All Roles Viewed' : `${formattedCount} Total Verified`}
                       </span>
                     </span>
                   ) : (
-                    `${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{displayedJobs.length.toLocaleString()}</span>
+                      <span className="elapsed-counter-label">Roles Matched</span>
+                      <span className="elapsed-counter-dot count-secondary">•</span>
+                      <span className="elapsed-counter-verified count-secondary">{formattedCount} Total Verified</span>
+                    </span>
                   )
                 ) : activeView === 'saved' && savedJobs.length > 0 ? (
                   isScrollingCards ? (
@@ -805,16 +810,23 @@ export default function Home() {
                       <span className="elapsed-counter-of">of</span>
                       <span className="elapsed-counter-total">{savedJobs.length}</span>
                       <span className="elapsed-counter-label">Saved Roles</span>
-                      <span className="elapsed-counter-dot">•</span>
-                      <span className="elapsed-counter-verified">
+                      <span className="elapsed-counter-dot count-secondary">•</span>
+                      <span className="elapsed-counter-verified count-secondary">
                         {isAllViewed ? 'All Saved Viewed' : 'Saved Collection'}
                       </span>
                     </span>
                   ) : (
-                    `${savedJobs.length} Saved Positions`
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{savedJobs.length}</span>
+                      <span className="elapsed-counter-label">Saved Positions</span>
+                    </span>
                   )
                 ) : (
-                  `${formattedCount} Live Verified Roles`
+                  <span className="elapsed-counter-status">
+                    <span className="elapsed-counter-num">{formattedCount}</span>
+                    <span className="elapsed-counter-label">Live</span>
+                    <span className="count-secondary">Verified Roles</span>
+                  </span>
                 )}
               </span>
               <span className="mobile-only">
@@ -825,13 +837,12 @@ export default function Home() {
                       <span className="elapsed-counter-of">/</span>
                       <span className="elapsed-counter-total">{displayedJobs.length.toLocaleString()}</span>
                       <span className="elapsed-counter-label">Matched</span>
-                      <span className="elapsed-counter-dot">•</span>
-                      <span className="elapsed-counter-verified">
-                        {isAllViewed ? 'All Viewed' : formattedCount}
-                      </span>
                     </span>
                   ) : (
-                    `${displayedJobs.length.toLocaleString()} Matched • ${formattedCount} Total`
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{displayedJobs.length.toLocaleString()}</span>
+                      <span className="elapsed-counter-label">Matched</span>
+                    </span>
                   )
                 ) : activeView === 'saved' && savedJobs.length > 0 ? (
                   isScrollingCards ? (
@@ -842,10 +853,16 @@ export default function Home() {
                       <span className="elapsed-counter-label">Saved</span>
                     </span>
                   ) : (
-                    `${savedJobs.length} Saved`
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{savedJobs.length}</span>
+                      <span className="elapsed-counter-label">Saved</span>
+                    </span>
                   )
                 ) : (
-                  `${formattedCount} Live`
+                  <span className="elapsed-counter-status">
+                    <span className="elapsed-counter-num">{formattedCount}</span>
+                    <span className="elapsed-counter-label">Live</span>
+                  </span>
                 )}
               </span>
             </span>
@@ -886,7 +903,7 @@ export default function Home() {
                   className={`site-header-btn ${activeView === 'saved' ? 'site-header-btn-active' : 'site-header-btn-ghost'}`}
                 >
                   <Bookmark size={14} fill={activeView === 'saved' ? 'currentColor' : 'none'} />
-                  <span>Saved</span>
+                  <span className="site-header-saved-label">Saved</span>
                   <span
                     style={{
                       background: activeView === 'saved' ? 'var(--primary-start)' : 'var(--tag-bg)',
@@ -2586,7 +2603,8 @@ export default function Home() {
                 >
                   <span className="pulse-dot" />
                   <span className="desktop-only">
-                    {displayedJobs.length.toLocaleString()} Roles Matched • {formattedCount} Total Verified
+                    <span className="count-main">{displayedJobs.length.toLocaleString()} Roles Matched</span>
+                    <span className="count-secondary"> • {formattedCount} Total Verified</span>
                   </span>
                   <span className="mobile-only">
                     {displayedJobs.length.toLocaleString()} Roles Matched
@@ -2655,9 +2673,17 @@ export default function Home() {
               >
                 <span className="pulse-dot" />
                 <span className="desktop-only">
-                  {isScrollingCards
-                    ? `${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`
-                    : `${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`}
+                  {isScrollingCards ? (
+                    <>
+                      <span className="count-main">{animatedElapsedCount} of {displayedJobs.length.toLocaleString()} Roles Matched</span>
+                      <span className="count-secondary"> • {formattedCount} Total Verified</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="count-main">{displayedJobs.length.toLocaleString()} Roles Matched</span>
+                      <span className="count-secondary"> • {formattedCount} Total Verified</span>
+                    </>
+                  )}
                 </span>
                 <span className="mobile-only">
                   {isScrollingCards

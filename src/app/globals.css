@@ -305,12 +305,35 @@
 }
 
 /* Force Poppins universally across all elements */
-*, *::before, *::after, html, body, button, input, select, textarea, optgroup, span, p, h1, h2, h3, h4, h5, h6, a, div, label {
+*,
+*::before,
+*::after,
+html,
+body,
+button,
+input,
+select,
+textarea,
+optgroup,
+span,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+a,
+div,
+label {
   font-family: var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   box-sizing: border-box;
 }
 
-code, pre, .font-mono, [data-mono] {
+code,
+pre,
+.font-mono,
+[data-mono] {
   font-family: var(--font-jetbrains-mono), 'JetBrains Mono', monospace !important;
 }
 
@@ -320,7 +343,12 @@ code, pre, .font-mono, [data-mono] {
   -webkit-tap-highlight-color: transparent;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   letter-spacing: -0.025em;
   font-weight: 700;
   color: var(--text-primary);
@@ -525,18 +553,17 @@ a {
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--tag-bg) 25%,
-    var(--border) 50%,
-    var(--tag-bg) 75%
-  );
+  background: linear-gradient(90deg,
+      var(--tag-bg) 25%,
+      var(--border) 50%,
+      var(--tag-bg) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.8s infinite;
   border-radius: 8px;
@@ -548,10 +575,12 @@ a {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
   }
+
   70% {
     transform: scale(1);
     box-shadow: 0 0 0 7px rgba(16, 185, 129, 0);
   }
+
   100% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
@@ -565,6 +594,7 @@ a {
   border-radius: 50%;
   display: inline-block;
   animation: pulsePing 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+  flex-shrink: 0;
 }
 
 /* Modern Glass Domain Card */
@@ -785,7 +815,8 @@ a {
   display: none !important;
 }
 
-@media (max-width: 640px) {
+/* Portrait Mobile (<= 640px) and Landscape Mobile / Constrained Height Viewports */
+@media (max-width: 640px), (orientation: landscape) and (max-height: 550px), (max-height: 500px) {
   .desktop-only {
     display: none !important;
   }
@@ -793,7 +824,9 @@ a {
   .mobile-only {
     display: inline-flex !important;
   }
+}
 
+@media (max-width: 640px) {
   .container {
     padding: 0 16px !important;
   }
@@ -843,10 +876,12 @@ a {
     transform: translateX(-100%);
     opacity: 0.3;
   }
+
   50% {
     transform: translateX(100%);
     opacity: 1;
   }
+
   100% {
     transform: translateX(-100%);
     opacity: 0.3;
@@ -858,10 +893,12 @@ a {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
   }
+
   70% {
     transform: scale(1.15);
     box-shadow: 0 0 0 7px rgba(16, 185, 129, 0);
   }
+
   100% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
@@ -873,10 +910,12 @@ a {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7);
   }
+
   70% {
     transform: scale(1.15);
     box-shadow: 0 0 0 7px rgba(244, 63, 94, 0);
   }
+
   100% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
@@ -888,10 +927,12 @@ a {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
   }
+
   70% {
     transform: scale(1.15);
     box-shadow: 0 0 0 7px rgba(99, 102, 241, 0);
   }
+
   100% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
@@ -902,6 +943,7 @@ a {
   from {
     transform: scaleX(1);
   }
+
   to {
     transform: scaleX(0);
   }
@@ -965,6 +1007,8 @@ a {
   user-select: none;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
   transition: all 0.2s ease;
+  flex-shrink: 0;
+  min-width: fit-content;
 }
 
 .roles-matched-pill:hover {
@@ -1039,7 +1083,7 @@ a {
 .site-header-brand {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.5rem;
   cursor: pointer;
   user-select: none;
   text-decoration: none;
@@ -1125,7 +1169,7 @@ a {
   padding: 0 0.95rem;
   border-radius: 10px;
   background: var(--surface-card);
-  border: 1px solid var(--border-card);
+  /* border: 1px solid var(--border-card); */
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1136,6 +1180,8 @@ a {
   letter-spacing: 0.01em;
   user-select: none;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  min-width: fit-content;
 }
 
 .site-header-status:hover {
@@ -1453,21 +1499,25 @@ a {
   flex-shrink: 0;
   text-transform: uppercase;
 }
+
 .loc-tier-tier1 {
   background: var(--badge-emerald-bg);
   border: 1px solid var(--badge-emerald-border);
   color: var(--badge-emerald-text);
 }
+
 .loc-tier-tier2 {
   background: var(--badge-indigo-bg);
   border: 1px solid var(--badge-indigo-border);
   color: var(--badge-indigo-text);
 }
+
 .loc-tier-remote {
   background: var(--badge-cyan-bg);
   border: 1px solid var(--badge-cyan-border);
   color: var(--badge-cyan-text);
 }
+
 .loc-tier-global {
   background: var(--badge-amber-bg);
   border: 1px solid var(--badge-amber-border);
@@ -1475,9 +1525,26 @@ a {
 }
 
 /* Media Queries for Responsive Perfection */
+@media (max-width: 960px) {
+  .count-secondary,
+  .status-secondary-text {
+    display: none !important;
+  }
+}
+
 @media (max-width: 900px) {
   .site-header-subtitle {
     display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .site-header-badge {
+    display: none !important;
+  }
+
+  .site-header-saved-label {
+    display: none !important;
   }
 }
 
@@ -1487,21 +1554,25 @@ a {
     margin-top: 8px;
     margin-bottom: 1rem;
   }
+
   .site-header {
     padding: 0.55rem 0.85rem;
     border-radius: 14px;
     gap: 0.5rem;
   }
+
   .site-header-status {
     height: 32px;
     padding: 0 0.65rem;
     font-size: 0.72rem;
   }
+
   .site-header-btn {
     height: 32px;
     padding: 0 0.65rem;
     font-size: 0.76rem;
   }
+
   .site-header-user-btn {
     height: 32px;
   }
@@ -1511,6 +1582,7 @@ a {
   .site-header {
     flex-wrap: wrap;
   }
+
   .site-header-status {
     order: 3;
     width: 100%;
@@ -1523,12 +1595,112 @@ a {
   .site-header-badge {
     display: none !important;
   }
+
   .site-header {
     padding: 0.5rem 0.65rem !important;
     gap: 0.35rem !important;
   }
+
   .site-header-title {
     font-size: 1.15rem !important;
+  }
+}
+
+/* ==========================================================================
+   Mobile Landscape & Low-Height Optimization (Height <= 550px / <= 500px)
+   Guarantees count visibility beside the pulsating green dot in landscape
+   ========================================================================== */
+@media (orientation: landscape) and (max-height: 550px), (max-height: 500px) {
+  .site-header-wrapper {
+    top: 6px !important;
+    margin-top: 6px !important;
+    margin-bottom: 0.65rem !important;
+  }
+
+  .site-header {
+    padding: 0.35rem 0.75rem !important;
+    gap: 0.45rem !important;
+    border-radius: 12px !important;
+  }
+
+  .site-header-brand {
+    gap: 0.35rem !important;
+  }
+
+  .site-header-logo {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 8px !important;
+  }
+
+  .site-header-title {
+    font-size: 1.15rem !important;
+  }
+
+  .site-header-badge,
+  .site-header-subtitle {
+    display: none !important;
+  }
+
+  /* Sticky Status Pill in Landscape: count directly beside green radar dot */
+  .site-header-status {
+    height: 28px !important;
+    padding: 0 0.55rem !important;
+    font-size: 0.72rem !important;
+    gap: 0.4rem !important;
+    flex-shrink: 0 !important;
+    min-width: fit-content !important;
+    max-width: none !important;
+  }
+
+  .site-header-radar {
+    width: 7px !important;
+    height: 7px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .site-header-actions {
+    gap: 0.35rem !important;
+  }
+
+  .site-header-btn {
+    height: 28px !important;
+    padding: 0 0.5rem !important;
+    font-size: 0.72rem !important;
+  }
+
+  .site-header-saved-label {
+    display: none !important;
+  }
+
+  .site-header-user-btn {
+    height: 28px !important;
+    padding: 0.15rem 0.45rem !important;
+  }
+
+  .site-header-user-badge {
+    display: none !important;
+  }
+
+  /* Roles Matched Pill in Landscape: count directly beside pulse-dot */
+  .roles-matched-pill {
+    font-size: 0.72rem !important;
+    padding: 0.22rem 0.55rem !important;
+    gap: 0.35rem !important;
+    flex-shrink: 0 !important;
+    min-width: fit-content !important;
+    white-space: nowrap !important;
+  }
+
+  .pulse-dot {
+    width: 7px !important;
+    height: 7px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .results-header-toolbar {
+    padding: 0.65rem 0 !important;
+    gap: 0.5rem !important;
   }
 }
 
@@ -1552,6 +1724,7 @@ a {
 }
 
 @media (max-width: 640px) {
+
   .job-grid,
   .discovery-domain-grid,
   .skeleton-job-grid,
