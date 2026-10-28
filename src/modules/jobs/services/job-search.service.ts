@@ -10,6 +10,12 @@ import {
 } from '../domain/job.types';
 import { deduplicateJobs } from '../domain/job.deduplication';
 import { filterAndRankJobs } from '../domain/job.ranking';
+import { classifyJobIndustry } from '../domain/job.taxonomy';
+
+interface CachedSearchResult {
+  response: JobSearchResponse;
+  timestamp: number;
+}
 
 export class JobSearchService {
   private providers: JobProvider[];
@@ -21,10 +27,15 @@ export class JobSearchService {
   private static cacheTimestamp = 0;
   private static readonly CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
+  // Bounded multi-key search cache
+  private static searchCache = new Map<string, CachedSearchResult>();
+  private static readonly MAX_SEARCH_CACHE_ENTRIES = 50;
+
   static clearCache(): void {
     JobSearchService.cachedRawJobs = null;
     JobSearchService.cachedDiagnostics = null;
     JobSearchService.cacheTimestamp = 0;
+    JobSearchService.searchCache.clear();
   }
 
   constructor(customProviders?: JobProvider[]) {
@@ -41,7 +52,8 @@ export class JobSearchService {
       !params.location &&
       !params.type &&
       !params.level &&
-      !params.remote;
+      !params.remote &&
+      (!params.industry || params.industry === 'all');
 
     // Use cached feed for default providers if within TTL
     if (
@@ -97,6 +109,15 @@ export class JobSearchService {
       allJobs.push(...jobBatch);
     }
 
+    // Ensure canonical industry classification on all fetched jobs
+    for (const job of allJobs) {
+      if (!job.industry) {
+        const classified = classifyJobIndustry(job.title, job.tags, job.description);
+        job.industry = classified.industry;
+        job.category = classified.category;
+      }
+    }
+
     // Update in-memory cache for default providers on unfiltered queries
     if (!this.isCustom && isUnfiltered) {
       JobSearchService.cachedRawJobs = allJobs;
@@ -108,6 +129,15 @@ export class JobSearchService {
   }
 
   async searchJobs(params: JobSearchParams): Promise<JobSearchResponse> {
+    const cacheKey = `${params.query || ''}::${params.location || ''}::${params.type || ''}::${params.level || ''}::${params.remote || ''}::${params.industry || ''}::${params.limit || ''}`;
+
+    if (!this.isCustom) {
+      const cached = JobSearchService.searchCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < JobSearchService.CACHE_TTL_MS) {
+        return cached.response;
+      }
+    }
+
     const { allJobs, diagnostics } = await this.fetchRawJobs(params);
 
     // Step 1: Deterministic multi-layer deduplication
@@ -119,12 +149,25 @@ export class JobSearchService {
     // Step 3: Map to backward-compatible legacy shape
     const legacyJobs = rankedJobs.map(toLegacyJob);
 
-    return {
+    const response: JobSearchResponse = {
       jobs: legacyJobs,
       count: legacyJobs.length,
       sources: this.providers.map((p) => p.name),
       diagnostics,
     };
+
+    if (!this.isCustom) {
+      if (JobSearchService.searchCache.size >= JobSearchService.MAX_SEARCH_CACHE_ENTRIES) {
+        const oldestKey = JobSearchService.searchCache.keys().next().value;
+        if (oldestKey) JobSearchService.searchCache.delete(oldestKey);
+      }
+      JobSearchService.searchCache.set(cacheKey, {
+        response,
+        timestamp: Date.now(),
+      });
+    }
+
+    return response;
   }
 
   async getJobStats(): Promise<JobStatsResponse> {

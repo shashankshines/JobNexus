@@ -1,4 +1,5 @@
 import { NormalizedJob, JobSearchParams } from './job.types';
+import { classifyJobIndustry } from './job.taxonomy';
 
 export const INDIAN_CITIES = [
   // Tier 1 Metros & Prime Tech Hubs
@@ -946,6 +947,25 @@ export function matchesRemote(job: NormalizedJob, filterRemote?: string): boolea
   return true;
 }
 
+export function matchesIndustry(job: NormalizedJob, filterIndustry?: string): boolean {
+  if (!filterIndustry || !filterIndustry.trim() || filterIndustry === 'all') {
+    return true;
+  }
+  const target = filterIndustry.trim().toLowerCase();
+  const currentIndustry = (job.industry || classifyJobIndustry(job.title, job.tags, job.description).industry).toLowerCase();
+
+  if (currentIndustry === target) {
+    return true;
+  }
+
+  // Also check category or label match
+  if (job.category && job.category.toLowerCase().includes(target)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function filterAndRankJobs(
   jobs: NormalizedJob[],
   params: JobSearchParams
@@ -955,6 +975,7 @@ export function filterAndRankJobs(
   const type = params.type || '';
   const level = params.level || '';
   const remote = params.remote || '';
+  const industry = params.industry || '';
   const now = Date.now();
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -976,6 +997,9 @@ export function filterAndRankJobs(
 
     // 5. Check seniority level
     if (!matchesLevel(job, level)) continue;
+
+    // 6. Check industry taxonomy
+    if (!matchesIndustry(job, industry)) continue;
 
     let score = queryResult.baseScore;
 

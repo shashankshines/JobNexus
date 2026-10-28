@@ -1,16 +1,12 @@
-import React from 'react';
 import {
   Palette,
   PenTool,
   Code2,
   Terminal,
   Server,
-  Cpu,
-  Database,
   Brain,
   Sparkles,
   Shield,
-  ShieldAlert,
   ShieldCheck,
   Lock,
   Compass,
@@ -18,27 +14,19 @@ import {
   Briefcase,
   Clock,
   Globe,
-  Wifi,
-  Building2,
   Building,
   GitFork,
-  Users,
   Headphones,
   TrendingUp,
-  Megaphone,
   Zap,
-  Flame,
   Crown,
   Award,
   Star,
   GraduationCap,
   CheckCircle2,
   Layers,
-  Tag,
   Hash,
-  Boxes,
   Cloud,
-  FileCode,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -80,9 +68,29 @@ export interface ContextualBadgeInfo {
  * Deterministically categorize a job into a high-demand professional domain
  * based on its title and tags.
  */
-export function getRoleCategory(title: string, tags: string[] = []): ContextualRoleInfo {
+export function getRoleCategory(title: string, tags: string[] = [], industry?: string): ContextualRoleInfo {
   const titleLower = title.toLowerCase();
   const text = `${title} ${tags.join(' ')}`.toLowerCase();
+
+  // Multi-sector explicit industry check
+  if (industry === 'education' || /\b(teacher|teaching|professor|lecturer|school|curriculum|pedagogy|learning support)\b/i.test(titleLower)) {
+    return { category: 'education', label: 'Education & Teaching', icon: GraduationCap, palette: 'purple' };
+  }
+  if (industry === 'healthcare' || /\b(doctor|physician|nurse|nursing|clinical|hospital|medical|surgeon|pharmacist|therapist)\b/i.test(titleLower)) {
+    return { category: 'healthcare', label: 'Healthcare & Medical', icon: Shield, palette: 'rose' };
+  }
+  if (industry === 'finance_accounting' || /\b(accountant|accounting|auditor|financial analyst|tax specialist|cfo|bookkeeper)\b/i.test(titleLower)) {
+    return { category: 'finance', label: 'Finance & Accounts', icon: TrendingUp, palette: 'emerald' };
+  }
+  if (industry === 'logistics_transport' || /\b(supply chain|logistics|warehouse|forklift|freight|dispatcher|truck driver)\b/i.test(titleLower)) {
+    return { category: 'logistics', label: 'Logistics & Supply', icon: Compass, palette: 'amber' };
+  }
+  if (industry === 'construction_trades' || /\b(construction|civil engineer|site engineer|carpenter|electrician|plumber)\b/i.test(titleLower)) {
+    return { category: 'trades', label: 'Construction & Trades', icon: Target, palette: 'sky' };
+  }
+  if (industry === 'government_public' || /\b(civil service|public sector|humanitarian|disaster relief|municipal)\b/i.test(titleLower)) {
+    return { category: 'government', label: 'Public Sector & Aid', icon: Award, palette: 'teal' };
+  }
 
   // 1. Direct Title-Based Role Classification (Priority)
   if (titleLower.includes('interior')) {
@@ -284,7 +292,17 @@ export function getRoleCategory(title: string, tags: string[] = []): ContextualR
     return { category: 'leadership', label: 'Executive Leadership', icon: Crown, palette: 'gold' };
   }
 
-  return { category: 'tech', label: 'Tech & Engineering', icon: Zap, palette: 'indigo' };
+  if (
+    text.includes('software') ||
+    text.includes('engineer') ||
+    text.includes('developer') ||
+    text.includes('tech') ||
+    text.includes('code')
+  ) {
+    return { category: 'tech', label: 'Tech & Engineering', icon: Zap, palette: 'indigo' };
+  }
+
+  return { category: 'general', label: 'Professional Role', icon: Briefcase, palette: 'teal' };
 }
 
 /**
@@ -472,7 +490,7 @@ export function getWorkplaceBadge(
       title: 'Flexible hybrid workplace (office + remote)',
     };
   }
-  if (type === 'onsite' || type === 'on-site') {
+  if (type === 'onsite' || type === 'on-site' || (isRemote === false && !type)) {
     return {
       label: 'On-site',
       icon: Building,

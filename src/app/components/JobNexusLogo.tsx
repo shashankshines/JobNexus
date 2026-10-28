@@ -32,7 +32,6 @@ const SIZE_MAP: Record<string, number> = {
 export default function JobNexusLogo({
   variant = 'mark',
   size = 'md',
-  glow = false,
   priority = false,
   className = '',
   style,

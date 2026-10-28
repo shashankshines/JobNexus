@@ -21,6 +21,8 @@ export interface NormalizedJob {
   score?: number;
   alternateSources?: Array<{ sourceName: string; sourceUrl?: string; applicationUrl: string }>;
   salary?: string;
+  industry?: string;
+  category?: string;
 }
 
 export interface JobSearchParams {
@@ -29,6 +31,7 @@ export interface JobSearchParams {
   type?: string;
   level?: string;
   remote?: string;
+  industry?: string;
   limit?: number;
 }
 
@@ -49,6 +52,8 @@ export interface LegacyJob {
   isIndiaEligible?: boolean;
   isFresh?: boolean;
   salary?: string;
+  industry?: string;
+  category?: string;
 }
 
 export interface ProviderDiagnostic {
@@ -100,5 +105,7 @@ export function toLegacyJob(job: NormalizedJob): LegacyJob {
     isIndiaEligible: job.isIndiaEligible,
     isFresh,
     salary: job.salary,
+    industry: job.industry,
+    category: job.category,
   };
 }

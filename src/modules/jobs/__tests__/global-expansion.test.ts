@@ -212,9 +212,9 @@ describe('Global Job Discovery Expansion Test Suite', () => {
   });
 
   describe('ProviderRegistry Expansion', () => {
-    it('registers all 10 verified providers including LeverAdapter', () => {
+    it('registers all verified providers including LeverAdapter, TeachingAdapter, and ReliefWebAdapter', () => {
       const providers = ProviderRegistry.getDefaultProviders();
-      assert.strictEqual(providers.length, 10);
+      assert.strictEqual(providers.length, 12);
 
       const ids = providers.map((p) => p.id);
       assert.ok(ids.includes('arbeitnow'));
@@ -227,6 +227,8 @@ describe('Global Job Discovery Expansion Test Suite', () => {
       assert.ok(ids.includes('ashby'));
       assert.ok(ids.includes('lever'));
       assert.ok(ids.includes('ncs'));
+      assert.ok(ids.includes('teaching_uk'));
+      assert.ok(ids.includes('reliefweb'));
     });
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import crypto from 'node:crypto';
 import { NextRequest } from 'next/server';
-import { PREMIUM_PLAN, SubscriptionRecord } from '../../billing/domain/subscription.types';
+import { PREMIUM_PLAN } from '../../billing/domain/subscription.types';
 import {
   getUserEntitlement,
   hasActivePremiumAccess,

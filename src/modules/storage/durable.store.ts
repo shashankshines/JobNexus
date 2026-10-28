@@ -53,8 +53,10 @@ export class DurableStore<T extends { id?: string }> {
           }
         }
       }
-    } catch (err) {
-      console.warn(`[DurableStore] Error reading collection ${this.collectionName} from disk:`, err);
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code !== 'ENOENT') {
+        console.warn(`[DurableStore] Error reading collection ${this.collectionName} from disk:`, err);
+      }
     } finally {
       this.isLoaded = true;
     }
@@ -100,6 +102,10 @@ export class DurableStore<T extends { id?: string }> {
 
   values(): T[] {
     return Array.from(this.cache.values());
+  }
+
+  getAll(): T[] {
+    return this.values();
   }
 
   entries(): [string, T][] {

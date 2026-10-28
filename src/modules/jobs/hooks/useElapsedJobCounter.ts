@@ -182,12 +182,14 @@ export function useElapsedJobCounter({
   // Set up passive scroll & resize listener
   useEffect(() => {
     if (!isActive || totalJobs <= 0) {
-      setIsScrollingCards(false);
-      setRawElapsedCount(0);
-      setAnimatedElapsedCount(0);
-      setProgressPercent(0);
-      setIsAllViewed(false);
-      return;
+      const rafId = window.requestAnimationFrame(() => {
+        setIsScrollingCards(false);
+        setRawElapsedCount(0);
+        setAnimatedElapsedCount(0);
+        setProgressPercent(0);
+        setIsAllViewed(false);
+      });
+      return () => window.cancelAnimationFrame(rafId);
     }
 
     const handleScroll = () => {
@@ -217,14 +219,18 @@ export function useElapsedJobCounter({
   // Smooth counting animation loop
   useEffect(() => {
     if (!isScrollingCards || rawElapsedCount <= 0) {
-      setAnimatedElapsedCount(0);
-      return;
+      const rafId = window.requestAnimationFrame(() => {
+        setAnimatedElapsedCount(0);
+      });
+      return () => window.cancelAnimationFrame(rafId);
     }
 
     // Check for reduced motion preference
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setAnimatedElapsedCount(rawElapsedCount);
-      return;
+      const rafId = window.requestAnimationFrame(() => {
+        setAnimatedElapsedCount(rawElapsedCount);
+      });
+      return () => window.cancelAnimationFrame(rafId);
     }
 
     let isRunning = true;

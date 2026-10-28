@@ -9,6 +9,8 @@ import { GreenhouseAdapter } from '../adapters/ats/greenhouse.adapter';
 import { AshbyAdapter } from '../adapters/ats/ashby.adapter';
 import { LeverAdapter } from '../adapters/ats/lever.adapter';
 import { NcsAdapter } from '../adapters/ncs/ncs.adapter';
+import { TeachingAdapter } from '../adapters/teaching/teaching.adapter';
+import { ReliefWebAdapter } from '../adapters/reliefweb/reliefweb.adapter';
 
 export class ProviderRegistry {
   private static defaultProviders: JobProvider[] = [
@@ -22,6 +24,8 @@ export class ProviderRegistry {
     new AshbyAdapter(),
     new LeverAdapter(),
     new NcsAdapter(),
+    new TeachingAdapter(),
+    new ReliefWebAdapter(),
   ];
 
   static getDefaultProviders(): JobProvider[] {

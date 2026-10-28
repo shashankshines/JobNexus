@@ -1979,6 +1979,11 @@ a {
   min-width: 190px;
 }
 
+.search-refinement-industry {
+  flex: 1.1;
+  min-width: 165px;
+}
+
 .search-refinement-workplace {
   flex: 0.9;
   min-width: 155px;
@@ -2077,6 +2082,7 @@ a {
   }
 
   .search-refinement-role,
+  .search-refinement-industry,
   .search-refinement-workplace,
   .search-refinement-type,
   .search-refinement-level {

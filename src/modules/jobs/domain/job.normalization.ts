@@ -272,3 +272,6 @@ export function normalizeSalary(rawSalary?: unknown): string | undefined {
 
   return str.replace(/\s+/g, ' ');
 }
+
+export { classifyJobIndustry, getIndustryLabel } from './job.taxonomy';
+export type { JobIndustry } from './job.taxonomy';

@@ -65,6 +65,8 @@ interface JobCardProps {
     isIndiaEligible?: boolean;
     isFresh?: boolean;
     salary?: string;
+    industry?: string;
+    category?: string;
   };
   index: number;
 }
@@ -106,8 +108,8 @@ function JobCardComponent({ job, index }: JobCardProps) {
 
   // Compute contextual visual tokens
   const roleCategory = useMemo(
-    () => getRoleCategory(job.title, job.tags),
-    [job.title, job.tags]
+    () => getRoleCategory(job.title, job.tags, job.industry),
+    [job.title, job.tags, job.industry]
   );
   const RoleIcon = roleCategory.icon;
 

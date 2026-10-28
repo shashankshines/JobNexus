@@ -49,6 +49,7 @@ export async function GET(request: Request) {
     const type = searchParams.get('type') || '';
     const level = searchParams.get('level') || '';
     const remote = searchParams.get('remote') || '';
+    const industry = searchParams.get('industry') || '';
     const jobId = searchParams.get('id');
 
     // Step 1: Execute server-side job aggregation, deduplication, and ranking on raw data
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
       type,
       level,
       remote,
+      industry,
     });
 
     const responseHeaders: Record<string, string> = {

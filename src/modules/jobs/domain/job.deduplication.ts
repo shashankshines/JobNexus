@@ -50,8 +50,12 @@ export function deduplicateJobs(jobs: NormalizedJob[]): NormalizedJob[] {
 
     if (comp && title && seenRoleKeys.has(roleKey)) {
       const existing = seenRoleKeys.get(roleKey)!;
-      mergeProvenance(existing, job);
-      continue;
+      // Multi-sector protection: If both listings define distinct non-empty industries,
+      // they represent distinct departmental vacancies and should not be collapsed.
+      if (!existing.industry || !job.industry || existing.industry === job.industry) {
+        mergeProvenance(existing, job);
+        continue;
+      }
     }
 
     // Check layer 3: Defense-in-depth against duplicate job IDs
@@ -101,5 +105,11 @@ function mergeProvenance(primary: NormalizedJob, duplicate: NormalizedJob): void
   // If duplicate has longer/better description, use it
   if ((!primary.description || primary.description.length < 50) && duplicate.description) {
     primary.description = duplicate.description;
+  }
+
+  // Preserve industry classification if primary lacks it or is 'other'
+  if ((!primary.industry || primary.industry === 'other') && duplicate.industry && duplicate.industry !== 'other') {
+    primary.industry = duplicate.industry;
+    primary.category = duplicate.category;
   }
 }
