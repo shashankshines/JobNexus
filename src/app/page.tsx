@@ -1504,7 +1504,8 @@ export default function Home() {
             onSubmit={handleSearchSubmit}
             className="glass-panel search-console-form"
             style={{
-              maxWidth: 1040,
+              width: '100%',
+              maxWidth: '100%',
               margin: '0 auto',
               padding: '1.25rem',
               display: 'flex',
@@ -1907,8 +1908,8 @@ export default function Home() {
                 className="search-refinement-role"
                 style={{
                   position: 'relative',
-                  flex: '1.2',
-                  minWidth: 190,
+                  flex: '1.1',
+                  minWidth: 160,
                 }}
               >
                 <button
@@ -2168,8 +2169,8 @@ export default function Home() {
                 className="search-refinement-industry"
                 style={{
                   position: 'relative',
-                  flex: '1.1',
-                  minWidth: 165,
+                  flex: '1.8',
+                  minWidth: 220,
                 }}
               >
                 <button
@@ -2260,14 +2261,15 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -6, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="glass-panel"
+                      className="glass-panel dropdown-popover-right"
                       style={{
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
                         left: 0,
                         width: '100%',
-                        minWidth: 'min(100%, 220px)',
-                        maxHeight: 280,
+                        minWidth: 'max(100%, 280px)',
+                        maxWidth: 'calc(100vw - 32px)',
+                        maxHeight: 320,
                         overflowY: 'auto',
                         zIndex: 250,
                         background: 'var(--dropdown-bg)',
@@ -2307,9 +2309,9 @@ export default function Home() {
                               if (!isSelected) e.currentTarget.style.background = 'transparent';
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', overflow: 'hidden' }}>
-                              <span>{opt.icon}</span>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: 1 }}>
+                              <span style={{ fontSize: '1rem', flexShrink: 0 }}>{opt.icon}</span>
+                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.86rem' }}>
                                 {opt.label}
                               </span>
                             </div>
@@ -2328,8 +2330,8 @@ export default function Home() {
                 className="search-refinement-workplace"
                 style={{
                   position: 'relative',
-                  flex: '0.9',
-                  minWidth: 155,
+                  flex: '0.75',
+                  minWidth: 125,
                 }}
               >
                 <button
@@ -2485,8 +2487,8 @@ export default function Home() {
                 className="search-refinement-type"
                 style={{
                   position: 'relative',
-                  flex: '0.8',
-                  minWidth: 135,
+                  flex: '0.65',
+                  minWidth: 110,
                 }}
               >
                 <button
@@ -2637,8 +2639,8 @@ export default function Home() {
                 className="search-refinement-level"
                 style={{
                   position: 'relative',
-                  flex: '0.8',
-                  minWidth: 135,
+                  flex: '0.65',
+                  minWidth: 110,
                 }}
               >
                 <button

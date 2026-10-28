@@ -61,6 +61,27 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
   });
 
   describe('Search Console & Refinement Mobile Flow Architecture', () => {
+    it('sets 100% width on search-console-form in page.tsx without hardcoded 1040px constraint', () => {
+      assert.ok(
+        pageContent.includes("className=\"glass-panel search-console-form\""),
+        'page.tsx must define search-console-form'
+      );
+      assert.ok(
+        pageContent.includes("width: '100%'") && pageContent.includes("maxWidth: '100%'"),
+        'search-console-form in page.tsx must use 100% width and maxWidth to fill container across resolutions'
+      );
+      assert.ok(
+        !pageContent.includes("maxWidth: 1040"),
+        'search-console-form in page.tsx must NOT constrain maxWidth to 1040px'
+      );
+    });
+
+    it('guarantees search-console-form has 100% width and responsive adaptation in globals.css', () => {
+      assert.ok(cssContent.includes('.search-console-form {\n  width: 100%;'), 'search-console-form must have width: 100% in CSS');
+      assert.ok(cssContent.includes('@media (max-width: 640px)'), 'Should have mobile media query');
+      assert.ok(cssContent.includes('padding: 1rem 0.85rem !important;'), 'Should adapt padding on mobile');
+    });
+
     it('defines mobile stacking for search inputs in globals.css', () => {
       assert.ok(cssContent.includes('.search-inputs-row'), 'Should define search-inputs-row');
       assert.ok(cssContent.includes('flex-direction: column !important;'), 'Should stack search inputs vertically on mobile');
@@ -70,6 +91,14 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
     it('defines balanced 2x2 grid for refinement dropdowns on mobile', () => {
       assert.ok(cssContent.includes('.search-refinements-bar'), 'Should define search-refinements-bar');
       assert.ok(cssContent.includes('grid-template-columns: 1fr 1fr !important;'), 'Should arrange filter dropdowns in a neat 2x2 grid on mobile');
+    });
+
+    it('allocates expanded width to Industry dropdown while balancing compact widths for other components', () => {
+      assert.ok(cssContent.includes('.search-refinement-industry {\n  flex: 1.8;\n  min-width: 220px;'), 'Industry must have flex: 1.8 and min-width: 220px in globals.css');
+      assert.ok(cssContent.includes('.search-refinement-workplace {\n  flex: 0.75;\n  min-width: 125px;'), 'Workplace must have compact width');
+      assert.ok(cssContent.includes('.search-refinement-type {\n  flex: 0.65;\n  min-width: 110px;'), 'Type must have compact width');
+      assert.ok(cssContent.includes('.search-refinement-level {\n  flex: 0.65;\n  min-width: 110px;'), 'Level must have compact width');
+      assert.ok(pageContent.includes("minWidth: 'max(100%, 280px)'"), 'Industry popover must guarantee at least 280px width for all items');
     });
 
     it('defines dropdown-popover-right to avoid right-edge clipping on mobile touch screens', () => {
