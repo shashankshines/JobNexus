@@ -33,6 +33,7 @@ import ThemeToggle from './components/ThemeToggle';
 import FuturisticToast from './components/FuturisticToast';
 import { useAuth } from './context/AuthContext';
 import { useJobStats } from '@/modules/jobs/hooks/useJobStats';
+import { useElapsedJobCounter } from '@/modules/jobs/hooks/useElapsedJobCounter';
 import {
   isValidApplicationUrl,
   getFallbackApplicationUrl,
@@ -227,6 +228,7 @@ export default function Home() {
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const levelDropdownRef = useRef<HTMLDivElement>(null);
   const intentProcessedRef = useRef(false);
+  const jobGridRef = useRef<HTMLDivElement>(null);
 
   const executeSearch = useCallback(
     async (
@@ -608,6 +610,19 @@ export default function Home() {
 
   const hasMore = visibleCount < displayedJobs.length;
 
+  // Track scroll-through progress and animated elapsed counting across job cards
+  const isJobGridActive = (searched && displayedJobs.length > 0) || (activeView === 'saved' && savedJobs.length > 0);
+  const {
+    isScrollingCards,
+    animatedElapsedCount,
+    progressPercent,
+    isAllViewed,
+  } = useElapsedJobCounter({
+    gridRef: jobGridRef,
+    totalJobs: displayedJobs.length,
+    isActive: isJobGridActive,
+  });
+
   const loadMore = useCallback(() => {
     if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
@@ -750,30 +765,97 @@ export default function Home() {
 
           {/* Dynamic Live Aggregation Status Pill */}
           <motion.div
-            key={searched ? `searched-${displayedJobs.length}` : `total-${formattedCount}`}
+            key={searched ? `searched-${displayedJobs.length}` : activeView === 'saved' ? `saved-${savedJobs.length}` : `total-${formattedCount}`}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.2 }}
-            className="site-header-status"
+            className={`site-header-status ${isScrollingCards ? 'is-scrolling-cards' : ''}`}
             title={
-              searched
-                ? `Showing ${displayedJobs.length.toLocaleString()} active roles filtered from ${formattedCount} live verified openings across ${sourcesCount} direct ATS feeds`
-                : `Total ${formattedCount} live verified opportunities actively aggregated from ${sourcesCount} direct employer ATS feeds`
+              isScrollingCards
+                ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} matched roles (${Math.round(progressPercent)}% viewed)`
+                : searched
+                  ? `Showing ${displayedJobs.length.toLocaleString()} active roles filtered from ${formattedCount} live verified openings across ${sourcesCount} direct ATS feeds`
+                  : activeView === 'saved'
+                    ? `${savedJobs.length} bookmarked tech opportunities`
+                    : `Total ${formattedCount} live verified opportunities actively aggregated from ${sourcesCount} direct employer ATS feeds`
             }
           >
-            <span className="site-header-radar" />
+            <span className={`site-header-radar ${isScrollingCards ? (isAllViewed ? 'is-complete' : 'is-scrolling') : ''}`} />
             <span>
               <span className="desktop-only">
-                {searched
-                  ? `${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`
-                  : `${formattedCount} Live Verified Roles`}
+                {searched ? (
+                  isScrollingCards ? (
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{animatedElapsedCount}</span>
+                      <span className="elapsed-counter-of">of</span>
+                      <span className="elapsed-counter-total">{displayedJobs.length.toLocaleString()}</span>
+                      <span className="elapsed-counter-label">Roles Matched</span>
+                      <span className="elapsed-counter-dot">•</span>
+                      <span className="elapsed-counter-verified">
+                        {isAllViewed ? 'All Roles Viewed' : `${formattedCount} Total Verified`}
+                      </span>
+                    </span>
+                  ) : (
+                    `${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`
+                  )
+                ) : activeView === 'saved' && savedJobs.length > 0 ? (
+                  isScrollingCards ? (
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{animatedElapsedCount}</span>
+                      <span className="elapsed-counter-of">of</span>
+                      <span className="elapsed-counter-total">{savedJobs.length}</span>
+                      <span className="elapsed-counter-label">Saved Roles</span>
+                      <span className="elapsed-counter-dot">•</span>
+                      <span className="elapsed-counter-verified">
+                        {isAllViewed ? 'All Saved Viewed' : 'Saved Collection'}
+                      </span>
+                    </span>
+                  ) : (
+                    `${savedJobs.length} Saved Positions`
+                  )
+                ) : (
+                  `${formattedCount} Live Verified Roles`
+                )}
               </span>
               <span className="mobile-only">
-                {searched
-                  ? `${displayedJobs.length.toLocaleString()} Matched • ${formattedCount} Total`
-                  : `${formattedCount} Live`}
+                {searched ? (
+                  isScrollingCards ? (
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{animatedElapsedCount}</span>
+                      <span className="elapsed-counter-of">/</span>
+                      <span className="elapsed-counter-total">{displayedJobs.length.toLocaleString()}</span>
+                      <span className="elapsed-counter-label">Matched</span>
+                      <span className="elapsed-counter-dot">•</span>
+                      <span className="elapsed-counter-verified">
+                        {isAllViewed ? 'All Viewed' : formattedCount}
+                      </span>
+                    </span>
+                  ) : (
+                    `${displayedJobs.length.toLocaleString()} Matched • ${formattedCount} Total`
+                  )
+                ) : activeView === 'saved' && savedJobs.length > 0 ? (
+                  isScrollingCards ? (
+                    <span className="elapsed-counter-status">
+                      <span className="elapsed-counter-num">{animatedElapsedCount}</span>
+                      <span className="elapsed-counter-of">/</span>
+                      <span className="elapsed-counter-total">{savedJobs.length}</span>
+                      <span className="elapsed-counter-label">Saved</span>
+                    </span>
+                  ) : (
+                    `${savedJobs.length} Saved`
+                  )
+                ) : (
+                  `${formattedCount} Live`
+                )}
               </span>
             </span>
+            {isScrollingCards && (
+              <span
+                className={`site-header-status-progress ${isAllViewed ? 'is-complete' : ''}`}
+                style={{ width: `${progressPercent}%` }}
+                aria-hidden="true"
+              />
+            )}
           </motion.div>
 
           {/* Action Navigation Cluster (Uniform 36px Height, 10px Radius) */}
@@ -1020,7 +1102,7 @@ export default function Home() {
           </span>
           <span className="hero-ats-badge-bullet">•</span>
           <span className="hero-ats-badge-secondary">
-            {searched ? `${formattedCount} Total Verified` : `${sourcesCount} Verified Public Feeds &amp; ATS`}
+            {searched ? `${formattedCount} Total Verified` : `${sourcesCount} Verified Public Sources`}
           </span>
         </motion.div>
 
@@ -1080,6 +1162,7 @@ export default function Home() {
           }}
         >
           <div
+            className="workplace-pills-bar"
             style={{
               display: 'inline-flex',
               background: 'var(--surface)',
@@ -1100,6 +1183,7 @@ export default function Home() {
                   key={cat.id}
                   type="button"
                   onClick={() => handleWorkplaceCategoryClick(cat.remoteParam)}
+                  className="workplace-pill-btn"
                   style={{
                     flex: 1,
                     display: 'inline-flex',
@@ -1133,7 +1217,7 @@ export default function Home() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.25, duration: 0.4 }}
           onSubmit={handleSearchSubmit}
-          className="glass-panel"
+          className="glass-panel search-console-form"
           style={{
             maxWidth: 1040,
             margin: '0 auto',
@@ -1148,10 +1232,11 @@ export default function Home() {
           }}
         >
           {/* Top Tier: Primary Inputs + Search CTA */}
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="search-inputs-row" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Query Input */}
             <div
               ref={searchBoxRef}
+              className="search-query-box"
               style={{
                 flex: '1.8',
                 minWidth: 260,
@@ -1214,7 +1299,8 @@ export default function Home() {
                       top: '115%',
                       left: 0,
                       width: '100%',
-                      minWidth: 280,
+                      minWidth: 'min(100%, 280px)',
+                      maxWidth: 'calc(100vw - 32px)',
                       zIndex: 200,
                       background: 'var(--dropdown-bg)',
                       borderRadius: 12,
@@ -1274,6 +1360,7 @@ export default function Home() {
             {/* Location Input */}
             <div
               ref={locBoxRef}
+              className="search-loc-box"
               style={{
                 flex: '1.2',
                 minWidth: 200,
@@ -1336,8 +1423,8 @@ export default function Home() {
                       top: '115%',
                       left: 0,
                       width: '100%',
-                      minWidth: 320,
-                      maxWidth: 440,
+                      minWidth: 'min(100%, 300px)',
+                      maxWidth: 'calc(100vw - 32px)',
                       maxHeight: 380,
                       overflowY: 'auto',
                       zIndex: 250,
@@ -1377,10 +1464,10 @@ export default function Home() {
                             const tierClass = item.tier === 'tier1'
                               ? 'loc-tier-tier1'
                               : item.tier === 'tier2'
-                              ? 'loc-tier-tier2'
-                              : item.tier === 'remote'
-                              ? 'loc-tier-remote'
-                              : 'loc-tier-global';
+                                ? 'loc-tier-tier2'
+                                : item.tier === 'remote'
+                                  ? 'loc-tier-remote'
+                                  : 'loc-tier-global';
                             return (
                               <div
                                 key={i}
@@ -1446,10 +1533,10 @@ export default function Home() {
                             const tierClass = tier === 'tier1'
                               ? 'loc-tier-tier1'
                               : tier === 'tier2'
-                              ? 'loc-tier-tier2'
-                              : tier === 'remote'
-                              ? 'loc-tier-remote'
-                              : 'loc-tier-global';
+                                ? 'loc-tier-tier2'
+                                : tier === 'remote'
+                                  ? 'loc-tier-remote'
+                                  : 'loc-tier-global';
                             return (
                               <div
                                 key={i}
@@ -1489,7 +1576,7 @@ export default function Home() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               type="submit"
-              className="btn-primary"
+              className="btn-primary search-submit-btn"
               style={{
                 height: 48,
                 padding: '0 2rem',
@@ -1515,6 +1602,7 @@ export default function Home() {
 
           {/* Bottom Tier: Refinement Filter Bar */}
           <div
+            className="search-refinements-bar"
             style={{
               display: 'flex',
               gap: '0.65rem',
@@ -1524,13 +1612,14 @@ export default function Home() {
               borderTop: '1px solid var(--border)',
             }}
           >
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '0.15rem' }}>
+            <span className="search-refinements-label" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '0.15rem' }}>
               Filters:
             </span>
 
             {/* Role & Category Custom Dropdown */}
             <div
               ref={roleDropdownRef}
+              className="search-refinement-role"
               style={{
                 position: 'relative',
                 flex: '1.2',
@@ -1623,7 +1712,8 @@ export default function Home() {
                       position: 'absolute',
                       top: 'calc(100% + 6px)',
                       left: 0,
-                      width: 'max(100%, 320px)',
+                      width: '100%',
+                      minWidth: 'min(100%, 300px)',
                       maxWidth: 'min(420px, calc(100vw - 2.5rem))',
                       maxHeight: 380,
                       zIndex: 250,
@@ -1789,6 +1879,7 @@ export default function Home() {
             {/* Workplace Custom Dropdown */}
             <div
               ref={workplaceDropdownRef}
+              className="search-refinement-workplace"
               style={{
                 position: 'relative',
                 flex: '0.9',
@@ -1888,7 +1979,7 @@ export default function Home() {
                       top: 'calc(100% + 6px)',
                       left: 0,
                       width: '100%',
-                      minWidth: 175,
+                      minWidth: 'min(100%, 175px)',
                       zIndex: 250,
                       background: 'var(--dropdown-bg)',
                       borderRadius: 12,
@@ -1944,6 +2035,7 @@ export default function Home() {
             {/* Type Custom Dropdown */}
             <div
               ref={typeDropdownRef}
+              className="search-refinement-type"
               style={{
                 position: 'relative',
                 flex: '0.8',
@@ -2034,13 +2126,14 @@ export default function Home() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                     transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="glass-panel"
+                    className="glass-panel dropdown-popover-right"
                     style={{
                       position: 'absolute',
                       top: 'calc(100% + 6px)',
                       left: 0,
                       width: '100%',
-                      minWidth: 160,
+                      minWidth: 'min(100%, 160px)',
+                      maxWidth: 'calc(100vw - 32px)',
                       zIndex: 250,
                       background: 'var(--dropdown-bg)',
                       borderRadius: 12,
@@ -2093,6 +2186,7 @@ export default function Home() {
             {/* Level Custom Dropdown */}
             <div
               ref={levelDropdownRef}
+              className="search-refinement-level"
               style={{
                 position: 'relative',
                 flex: '0.8',
@@ -2183,13 +2277,14 @@ export default function Home() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                     transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="glass-panel"
+                    className="glass-panel dropdown-popover-right"
                     style={{
                       position: 'absolute',
                       top: 'calc(100% + 6px)',
                       left: 0,
                       width: '100%',
-                      minWidth: 160,
+                      minWidth: 'min(100%, 160px)',
+                      maxWidth: 'calc(100vw - 32px)',
                       zIndex: 250,
                       background: 'var(--dropdown-bg)',
                       borderRadius: 12,
@@ -2244,6 +2339,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={clearAllFilters}
+                className="search-refinement-reset"
                 style={{
                   background: 'rgba(255, 255, 255, 0.04)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -2489,8 +2585,11 @@ export default function Home() {
                   style={{ marginLeft: 'auto' }}
                 >
                   <span className="pulse-dot" />
-                  <span>
+                  <span className="desktop-only">
                     {displayedJobs.length.toLocaleString()} Roles Matched • {formattedCount} Total Verified
+                  </span>
+                  <span className="mobile-only">
+                    {displayedJobs.length.toLocaleString()} Roles Matched
                   </span>
                 </motion.div>
               )}
@@ -2537,16 +2636,7 @@ export default function Home() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '1rem',
-            padding: '1.25rem 0.5rem',
-            marginBottom: '1rem',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-          }}
+          className="results-header-toolbar"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)' }}>
@@ -2564,8 +2654,15 @@ export default function Home() {
                 className="roles-matched-pill"
               >
                 <span className="pulse-dot" />
-                <span>
-                  {displayedJobs.length.toLocaleString()} Roles Matched • {formattedCount} Total Verified
+                <span className="desktop-only">
+                  {isScrollingCards
+                    ? `${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`
+                    : `${displayedJobs.length.toLocaleString()} Roles Matched • ${formattedCount} Total Verified`}
+                </span>
+                <span className="mobile-only">
+                  {isScrollingCards
+                    ? `${animatedElapsedCount}/${displayedJobs.length.toLocaleString()} Roles`
+                    : `${displayedJobs.length.toLocaleString()} Roles`}
                 </span>
               </motion.div>
             )}
@@ -2671,7 +2768,7 @@ export default function Home() {
       {/* Results or Discovery Section */}
       <div style={{ minHeight: 400 }}>
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
+          <div className="skeleton-job-grid" style={{ marginTop: '1.5rem' }}>
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
@@ -2739,11 +2836,9 @@ export default function Home() {
           ) : (
             <>
               <div
+                ref={jobGridRef}
                 className="job-grid"
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                  gap: '1.5rem',
                   overflowAnchor: 'auto',
                 }}
               >
@@ -2878,11 +2973,9 @@ export default function Home() {
         ) : searched && displayedJobs.length > 0 ? (
           <>
             <div
+              ref={jobGridRef}
               className="job-grid"
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: '1.5rem',
                 overflowAnchor: 'auto',
               }}
             >
@@ -3042,7 +3135,7 @@ export default function Home() {
             </div>
 
             {/* 6-Card Domain Explorer Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.4rem' }}>
+            <div className="discovery-domain-grid">
               {DISCOVERY_DOMAINS.map((domain, idx) => {
                 const Icon = domain.icon;
                 return (
@@ -3200,6 +3293,34 @@ export default function Home() {
         )}
       </AnimatePresence>
 
+      {/* Floating Glassmorphic Scroll Progress HUD Indicator */}
+      <AnimatePresence>
+        {showScrollTop && isScrollingCards && displayedJobs.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 15 }}
+            transition={{ duration: 0.2 }}
+            className="floating-elapsed-indicator"
+            onClick={scrollToTop}
+            role="button"
+            tabIndex={0}
+            title="Click to scroll back to top"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                scrollToTop();
+              }
+            }}
+          >
+            <Compass size={13} color="#818cf8" />
+            <span className="floating-elapsed-text">
+              {animatedElapsedCount} / {displayedJobs.length.toLocaleString()}
+            </span>
+            <span className="floating-elapsed-sub">roles</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Floating Glassmorphic Scroll Loader Pill */}
       <AnimatePresence>
         {isLoadingMore && (
@@ -3262,7 +3383,7 @@ export default function Home() {
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
-              className="glass-panel"
+              className="glass-panel profile-modal-card"
               style={{
                 width: '100%',
                 maxWidth: 440,

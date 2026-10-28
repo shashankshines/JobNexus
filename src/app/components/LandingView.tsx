@@ -312,6 +312,7 @@ export default function LandingView() {
                 Job<span className="text-gradient">Nexus</span>
               </span>
               <span
+                className="desktop-only"
                 style={{
                   marginLeft: '0.55rem',
                   fontSize: '0.68rem',
@@ -450,10 +451,8 @@ export default function LandingView() {
 
           {/* Platform Metrics Bar */}
           <div
+            className="platform-metrics-grid"
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-              gap: '1rem',
               background: 'var(--surface-card)',
               border: '1px solid var(--border-card)',
               borderRadius: 18,
@@ -722,13 +721,7 @@ export default function LandingView() {
             </div>
 
             {/* Grid of Verified Job Cards with Gated Apply & Share */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: '1.5rem',
-              }}
-            >
+            <div className="job-grid">
               {PREVIEW_VERIFIED_JOBS.map((job, index) => (
                 <JobCard key={job.id || `preview-${index}`} job={job} index={index} />
               ))}
@@ -801,7 +794,7 @@ export default function LandingView() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.4rem' }}>
+          <div className="discovery-domain-grid">
             {PREVIEW_DISCOVERY_TRACKS.map((domain, idx) => {
               const Icon = domain.icon;
               return (
@@ -888,7 +881,7 @@ export default function LandingView() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.6rem' }}>
+          <div className="feature-pillars-grid">
             {PILLARS.map((pillar, pIdx) => {
               const Icon = pillar.icon;
               return (
@@ -1003,7 +996,7 @@ export default function LandingView() {
             </h2>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+          <div className="testimonials-grid">
             {TESTIMONIALS.map((t, tIdx) => (
               <div
                 key={tIdx}

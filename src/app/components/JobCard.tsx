@@ -320,6 +320,7 @@ export default function JobCard({ job, index }: JobCardProps) {
       transition={{ duration: 0.25, delay: isInitialBatch ? Math.min((index % 18) * 0.03, 0.3) : 0, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -5, scale: 1.01 }}
       className={styles.card}
+      data-job-card-index={index + 1}
       onMouseMove={handleMouseMove}
     >
       {/* 1. Contextual Top Bar: Domain Pill (Left) & Actions (Right) */}

@@ -799,6 +799,12 @@ a {
   }
 }
 
+@media (max-width: 360px) {
+  .container {
+    padding: 0 10px !important;
+  }
+}
+
 /* Horizontal Swipe Pill Container on Mobile */
 .quick-pills-container {
   display: flex;
@@ -819,6 +825,10 @@ a {
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
     width: 100%;
+  }
+
+  .quick-pills-container > * {
+    flex-shrink: 0;
   }
 
   .quick-pills-container::-webkit-scrollbar {
@@ -1106,6 +1116,8 @@ a {
 
 /* Center / Dynamic Live Status Pill */
 .site-header-status {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
@@ -1123,12 +1135,51 @@ a {
   white-space: nowrap;
   letter-spacing: 0.01em;
   user-select: none;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .site-header-status:hover {
   border-color: var(--border-card-hover);
   box-shadow: var(--shadow-card-hover);
+}
+
+/* Dynamic State when user is scrolling through job cards */
+.site-header-status.is-scrolling-cards {
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 4px 18px -2px rgba(99, 102, 241, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="light"] .site-header-status.is-scrolling-cards {
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 14px -2px rgba(99, 102, 241, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Micro Progress Bar on bottom edge of sticky header status pill */
+.site-header-status-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #6366f1 0%, #06b6d4 70%, #10b981 100%);
+  border-radius: 9999px;
+  transition: width 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+  pointer-events: none;
+}
+
+.site-header-status-progress.is-complete {
+  background: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.85);
+}
+
+:root[data-theme="light"] .site-header-status-progress {
+  background: linear-gradient(90deg, #4f46e5 0%, #0891b2 70%, #059669 100%);
+  box-shadow: 0 0 8px rgba(79, 70, 229, 0.45);
+}
+
+:root[data-theme="light"] .site-header-status-progress.is-complete {
+  background: #059669;
+  box-shadow: 0 0 10px rgba(5, 150, 105, 0.6);
 }
 
 .site-header-radar {
@@ -1139,6 +1190,7 @@ a {
   background: #10b981;
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.8);
   flex-shrink: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .site-header-radar::after {
@@ -1151,6 +1203,142 @@ a {
   border-radius: 50%;
   border: 1.5px solid rgba(16, 185, 129, 0.6);
   animation: jn-beacon-pulse 1.8s infinite ease-out;
+}
+
+.site-header-radar.is-scrolling {
+  background: #06b6d4;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.85);
+}
+
+.site-header-radar.is-scrolling::after {
+  border-color: rgba(6, 182, 212, 0.7);
+  animation: jn-beacon-pulse 1.2s infinite ease-out;
+}
+
+.site-header-radar.is-complete {
+  background: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.9);
+}
+
+/* Elapsed counter typography tokens */
+.elapsed-counter-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28rem;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-feature-settings: 'tnum' 1;
+  font-feature-settings: 'tnum' 1;
+}
+
+.elapsed-counter-num {
+  font-weight: 800;
+  color: #818cf8;
+  letter-spacing: -0.01em;
+  font-size: 0.84rem;
+  text-shadow: 0 0 12px rgba(99, 102, 241, 0.35);
+  transition: color 0.2s ease;
+}
+
+:root[data-theme="light"] .elapsed-counter-num {
+  color: #4f46e5;
+  text-shadow: none;
+}
+
+.elapsed-counter-of {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  padding: 0 0.05rem;
+}
+
+.elapsed-counter-total {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.elapsed-counter-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.elapsed-counter-dot {
+  opacity: 0.45;
+  margin: 0 0.15rem;
+  color: var(--text-muted);
+}
+
+.elapsed-counter-verified {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+/* Floating Glassmorphic Scroll Progress HUD Indicator (Desktop & Mobile) */
+.floating-elapsed-indicator {
+  position: fixed;
+  bottom: 88px;
+  right: 30px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(99, 102, 241, 0.38);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 0 12px rgba(99, 102, 241, 0.25);
+  color: #f8fafc;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.76rem;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.floating-elapsed-indicator:hover {
+  transform: translateY(-2px) scale(1.03);
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 10px 28px -4px rgba(0, 0, 0, 0.6), 0 0 16px rgba(99, 102, 241, 0.4);
+}
+
+.floating-elapsed-text {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  font-weight: 700;
+  color: #818cf8;
+}
+
+.floating-elapsed-sub {
+  color: #94a3b8;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+:root[data-theme="light"] .floating-elapsed-indicator {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow: 0 8px 20px -4px rgba(99, 102, 241, 0.15), 0 2px 6px rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] .floating-elapsed-text {
+  color: #4f46e5;
+}
+
+:root[data-theme="light"] .floating-elapsed-sub {
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .floating-elapsed-indicator {
+    bottom: 84px;
+    right: 20px;
+    padding: 0.28rem 0.65rem;
+    font-size: 0.7rem;
+  }
 }
 
 /* Action Group */
@@ -1328,5 +1516,244 @@ a {
     width: 100%;
     justify-content: center;
     margin-top: 0.25rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .site-header-badge {
+    display: none !important;
+  }
+  .site-header {
+    padding: 0.5rem 0.65rem !important;
+    gap: 0.35rem !important;
+  }
+  .site-header-title {
+    font-size: 1.15rem !important;
+  }
+}
+
+/* ==========================================================================
+   Responsive Grids (Eliminating Horizontal Overflow on 320px - 480px Screens)
+   ========================================================================== */
+.job-grid,
+.discovery-domain-grid,
+.skeleton-job-grid,
+.feature-pillars-grid,
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 1.5rem;
+}
+
+.platform-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .job-grid,
+  .discovery-domain-grid,
+  .skeleton-job-grid,
+  .feature-pillars-grid,
+  .testimonials-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .platform-metrics-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.75rem !important;
+    padding: 1rem !important;
+  }
+}
+
+/* ==========================================================================
+   Responsive Search Console Architecture
+   ========================================================================== */
+.search-console-form {
+  width: 100%;
+  transition: padding 0.2s ease;
+}
+
+.search-inputs-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.search-query-box {
+  flex: 1.8;
+  min-width: 260px;
+}
+
+.search-loc-box {
+  flex: 1.2;
+  min-width: 200px;
+}
+
+.search-submit-btn {
+  flex-shrink: 0;
+}
+
+.search-refinements-bar {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+  width: 100%;
+}
+
+.search-refinement-role {
+  flex: 1.2;
+  min-width: 190px;
+}
+
+.search-refinement-workplace {
+  flex: 0.9;
+  min-width: 155px;
+}
+
+.search-refinement-type {
+  flex: 0.8;
+  min-width: 135px;
+}
+
+.search-refinement-level {
+  flex: 0.8;
+  min-width: 135px;
+}
+
+/* Workplace Category Selector */
+.workplace-pills-bar {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 4px;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+  max-width: 580px;
+}
+
+.workplace-pill-btn {
+  flex: 1;
+  min-height: 42px;
+}
+
+/* Results Header Toolbar */
+.results-header-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.25rem 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Mobile & Android Adaptation Rules (<= 640px) */
+@media (max-width: 640px) {
+  .search-console-form {
+    padding: 1rem 0.85rem !important;
+    border-radius: 16px !important;
+    gap: 0.85rem !important;
+  }
+
+  .search-inputs-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+  }
+
+  .search-query-box,
+  .search-loc-box {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .search-submit-btn {
+    width: 100% !important;
+    height: 48px !important;
+    justify-content: center !important;
+  }
+
+  /* Balanced 2x2 Grid for Mobile Refinements */
+  .search-refinements-bar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+  }
+
+  .search-refinements-label {
+    grid-column: 1 / -1;
+    margin-bottom: -0.15rem;
+  }
+
+  .search-refinement-role,
+  .search-refinement-workplace,
+  .search-refinement-type,
+  .search-refinement-level {
+    flex: none !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .search-refinement-reset {
+    grid-column: 1 / -1;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 38px !important;
+  }
+
+  /* Dropdown screen edge avoidance for right column */
+  .dropdown-popover-right {
+    left: auto !important;
+    right: 0 !important;
+  }
+
+  /* Symmetrical 2x2 Grid for Mobile Workplace Mode */
+  .workplace-pills-bar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+    padding: 6px !important;
+    border-radius: 14px !important;
+  }
+
+  .workplace-pill-btn {
+    width: 100% !important;
+    min-height: 44px !important;
+    padding: 0.55rem 0.65rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  .roles-matched-pill {
+    font-size: 0.74rem !important;
+    padding: 0.28rem 0.65rem !important;
+  }
+
+  .autoload-scroll-pill {
+    display: none !important;
+  }
+
+  .results-header-toolbar {
+    padding: 0.85rem 0 !important;
+    gap: 0.75rem !important;
+  }
+
+  .profile-modal-card {
+    padding: 1.25rem 1rem !important;
+    border-radius: 16px !important;
   }
 }
