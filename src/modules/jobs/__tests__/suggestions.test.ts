@@ -3,8 +3,10 @@ import assert from 'node:assert';
 import {
   getSuggestions,
   getLocationSuggestions,
+  getLocationTier,
   POPULAR_JOB_POSTS,
   POPULAR_LOCATIONS,
+  POPULAR_LOCATION_GROUPS,
   JOB_POST_CATEGORIES,
   JOB_POST_GROUPS,
   ALL_JOB_POSTS,
@@ -39,6 +41,102 @@ describe('Job Post & Location Dropdowns Suggestions Tests', () => {
     const indiaLocs = getLocationSuggestions('india');
     assert.ok(indiaLocs.length > 0);
     assert.ok(indiaLocs.some((l) => l.toLowerCase().includes('india')));
+  });
+
+  it('provides comprehensive Indian Tier 1 and Tier 2 cities in popular locations and groups', () => {
+    // Verify 3 distinct groups are present
+    assert.strictEqual(POPULAR_LOCATION_GROUPS.length, 3);
+    const tier1Group = POPULAR_LOCATION_GROUPS.find((g) => g.group.includes('Tier 1'));
+    const tier2Group = POPULAR_LOCATION_GROUPS.find((g) => g.group.includes('Tier 2'));
+    const globalGroup = POPULAR_LOCATION_GROUPS.find((g) => g.group.includes('Global'));
+
+    assert.ok(tier1Group, 'Tier 1 group must exist');
+    assert.ok(tier2Group, 'Tier 2 group must exist');
+    assert.ok(globalGroup, 'Global group must exist');
+
+    // Tier 1 Metros: At least 8 major tech centers
+    assert.ok(tier1Group.locations.length >= 8);
+    const t1Labels = tier1Group.locations.map((l) => l.label);
+    assert.ok(t1Labels.some((l) => l.includes('Bengaluru')));
+    assert.ok(t1Labels.some((l) => l.includes('Delhi NCR')));
+    assert.ok(t1Labels.some((l) => l.includes('Hyderabad')));
+    assert.ok(t1Labels.some((l) => l.includes('Mumbai')));
+    assert.ok(t1Labels.some((l) => l.includes('Pune')));
+    assert.ok(t1Labels.some((l) => l.includes('Chennai')));
+    assert.ok(t1Labels.some((l) => l.includes('Kolkata')));
+    assert.ok(t1Labels.some((l) => l.includes('Ahmedabad')));
+
+    // Tier 2 Hubs: At least 18 emerging tech centers
+    assert.ok(tier2Group.locations.length >= 18);
+    const t2Labels = tier2Group.locations.map((l) => l.label);
+    assert.ok(t2Labels.some((l) => l.includes('Chandigarh')));
+    assert.ok(t2Labels.some((l) => l.includes('Kochi')));
+    assert.ok(t2Labels.some((l) => l.includes('Indore')));
+    assert.ok(t2Labels.some((l) => l.includes('Jaipur')));
+    assert.ok(t2Labels.some((l) => l.includes('Coimbatore')));
+    assert.ok(t2Labels.some((l) => l.includes('Thiruvananthapuram')));
+    assert.ok(t2Labels.some((l) => l.includes('Bhubaneswar')));
+    assert.ok(t2Labels.some((l) => l.includes('Visakhapatnam')));
+    assert.ok(t2Labels.some((l) => l.includes('Nagpur')));
+    assert.ok(t2Labels.some((l) => l.includes('Lucknow')));
+    assert.ok(t2Labels.some((l) => l.includes('Vadodara')));
+    assert.ok(t2Labels.some((l) => l.includes('Surat')));
+    assert.ok(t2Labels.some((l) => l.includes('Bhopal')));
+    assert.ok(t2Labels.some((l) => l.includes('Patna')));
+    assert.ok(t2Labels.some((l) => l.includes('Mysuru')));
+    assert.ok(t2Labels.some((l) => l.includes('Mangaluru')));
+    assert.ok(t2Labels.some((l) => l.includes('Dehradun')));
+    assert.ok(t2Labels.some((l) => l.includes('Nashik')));
+
+    // Tier identification helper
+    assert.strictEqual(getLocationTier('Bengaluru, Karnataka'), 'tier1');
+    assert.strictEqual(getLocationTier('Kochi (Cochin), Kerala'), 'tier2');
+    assert.strictEqual(getLocationTier('Remote (Worldwide)'), 'remote');
+    assert.strictEqual(getLocationTier('India'), 'global');
+    assert.strictEqual(getLocationTier('Nonexistent City'), null);
+  });
+
+  it('resolves Tier 1 and Tier 2 cities by direct names and synonyms/aliases', () => {
+    // Kochi by alias "cochin"
+    const cochinMatches = getLocationSuggestions('cochin');
+    assert.ok(cochinMatches.some((l) => l.includes('Kochi (Cochin)')));
+
+    // Visakhapatnam by alias "vizag"
+    const vizagMatches = getLocationSuggestions('vizag');
+    assert.ok(vizagMatches.some((l) => l.includes('Visakhapatnam (Vizag)')));
+
+    // Delhi NCR by alias "gurgaon" or "noida"
+    const ggnMatches = getLocationSuggestions('gurgaon');
+    assert.ok(ggnMatches.some((l) => l.includes('Delhi NCR')));
+
+    // Vadodara by alias "baroda"
+    const barodaMatches = getLocationSuggestions('baroda');
+    assert.ok(barodaMatches.some((l) => l.includes('Vadodara (Baroda)')));
+
+    // Mysuru by alias "mysore"
+    const mysoreMatches = getLocationSuggestions('mysore');
+    assert.ok(mysoreMatches.some((l) => l.includes('Mysuru (Mysore)')));
+
+    // Thiruvananthapuram by alias "trivandrum"
+    const tvmMatches = getLocationSuggestions('trivandrum');
+    assert.ok(tvmMatches.some((l) => l.includes('Thiruvananthapuram (Trivandrum)')));
+
+    // Chandigarh by alias "mohali"
+    const mohaliMatches = getLocationSuggestions('mohali');
+    assert.ok(mohaliMatches.some((l) => l.includes('Chandigarh / Mohali')));
+
+    // Direct search for Tier 2 cities
+    assert.ok(getLocationSuggestions('indore').some((l) => l.includes('Indore')));
+    assert.ok(getLocationSuggestions('jaipur').some((l) => l.includes('Jaipur')));
+    assert.ok(getLocationSuggestions('coimbatore').some((l) => l.includes('Coimbatore')));
+    assert.ok(getLocationSuggestions('bhubaneswar').some((l) => l.includes('Bhubaneswar')));
+    assert.ok(getLocationSuggestions('nagpur').some((l) => l.includes('Nagpur')));
+    assert.ok(getLocationSuggestions('lucknow').some((l) => l.includes('Lucknow')));
+    assert.ok(getLocationSuggestions('surat').some((l) => l.includes('Surat')));
+    assert.ok(getLocationSuggestions('bhopal').some((l) => l.includes('Bhopal')));
+    assert.ok(getLocationSuggestions('patna').some((l) => l.includes('Patna')));
+    assert.ok(getLocationSuggestions('dehradun').some((l) => l.includes('Dehradun')));
+    assert.ok(getLocationSuggestions('nashik').some((l) => l.includes('Nashik')));
   });
 
   it('provides an exhaustive catalog of job post groups for the role dropdown', () => {

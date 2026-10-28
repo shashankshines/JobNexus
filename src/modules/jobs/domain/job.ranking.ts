@@ -1,6 +1,7 @@
 import { NormalizedJob, JobSearchParams } from './job.types';
 
 export const INDIAN_CITIES = [
+  // Tier 1 Metros & Prime Tech Hubs
   'bangalore',
   'bengaluru',
   'delhi',
@@ -20,11 +21,14 @@ export const INDIAN_CITIES = [
   'kolkata',
   'calcutta',
   'ahmedabad',
+  // Tier 2 Emerging Tech Hubs & Innovation Centers
   'thiruvananthapuram',
   'trivandrum',
   'kochi',
   'cochin',
   'chandigarh',
+  'mohali',
+  'panchkula',
   'jaipur',
   'indore',
   'lucknow',
@@ -36,9 +40,43 @@ export const INDIAN_CITIES = [
   'bhopal',
   'patna',
   'bhubaneswar',
+  'bhubaneshwar',
   'nagpur',
   'visakhapatnam',
   'vizag',
+  'surat',
+  'faridabad',
+  'ghaziabad',
+  'navi mumbai',
+  'thane',
+  'secunderabad',
+  'mangalore',
+  'mangaluru',
+  'dehradun',
+  'nashik',
+  'nasik',
+  'guwahati',
+  'raipur',
+  'ranchi',
+  'kanpur',
+  'varanasi',
+  'amritsar',
+  'ludhiana',
+  'jalandhar',
+  'madurai',
+  'trichy',
+  'tiruchirappalli',
+  'vijayawada',
+  'guntur',
+  'hubli',
+  'dharwad',
+  'belgaum',
+  'belagavi',
+  'aurangabad',
+  'chhatrapati sambhajinagar',
+  'solapur',
+  'jodhpur',
+  'udaipur',
 ];
 
 export const INDIAN_STATES = [
@@ -56,6 +94,15 @@ export const INDIAN_STATES = [
   'punjab',
   'madhya pradesh',
   'andhra pradesh',
+  'odisha',
+  'orissa',
+  'bihar',
+  'jharkhand',
+  'chhattisgarh',
+  'uttarakhand',
+  'assam',
+  'goa',
+  'himachal pradesh',
 ];
 
 export const US_CITIES = [
@@ -197,7 +244,9 @@ export const SYNONYMS: Record<string, string[]> = {
   gurgaon: ['gurugram'],
   gurugram: ['gurgaon'],
   bombay: ['mumbai'],
-  mumbai: ['bombay'],
+  mumbai: ['bombay', 'navi mumbai', 'thane'],
+  'navi mumbai': ['mumbai'],
+  thane: ['mumbai'],
   madras: ['chennai'],
   chennai: ['madras'],
   calcutta: ['kolkata'],
@@ -214,6 +263,26 @@ export const SYNONYMS: Record<string, string[]> = {
   vadodara: ['baroda'],
   mysore: ['mysuru'],
   mysuru: ['mysore'],
+  mangalore: ['mangaluru'],
+  mangaluru: ['mangalore'],
+  vizag: ['visakhapatnam'],
+  visakhapatnam: ['vizag'],
+  nasik: ['nashik'],
+  nashik: ['nasik'],
+  mohali: ['chandigarh', 'tricity'],
+  panchkula: ['chandigarh', 'tricity'],
+  chandigarh: ['mohali', 'panchkula', 'tricity'],
+  bhubaneshwar: ['bhubaneswar'],
+  bhubaneswar: ['bhubaneshwar'],
+  trichy: ['tiruchirappalli'],
+  tiruchirappalli: ['trichy'],
+  belgaum: ['belagavi'],
+  belagavi: ['belgaum'],
+  aurangabad: ['chhatrapati sambhajinagar'],
+  'chhatrapati sambhajinagar': ['aurangabad'],
+  orissa: ['odisha'],
+  odisha: ['orissa'],
+  secunderabad: ['hyderabad'],
   sf: ['san francisco', 'bay area', 'silicon valley'],
   'san francisco': ['sf', 'bay area', 'silicon valley'],
   'bay area': ['san francisco', 'sf', 'silicon valley'],
@@ -247,6 +316,7 @@ export const MULTI_WORD_LOCATIONS = [
   'new delhi',
   'delhi ncr',
   'greater noida',
+  'navi mumbai',
   'los angeles',
   'san diego',
   'tel aviv',
@@ -259,6 +329,10 @@ export const MULTI_WORD_LOCATIONS = [
   'west bengal',
   'andhra pradesh',
   'madhya pradesh',
+  'himachal pradesh',
+  'hubli dharwad',
+  'hubli-dharwad',
+  'chhatrapati sambhajinagar',
   'anywhere in the world',
   'remote (worldwide)',
 ];
@@ -482,12 +556,52 @@ export function matchesSingleLocation(
 }
 
 /**
+ * Helper to unpack aliases, parenthetical variations, and slashes in location filters.
+ * e.g., "Kochi (Cochin)" -> ["kochi (cochin)", "kochi", "cochin"]
+ * e.g., "Chandigarh / Mohali" -> ["chandigarh / mohali", "chandigarh", "mohali"]
+ * e.g., "Delhi NCR (Gurgaon / Noida)" -> ["delhi ncr (gurgaon / noida)", "delhi ncr", "gurgaon / noida", "gurgaon", "noida"]
+ */
+export function extractLocationVariants(loc: string): string[] {
+  const clean = loc.trim().toLowerCase();
+  if (!clean) return [];
+  const variants = new Set<string>();
+  variants.add(clean);
+
+  // Extract parentheses e.g. "kochi (cochin)" or "delhi ncr (gurgaon / noida)"
+  const parenMatch = clean.match(/^([^(]+)\(([^)]+)\)(.*)$/);
+  if (parenMatch) {
+    const main = (parenMatch[1] + (parenMatch[3] || '')).trim();
+    const inside = parenMatch[2].trim();
+    if (main) variants.add(main);
+    if (inside) {
+      variants.add(inside);
+      if (inside.includes('/') || inside.includes('|')) {
+        for (const sub of inside.split(/[/|]+/)) {
+          const s = sub.trim();
+          if (s) variants.add(s);
+        }
+      }
+    }
+  }
+
+  // Slashes check e.g. "chandigarh / mohali"
+  if (clean.includes('/') || clean.includes('|')) {
+    for (const sub of clean.split(/[/|]+/)) {
+      const s = sub.trim();
+      if (s) variants.add(s);
+    }
+  }
+
+  return Array.from(variants);
+}
+
+/**
  * Evaluates whether a job matches a search location, supporting:
  * - City searches (Bengaluru, Bangalore, Pune, Mumbai, London, New York)
  * - Country searches (India, United States, UK, Germany, Canada, Australia)
- * - Alternative compound filters with '/' (e.g., "Delhi NCR / Gurgaon / Noida")
- * - Hierarchical compound filters with ',' (e.g., "Bengaluru, Karnataka", "San Francisco, CA")
- * - Bi-directional synonym resolution
+ * - Alternative compound filters with '/' (e.g., "Delhi NCR / Gurgaon / Noida", "Chandigarh / Mohali")
+ * - Hierarchical compound filters with ',' (e.g., "Bengaluru, Karnataka", "Kochi (Cochin), Kerala", "San Francisco, CA")
+ * - Bi-directional synonym resolution and alias expansion
  */
 export function matchesLocation(job: NormalizedJob, filterLocation: string): boolean {
   if (!filterLocation || !filterLocation.trim()) return true;
@@ -497,26 +611,32 @@ export function matchesLocation(job: NormalizedJob, filterLocation: string): boo
   const isRemote = Boolean(job.isRemote || job.workplaceType === 'remote');
   const isIndiaEligible = Boolean(job.isIndiaEligible);
 
-  // 1. Direct atomic match
-  if (matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, rawFilter)) {
-    return true;
+  // 1. Direct atomic match with variant expansion
+  const directVariants = extractLocationVariants(rawFilter);
+  for (const variant of directVariants) {
+    if (matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, variant)) {
+      return true;
+    }
   }
 
-  // 2. Alternative options separated by slash or pipe (e.g. "Delhi NCR / Gurgaon / Noida")
+  // 2. Alternative options separated by slash or pipe (e.g. "Delhi NCR / Gurgaon / Noida", "Chandigarh / Mohali")
   if (rawFilter.includes('/') || rawFilter.includes('|')) {
     const parts = rawFilter
       .split(/[/|]+/)
       .map((p) => p.trim())
       .filter(Boolean);
     for (const part of parts) {
-      if (matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, part)) {
-        return true;
+      const partVariants = extractLocationVariants(part);
+      for (const variant of partVariants) {
+        if (matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, variant)) {
+          return true;
+        }
       }
     }
     return false;
   }
 
-  // 3. Hierarchical City, State/Country separated by comma or semicolon (e.g. "Bengaluru, Karnataka", "San Francisco, CA")
+  // 3. Hierarchical City, State/Country separated by comma or semicolon (e.g. "Bengaluru, Karnataka", "Kochi (Cochin), Kerala", "San Francisco, CA")
   if (rawFilter.includes(',') || rawFilter.includes(';')) {
     const parts = rawFilter
       .split(/[,;]+/)
@@ -527,9 +647,12 @@ export function matchesLocation(job: NormalizedJob, filterLocation: string): boo
       const cityPart = parts[0];
       const regionPart = parts[1];
 
-      // A: If job matches the primary city (e.g., job in "Bengaluru, India" matches "Bengaluru, Karnataka")
-      if (matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, cityPart)) {
-        return true;
+      // A: If job matches any primary city variant (e.g., job in "Kochi, Kerala" matches "Kochi (Cochin), Kerala")
+      const cityVariants = extractLocationVariants(cityPart);
+      for (const variant of cityVariants) {
+        if (matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, variant)) {
+          return true;
+        }
       }
 
       // B: If job does not specify a distinct competing city, but matches the specified state/country
@@ -540,7 +663,8 @@ export function matchesLocation(job: NormalizedJob, filterLocation: string): boo
         ...GERMANY_CITIES,
       ].some((c) => safeLocationMatch(jobLoc, c));
 
-      if (!hasKnownCity && matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, regionPart)) {
+      const regionVariants = extractLocationVariants(regionPart);
+      if (!hasKnownCity && regionVariants.some((r) => matchesSingleLocation(jobLoc, isRemote, isIndiaEligible, r))) {
         return true;
       }
 

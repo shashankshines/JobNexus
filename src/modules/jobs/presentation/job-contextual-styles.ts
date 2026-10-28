@@ -542,6 +542,15 @@ export function getEmploymentTypeBadge(typeString: string): ContextualBadgeInfo 
 export function getSourceBadge(sourceName: string): ContextualBadgeInfo {
   const s = (sourceName || 'ATS').toLowerCase();
 
+  if (s.includes('hidden') || s.includes('undisclosed')) {
+    return {
+      label: 'Job source hidden',
+      icon: Lock,
+      palette: 'amber',
+      title: 'Sign in to reveal job source and verified provider details',
+    };
+  }
+
   if (s.includes('ashby')) {
     return {
       label: 'Ashby ATS',

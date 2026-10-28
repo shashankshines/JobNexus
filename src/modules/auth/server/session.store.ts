@@ -45,13 +45,72 @@ export interface SessionRecord {
 export const SESSION_COOKIE_NAME = 'jobnexus_session_v1';
 export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 Days
 
-// In-memory persistent registry across server requests
-const users = new Map<string, UserRecord>();
-const usersByEmail = new Map<string, string>(); // email -> userId
-const sessions = new Map<string, SessionRecord>(); // sessionId -> SessionRecord
+interface GlobalAuthRegistry {
+  users: Map<string, UserRecord>;
+  usersByEmail: Map<string, string>;
+  sessions: Map<string, SessionRecord>;
+  passwordHashes: Map<string, string>;
+  rateLimitMap: Map<string, { count: number; resetAt: number }>;
+}
 
-// Password hash store (mocked secure salted hash for memory store)
-const passwordHashes = new Map<string, string>(); // userId -> hash
+const globalForAuth = globalThis as unknown as {
+  __jobnexus_auth_registry?: GlobalAuthRegistry;
+};
+
+if (!globalForAuth.__jobnexus_auth_registry) {
+  globalForAuth.__jobnexus_auth_registry = {
+    users: new Map<string, UserRecord>(),
+    usersByEmail: new Map<string, string>(),
+    sessions: new Map<string, SessionRecord>(),
+    passwordHashes: new Map<string, string>(),
+    rateLimitMap: new Map<string, { count: number; resetAt: number }>(),
+  };
+}
+
+const users = globalForAuth.__jobnexus_auth_registry.users;
+const usersByEmail = globalForAuth.__jobnexus_auth_registry.usersByEmail;
+const sessions = globalForAuth.__jobnexus_auth_registry.sessions;
+const passwordHashes = globalForAuth.__jobnexus_auth_registry.passwordHashes;
+const rateLimitMap = globalForAuth.__jobnexus_auth_registry.rateLimitMap;
+
+/**
+ * Safely extracts a session identifier from incoming Request headers:
+ * 1. Checks HTTP-only cookie matching SESSION_COOKIE_NAME.
+ * 2. Checks Authorization Bearer header.
+ */
+export function extractSessionId(request?: Request | null): string | null {
+  if (!request) return null;
+
+  // 1. Check HTTP-only cookie
+  const cookieHeader = request.headers.get('cookie') || '';
+  if (cookieHeader) {
+    const cookies = cookieHeader.split(';');
+    for (const cookie of cookies) {
+      const trimmed = cookie.trim();
+      const prefix = `${SESSION_COOKIE_NAME}=`;
+      if (trimmed.startsWith(prefix)) {
+        const val = trimmed.slice(prefix.length).trim();
+        const unquoted = val.replace(/^"|"$/g, '');
+        if (unquoted) {
+          try {
+            return decodeURIComponent(unquoted);
+          } catch {
+            return unquoted;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Check Authorization Bearer header
+  const authHeader = request.headers.get('authorization') || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    if (token) return token;
+  }
+
+  return null;
+}
 
 function hashPassword(password: string, salt: string): string {
   return crypto.pbkdf2Sync(password, salt, 1000, 32, 'sha256').toString('hex');
@@ -278,8 +337,6 @@ export function updateUserPassword(
   return { success: true };
 }
 
-// In-memory rate limiting store: key -> { count: number, resetAt: number }
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 export function checkAuthRateLimit(
   key: string,

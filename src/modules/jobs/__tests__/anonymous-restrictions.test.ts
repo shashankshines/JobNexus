@@ -5,6 +5,9 @@ import {
   maskJobsForAnonymous,
   isValidApplicationUrl,
   ANONYMOUS_COMPANY_LABEL,
+  ANONYMOUS_SOURCE_LABEL,
+  isCompanyMasked,
+  isSourceMasked,
 } from '../domain/job.masking';
 import { LegacyJob, NormalizedJob, toLegacyJob } from '../domain/job.types';
 import { deduplicateJobs } from '../domain/job.deduplication';
@@ -18,6 +21,7 @@ import {
   expireSessionForTesting,
 } from '../../auth/server/session.store';
 import { GET as jobsRouteHandler } from '../../../app/api/jobs/route';
+import { GET as statsRouteHandler } from '../../../app/api/jobs/stats/route';
 
 describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite', () => {
   beforeEach(() => {
@@ -66,7 +70,9 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
     it('replaces actual company names with standard neutral label', () => {
       const masked = maskJobForAnonymous(sampleLegacyJobs[0]);
       assert.strictEqual(masked.company, ANONYMOUS_COMPANY_LABEL);
-      assert.strictEqual(masked.company, 'Company undisclosed');
+      assert.strictEqual(masked.company, 'Company hidden');
+      assert.strictEqual(isCompanyMasked(masked.company), true);
+      assert.strictEqual(isCompanyMasked('Linear Technologies Inc'), false);
       assert.ok(!masked.company.includes('Linear'));
     });
 
@@ -83,10 +89,14 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       assert.ok(!masked.tags.includes('Linear Technologies Inc'));
     });
 
-    it('neutralizes parenthesized company names in source metadata', () => {
+    it('masks provider and source metadata for anonymous responses', () => {
       const masked = maskJobForAnonymous(sampleLegacyJobs[0]);
-      assert.strictEqual(masked.source, 'Ashby ATS');
+      assert.strictEqual(masked.source, ANONYMOUS_SOURCE_LABEL);
+      assert.strictEqual(masked.source, 'Job source hidden');
+      assert.strictEqual(isSourceMasked(masked.source), true);
+      assert.strictEqual(isSourceMasked('Ashby ATS'), false);
       assert.ok(!masked.source.includes('Linear'));
+      assert.ok(!masked.source.includes('Ashby'));
     });
 
     it('sanitizes explicit company references in descriptions', () => {
@@ -114,12 +124,33 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       assert.strictEqual(batch.length, 2);
       assert.strictEqual(batch[0].company, ANONYMOUS_COMPANY_LABEL);
       assert.strictEqual(batch[1].company, ANONYMOUS_COMPANY_LABEL);
+      assert.strictEqual(batch[0].source, ANONYMOUS_SOURCE_LABEL);
+      assert.strictEqual(batch[1].source, ANONYMOUS_SOURCE_LABEL);
       assert.strictEqual(batch[0].url, '');
       assert.strictEqual(batch[1].url, '');
 
       // Verify originals remain unmodified
       assert.strictEqual(sampleLegacyJobs[0].company, 'Linear Technologies Inc');
+      assert.strictEqual(sampleLegacyJobs[0].source, 'Ashby ATS (Linear Technologies Inc)');
       assert.ok(sampleLegacyJobs[0].url.length > 0);
+    });
+
+    it('handles missing company or source gracefully without generating fake identities', () => {
+      const missingJob: LegacyJob = {
+        id: 'missing-1',
+        title: 'Backend Developer',
+        company: '',
+        location: 'Remote',
+        type: 'Full-time',
+        url: 'https://example.com/apply',
+        date: '2026-10-26T10:00:00.000Z',
+        source: '',
+        tags: ['Go'],
+        description: '',
+      };
+      const masked = maskJobForAnonymous(missingJob);
+      assert.strictEqual(masked.company, ANONYMOUS_COMPANY_LABEL);
+      assert.strictEqual(masked.source, ANONYMOUS_SOURCE_LABEL);
     });
   });
 
@@ -127,7 +158,7 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
   // 2. /api/jobs Route: Server-Side Authorization & Anti-Bypass Verification
   // =========================================================================
   describe('/api/jobs Route: Server-Side Authorization Enforcement', () => {
-    it('returns masked company names and empty application URLs for unauthenticated requests', async () => {
+    it('returns masked company names, masked sources, and empty application URLs for unauthenticated requests', async () => {
       const req = new Request('http://localhost:3000/api/jobs?limit=5', {
         headers: {},
       });
@@ -139,14 +170,24 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       assert.ok(data.jobs.length > 0);
 
       for (const job of data.jobs) {
-        // Must never leak company name in anonymous response
+        // Must never leak company name or source in anonymous response
         assert.strictEqual(job.company, ANONYMOUS_COMPANY_LABEL);
+        assert.strictEqual(job.company, 'Company hidden');
+        assert.strictEqual(job.source, ANONYMOUS_SOURCE_LABEL);
+        assert.strictEqual(job.source, 'Job source hidden');
         assert.strictEqual(job.url, '');
-        assert.ok(!job.source.includes('('));
         for (const tag of job.tags) {
           assert.notStrictEqual(tag, job.company);
         }
       }
+
+      // Provider lists and diagnostics must be hidden for anonymous consumers
+      assert.deepStrictEqual(data.sources, []);
+      assert.strictEqual(data.diagnostics, undefined);
+
+      // Cache isolation headers
+      assert.strictEqual(res.headers.get('vary'), 'Cookie, Authorization');
+      assert.ok(res.headers.get('cache-control')?.includes('private'));
     });
 
     it('rejects fake or forged session tokens and falls back safely to masked data', async () => {
@@ -161,8 +202,10 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       const data = await res.json();
       for (const job of data.jobs) {
         assert.strictEqual(job.company, ANONYMOUS_COMPANY_LABEL);
+        assert.strictEqual(job.source, ANONYMOUS_SOURCE_LABEL);
         assert.strictEqual(job.url, '');
       }
+      assert.deepStrictEqual(data.sources, []);
     });
 
     it('rejects expired session tokens and returns masked response', async () => {
@@ -194,8 +237,10 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       const data = await res.json();
       for (const job of data.jobs) {
         assert.strictEqual(job.company, ANONYMOUS_COMPANY_LABEL);
+        assert.strictEqual(job.source, ANONYMOUS_SOURCE_LABEL);
         assert.strictEqual(job.url, '');
       }
+      assert.deepStrictEqual(data.sources, []);
     });
 
     it('returns unmasked real company names and valid URLs for authenticated requests', async () => {
@@ -217,12 +262,19 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       const data = await res.json();
       assert.ok(data.jobs.length > 0);
 
-      // Authenticated users must see real company names and application URLs
+      // Authenticated users must see real company names, verified sources, and application URLs
       for (const job of data.jobs) {
         assert.notStrictEqual(job.company, ANONYMOUS_COMPANY_LABEL);
+        assert.notStrictEqual(job.source, ANONYMOUS_SOURCE_LABEL);
         assert.ok(job.company.length > 0);
+        assert.ok(job.source.length > 0);
         assert.ok(isValidApplicationUrl(job.url));
       }
+
+      assert.ok(Array.isArray(data.sources));
+      assert.ok(data.sources.length > 0);
+      assert.strictEqual(res.headers.get('vary'), 'Cookie, Authorization');
+      assert.ok(res.headers.get('cache-control')?.includes('private'));
     });
 
     it('supports single-job resolution by ID with auth-aware shaping', async () => {
@@ -240,6 +292,7 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       const singleUnauthData = await singleUnauthRes.json();
       assert.strictEqual(singleUnauthData.job.id, firstJobId);
       assert.strictEqual(singleUnauthData.job.company, ANONYMOUS_COMPANY_LABEL);
+      assert.strictEqual(singleUnauthData.job.source, ANONYMOUS_SOURCE_LABEL);
       assert.strictEqual(singleUnauthData.job.url, '');
 
       // 2. Authenticated single job query
@@ -260,7 +313,36 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       const singleAuthData = await singleAuthRes.json();
       assert.strictEqual(singleAuthData.job.id, firstJobId);
       assert.notStrictEqual(singleAuthData.job.company, ANONYMOUS_COMPANY_LABEL);
+      assert.notStrictEqual(singleAuthData.job.source, ANONYMOUS_SOURCE_LABEL);
       assert.ok(isValidApplicationUrl(singleAuthData.job.url));
+    });
+
+    it('ensures /api/jobs?stats=true does not leak provider identities to anonymous callers', async () => {
+      const anonReq = new Request('http://localhost:3000/api/jobs?stats=true');
+      const anonRes = await jobsRouteHandler(anonReq);
+      assert.strictEqual(anonRes.status, 200);
+      const data = await anonRes.json();
+
+      assert.ok(data.totalJobs > 0);
+      assert.ok(data.sourcesCount > 0);
+      for (const src of data.sources) {
+        assert.strictEqual(src, 'Job source hidden');
+      }
+      assert.deepStrictEqual(data.providerBreakdown, {});
+    });
+
+    it('ensures /api/jobs/stats endpoint masks sources for anonymous users and isolates cache', async () => {
+      const anonReq = new Request('http://localhost:3000/api/jobs/stats');
+      const anonRes = await statsRouteHandler(anonReq);
+      assert.strictEqual(anonRes.status, 200);
+      const data = await anonRes.json();
+
+      assert.ok(data.totalJobs > 0);
+      for (const src of data.sources) {
+        assert.strictEqual(src, 'Job source hidden');
+      }
+      assert.deepStrictEqual(data.providerBreakdown, {});
+      assert.strictEqual(anonRes.headers.get('vary'), 'Cookie, Authorization');
     });
   });
 
@@ -271,21 +353,28 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
     function evaluateCardInteractions(params: {
       authStatus: 'initializing' | 'anonymous' | 'authenticated';
       rawCompany: string;
+      rawSource?: string;
       rawUrl: string;
     }) {
       const isAuth = params.authStatus === 'authenticated';
-      const displayedCompany = isAuth ? params.rawCompany : ANONYMOUS_COMPANY_LABEL;
+      const displayedCompany = isAuth ? (params.rawCompany || 'Not specified') : ANONYMOUS_COMPANY_LABEL;
+      const displayedSource = isAuth ? (params.rawSource || 'Verified Source') : ANONYMOUS_SOURCE_LABEL;
       const allowsDirectApply = isAuth && isValidApplicationUrl(params.rawUrl);
       const buttonTag = allowsDirectApply ? 'a' : 'button';
       const hasHrefInDom = allowsDirectApply;
-      const tooltip = isAuth ? params.rawCompany : 'Sign in to reveal company';
+      const companyTooltip = isAuth ? displayedCompany : 'Sign in to reveal employer details';
+      const sourceTooltip = isAuth ? displayedSource : 'Sign in to reveal job source';
 
       return {
         displayedCompany,
+        displayedSource,
         allowsDirectApply,
         buttonTag,
         hasHrefInDom,
-        tooltip,
+        companyTooltip,
+        sourceTooltip,
+        companyClickOpensModal: !isAuth,
+        sourceClickOpensModal: !isAuth,
         requiresModalOnApply: !isAuth,
         requiresModalOnCopy: !isAuth,
       };
@@ -295,24 +384,31 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       const initCard = evaluateCardInteractions({
         authStatus: 'initializing',
         rawCompany: 'Stripe Inc.',
+        rawSource: 'Ashby ATS',
         rawUrl: 'https://stripe.com/jobs/101',
       });
 
-      assert.strictEqual(initCard.displayedCompany, 'Company undisclosed');
+      assert.strictEqual(initCard.displayedCompany, 'Company hidden');
+      assert.strictEqual(initCard.displayedSource, 'Job source hidden');
+      assert.strictEqual(initCard.companyClickOpensModal, true);
+      assert.strictEqual(initCard.sourceClickOpensModal, true);
       assert.strictEqual(initCard.hasHrefInDom, false);
       assert.strictEqual(initCard.buttonTag, 'button');
       assert.strictEqual(initCard.requiresModalOnApply, true);
-      assert.strictEqual(initCard.tooltip, 'Sign in to reveal company');
     });
 
     it('anonymous: Apply button rendered as button with no href in DOM', () => {
       const anonCard = evaluateCardInteractions({
         authStatus: 'anonymous',
         rawCompany: 'Airbnb Engineering',
+        rawSource: 'Greenhouse ATS',
         rawUrl: 'https://careers.airbnb.com/positions/456',
       });
 
-      assert.strictEqual(anonCard.displayedCompany, 'Company undisclosed');
+      assert.strictEqual(anonCard.displayedCompany, 'Company hidden');
+      assert.strictEqual(anonCard.displayedSource, 'Job source hidden');
+      assert.strictEqual(anonCard.companyClickOpensModal, true);
+      assert.strictEqual(anonCard.sourceClickOpensModal, true);
       assert.strictEqual(anonCard.buttonTag, 'button');
       assert.strictEqual(anonCard.hasHrefInDom, false);
       assert.strictEqual(anonCard.requiresModalOnApply, true);
@@ -322,10 +418,14 @@ describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite
       const authCard = evaluateCardInteractions({
         authStatus: 'authenticated',
         rawCompany: 'Airbnb Engineering',
+        rawSource: 'Greenhouse ATS',
         rawUrl: 'https://careers.airbnb.com/positions/456',
       });
 
       assert.strictEqual(authCard.displayedCompany, 'Airbnb Engineering');
+      assert.strictEqual(authCard.displayedSource, 'Greenhouse ATS');
+      assert.strictEqual(authCard.companyClickOpensModal, false);
+      assert.strictEqual(authCard.sourceClickOpensModal, false);
       assert.strictEqual(authCard.buttonTag, 'a');
       assert.strictEqual(authCard.hasHrefInDom, true);
       assert.strictEqual(authCard.allowsDirectApply, true);

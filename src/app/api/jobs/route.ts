@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { JobSearchService } from '@/modules/jobs/services/job-search.service';
 import { LegacyJob } from '@/modules/jobs/domain/job.types';
 import {
-  SESSION_COOKIE_NAME,
   validateSession,
+  extractSessionId,
 } from '@/modules/auth/server/session.store';
 import {
   maskJobForAnonymous,
@@ -16,33 +16,30 @@ export type Job = LegacyJob;
 
 const searchService = new JobSearchService();
 
-function extractSessionId(request: Request): string | null {
-  // 1. Check HTTP-only cookie
-  const cookieHeader = request.headers.get('cookie') || '';
-  const match = cookieHeader
-    .split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`));
-  if (match) return match.split('=')[1];
-
-  // 2. Check Authorization Bearer header
-  const authHeader = request.headers.get('authorization') || '';
-  if (authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7).trim();
-  }
-
-  return null;
-}
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const sessionId = extractSessionId(request);
+    const auth = validateSession(sessionId);
+    const isAuthenticated = Boolean(auth.valid && auth.user);
+
     const isStats = searchParams.get('stats') === 'true';
     if (isStats) {
       const stats = await searchService.getJobStats();
-      return NextResponse.json(stats, {
+      const safeStats = isAuthenticated
+        ? stats
+        : {
+            ...stats,
+            sources: stats.sources.map(() => 'Job source hidden'),
+            providerBreakdown: {},
+          };
+
+      return NextResponse.json(safeStats, {
         headers: {
-          'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
+          'Vary': 'Cookie, Authorization',
+          'Cache-Control': isAuthenticated
+            ? 'private, no-cache, no-store, must-revalidate'
+            : 'public, s-maxage=60, stale-while-revalidate=120',
         },
       });
     }
@@ -63,10 +60,10 @@ export async function GET(request: Request) {
       remote,
     });
 
-    // Step 2: Verify server-side session
-    const sessionId = extractSessionId(request);
-    const auth = validateSession(sessionId);
-    const isAuthenticated = Boolean(auth.valid && auth.user);
+    const responseHeaders: Record<string, string> = {
+      'Vary': 'Cookie, Authorization',
+      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+    };
 
     // Support single job query by id
     if (jobId) {
@@ -74,25 +71,35 @@ export async function GET(request: Request) {
       if (!targetJob) {
         return NextResponse.json({ error: 'Job not found' }, { status: 404 });
       }
-      return NextResponse.json({
-        job: isAuthenticated ? targetJob : maskJobForAnonymous(targetJob),
-      });
+      return NextResponse.json(
+        {
+          job: isAuthenticated ? targetJob : maskJobForAnonymous(targetJob),
+        },
+        {
+          headers: responseHeaders,
+        }
+      );
     }
 
-    // Step 3: Server-side data boundary shaping
-    // Anonymous users receive masked company names and redacted application URLs.
-    // Authenticated users receive full unmasked company details.
+    // Step 2: Server-side data boundary shaping
+    // Anonymous users receive masked company names, masked sources, empty provider list, and omitted diagnostics.
+    // Authenticated users receive full unmasked company details, sources, and verified diagnostics.
     const shapedJobs = isAuthenticated
       ? result.jobs
       : maskJobsForAnonymous(result.jobs);
 
-    return NextResponse.json({
-      jobs: shapedJobs,
-      count: shapedJobs.length,
-      sources: result.sources,
-      diagnostics: result.diagnostics,
-      externalDiscovery: buildExternalPlatformSearchLinks({ query, location }),
-    });
+    return NextResponse.json(
+      {
+        jobs: shapedJobs,
+        count: shapedJobs.length,
+        sources: isAuthenticated ? result.sources : [],
+        diagnostics: isAuthenticated ? result.diagnostics : undefined,
+        externalDiscovery: buildExternalPlatformSearchLinks({ query, location }),
+      },
+      {
+        headers: responseHeaders,
+      }
+    );
   } catch (error) {
     console.error('[JobNexus API Error]:', error);
     return NextResponse.json({ error: 'Failed to fetch jobs' }, { status: 500 });

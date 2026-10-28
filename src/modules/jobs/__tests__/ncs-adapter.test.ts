@@ -1,7 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { NcsAdapter, VERIFIED_NCS_VACANCIES } from '../adapters/ncs/ncs.adapter';
-import { maskJobForAnonymous, getFallbackApplicationUrl } from '../domain/job.masking';
+import {
+  maskJobForAnonymous,
+  getFallbackApplicationUrl,
+  ANONYMOUS_COMPANY_LABEL,
+  ANONYMOUS_SOURCE_LABEL,
+} from '../domain/job.masking';
 import { toLegacyJob } from '../domain/job.types';
 import {
   normalizeEmploymentType,
@@ -92,14 +97,17 @@ describe('National Career Service (NCS) Adapter Suite', () => {
     const masked = maskJobForAnonymous(legacyJob);
 
     // Company name must be masked
-    assert.strictEqual(masked.company, 'Company undisclosed');
+    assert.strictEqual(masked.company, ANONYMOUS_COMPANY_LABEL);
+    assert.strictEqual(masked.company, 'Company hidden');
     // Application URL must be redacted for anonymous users
     assert.strictEqual(masked.url, '');
     // Public discovery attributes remain intact
     assert.strictEqual(masked.title, rawJob.title);
     assert.strictEqual(masked.location, rawJob.location);
     assert.strictEqual(masked.isIndiaEligible, true);
-    assert.strictEqual(masked.source, 'National Career Service');
+    // Source name must be masked for anonymous users
+    assert.strictEqual(masked.source, ANONYMOUS_SOURCE_LABEL);
+    assert.strictEqual(masked.source, 'Job source hidden');
   });
 
   it('provides verified fallback URL for National Career Service', () => {

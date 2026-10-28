@@ -1,20 +1,11 @@
 import { NextResponse } from 'next/server';
 import {
-  SESSION_COOKIE_NAME,
   validateSession,
   getSavedJobs,
   saveJobForUser,
   removeSavedJobForUser,
+  extractSessionId,
 } from '@/modules/auth/server/session.store';
-
-function extractSessionId(request: Request): string | null {
-  const cookieHeader = request.headers.get('cookie') || '';
-  const match = cookieHeader
-    .split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`));
-  return match ? match.split('=')[1] : null;
-}
 
 export async function GET(request: Request) {
   const sessionId = extractSessionId(request);

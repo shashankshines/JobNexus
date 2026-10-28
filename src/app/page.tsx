@@ -43,6 +43,8 @@ import {
   JOB_POST_GROUPS,
   WORKPLACE_CATEGORIES,
   isRemoteRole,
+  POPULAR_LOCATION_GROUPS,
+  getLocationTier,
 } from '@/utils/suggestions';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -93,8 +95,8 @@ const DISCOVERY_DOMAINS: DiscoveryDomain[] = [
   {
     title: 'India Tech Hubs',
     count: '240+ Roles',
-    desc: 'Verified on-site and hybrid engineering roles in Bengaluru, Hyderabad, and Pune.',
-    tags: ['Bengaluru', 'Hyderabad', 'Pune', 'Gurgaon'],
+    desc: 'Verified on-site and hybrid engineering roles across Tier 1 & Tier 2 Indian tech hubs.',
+    tags: ['Bengaluru', 'Delhi NCR', 'Hyderabad', 'Pune', 'Tier 2 Hubs'],
     icon: MapPin,
     location: 'India',
   },
@@ -253,7 +255,10 @@ export default function Home() {
         if (searchLevel) params.append('level', searchLevel);
         if (searchRemote) params.append('remote', searchRemote);
 
-        const res = await fetch(`/api/jobs?${params.toString()}`);
+        const res = await fetch(`/api/jobs?${params.toString()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
         const data = await res.json();
 
         if (data.jobs && Array.isArray(data.jobs)) {
@@ -301,7 +306,10 @@ export default function Home() {
             // If URL was masked during anonymous session, resolve authenticated URL
             if (!isValidApplicationUrl(applicationUrl) && targetJobId) {
               try {
-                const res = await fetch(`/api/jobs?id=${encodeURIComponent(targetJobId)}`);
+                const res = await fetch(`/api/jobs?id=${encodeURIComponent(targetJobId)}`, {
+                  cache: 'no-store',
+                  headers: { 'Cache-Control': 'no-cache' },
+                });
                 if (res.ok) {
                   const data = await res.json();
                   if (data.job?.url) {
@@ -409,7 +417,7 @@ export default function Home() {
   }, [query]);
 
   useEffect(() => {
-    setLocationSuggestions(getLocationSuggestions(location));
+    setLocationSuggestions(getLocationSuggestions(location, 15));
   }, [location]);
 
   const handleDomainClick = (domain: DiscoveryDomain) => {
@@ -1051,9 +1059,9 @@ export default function Home() {
           <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
             <ShieldCheck size={14} color="#10b981" /> 100% Direct ATS Links
           </span>
-          <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
+          {/* <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
             <Zap size={14} color="#f59e0b" /> Zero Paywalls
-          </span>
+          </span> */}
           <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
             <Globe size={14} color="#38bdf8" /> Global &amp; India Roles
           </span>
@@ -1316,7 +1324,7 @@ export default function Home() {
 
               {/* Location Suggestions Dropdown */}
               <AnimatePresence>
-                {showLocDropdown && locationSuggestions.length > 0 && (
+                {showLocDropdown && (
                   <motion.div
                     initial={{ opacity: 0, y: -8, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1328,54 +1336,149 @@ export default function Home() {
                       top: '115%',
                       left: 0,
                       width: '100%',
-                      minWidth: 240,
-                      zIndex: 200,
+                      minWidth: 320,
+                      maxWidth: 440,
+                      maxHeight: 380,
+                      overflowY: 'auto',
+                      zIndex: 250,
                       background: 'var(--dropdown-bg)',
                       borderRadius: 12,
                       border: '1px solid var(--border)',
                       boxShadow: 'var(--shadow-lg)',
                       flexDirection: 'column',
                       display: 'flex',
-                      overflow: 'hidden',
                       textAlign: 'left',
                     }}
                   >
-                    <div
-                      style={{
-                        padding: '0.6rem 0.95rem',
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: 'var(--text-secondary)',
-                        background: 'var(--tag-bg)',
-                        borderBottom: '1px solid var(--border)',
-                      }}
-                    >
-                      Popular Locations
-                    </div>
-                    {locationSuggestions.map((loc, i) => (
-                      <div
-                        key={i}
-                        onClick={() => handleLocSuggestionClick(loc)}
-                        style={{
-                          padding: '0.75rem 1rem',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-                          color: 'var(--text-primary)',
-                          fontSize: '0.88rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.55rem',
-                          transition: 'background 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <MapPin size={13} color="var(--primary-start)" />
-                        <span>{loc}</span>
-                      </div>
-                    ))}
+                    {!location.trim() ? (
+                      /* Grouped View: Tier 1 Metros, Tier 2 Emerging Tech Hubs, Global & Remote */
+                      POPULAR_LOCATION_GROUPS.map((group, gIdx) => (
+                        <div key={gIdx}>
+                          <div
+                            style={{
+                              padding: '0.55rem 0.95rem',
+                              fontSize: '0.73rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                              color: 'var(--text-secondary)',
+                              background: 'var(--tag-bg)',
+                              borderBottom: '1px solid var(--border)',
+                              borderTop: gIdx > 0 ? '1px solid var(--border)' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            }}
+                          >
+                            <span>{group.group}</span>
+                            <span style={{ fontSize: '0.67rem', opacity: 0.8 }}>{group.badge}</span>
+                          </div>
+                          {group.locations.map((item, i) => {
+                            const tierClass = item.tier === 'tier1'
+                              ? 'loc-tier-tier1'
+                              : item.tier === 'tier2'
+                              ? 'loc-tier-tier2'
+                              : item.tier === 'remote'
+                              ? 'loc-tier-remote'
+                              : 'loc-tier-global';
+                            return (
+                              <div
+                                key={i}
+                                onClick={() => handleLocSuggestionClick(item.label)}
+                                style={{
+                                  padding: '0.65rem 0.95rem',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                                  color: 'var(--text-primary)',
+                                  fontSize: '0.88rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.55rem',
+                                  transition: 'background 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)')}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                              >
+                                <MapPin size={13} color="var(--primary-start)" style={{ flexShrink: 0 }} />
+                                <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                                <span className={`loc-tier-badge ${tierClass}`}>{item.badge}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))
+                    ) : (
+                      /* Filtered Results View when typing */
+                      <>
+                        <div
+                          style={{
+                            padding: '0.55rem 0.95rem',
+                            fontSize: '0.73rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            color: 'var(--text-secondary)',
+                            background: 'var(--tag-bg)',
+                            borderBottom: '1px solid var(--border)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <span>Matching Locations</span>
+                          <span style={{ fontSize: '0.68rem', opacity: 0.8 }}>{locationSuggestions.length} found</span>
+                        </div>
+                        {locationSuggestions.length === 0 ? (
+                          <div
+                            style={{
+                              padding: '1rem',
+                              textAlign: 'center',
+                              color: 'var(--text-secondary)',
+                              fontSize: '0.84rem',
+                            }}
+                          >
+                            No predefined cities matching &ldquo;{location}&rdquo;. Press Enter or Search to query worldwide.
+                          </div>
+                        ) : (
+                          locationSuggestions.map((loc, i) => {
+                            const tier = getLocationTier(loc);
+                            const tierBadge = tier === 'tier1' ? 'Tier 1' : tier === 'tier2' ? 'Tier 2' : tier === 'remote' ? 'Remote' : tier === 'global' ? 'Global' : null;
+                            const tierClass = tier === 'tier1'
+                              ? 'loc-tier-tier1'
+                              : tier === 'tier2'
+                              ? 'loc-tier-tier2'
+                              : tier === 'remote'
+                              ? 'loc-tier-remote'
+                              : 'loc-tier-global';
+                            return (
+                              <div
+                                key={i}
+                                onClick={() => handleLocSuggestionClick(loc)}
+                                style={{
+                                  padding: '0.65rem 0.95rem',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                                  color: 'var(--text-primary)',
+                                  fontSize: '0.88rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.55rem',
+                                  transition: 'background 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)')}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                              >
+                                <MapPin size={13} color="var(--primary-start)" style={{ flexShrink: 0 }} />
+                                <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{loc}</span>
+                                {tierBadge && (
+                                  <span className={`loc-tier-badge ${tierClass}`}>{tierBadge}</span>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

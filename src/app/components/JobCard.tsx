@@ -19,6 +19,8 @@ import styles from './JobCard.module.css';
 import { useAuth } from '../context/AuthContext';
 import {
   ANONYMOUS_COMPANY_LABEL,
+  ANONYMOUS_SOURCE_LABEL,
+  isCompanyMasked,
   isValidApplicationUrl,
   getFallbackApplicationUrl,
 } from '@/modules/jobs/domain/job.masking';
@@ -75,24 +77,31 @@ export default function JobCard({ job, index }: JobCardProps) {
   const [isResolving, setIsResolving] = useState<boolean>(false);
   const isSaved = isJobSaved(job.id);
 
-  // Keep state synchronized with parent prop updates (e.g., when auth status unmasks jobs)
+  // Keep state synchronized with parent prop updates (e.g., when auth status unmasks or masks jobs)
   useEffect(() => {
-    if (job.url && job.url !== resolvedUrl) {
-      setResolvedUrl(job.url);
+    if (!isAuthenticated) {
+      setResolvedUrl('');
+      setResolvedCompany(job.company || '');
+    } else {
+      if (job.url !== resolvedUrl) {
+        setResolvedUrl(job.url || '');
+      }
+      if (job.company !== resolvedCompany) {
+        setResolvedCompany(job.company || '');
+      }
     }
-    if (job.company && job.company !== resolvedCompany) {
-      setResolvedCompany(job.company);
-    }
-  }, [job.url, job.company]);
+  }, [job.url, job.company, isAuthenticated, resolvedUrl, resolvedCompany]);
 
-  const effectiveUrl = resolvedUrl || job.url || '';
+  const effectiveUrl = isAuthenticated ? (resolvedUrl || job.url || '') : '';
   const isUrlValid = isValidApplicationUrl(effectiveUrl);
 
   // Mask company name on client as defense-in-depth, even though API boundary also shapes it
   const displayedCompany = isAuthenticated
-    ? resolvedCompany && resolvedCompany !== ANONYMOUS_COMPANY_LABEL
+    ? resolvedCompany && !isCompanyMasked(resolvedCompany)
       ? resolvedCompany
-      : job.company
+      : job.company && !isCompanyMasked(job.company)
+        ? job.company
+        : job.company || 'Not specified'
     : ANONYMOUS_COMPANY_LABEL;
 
   // Compute contextual visual tokens
@@ -165,7 +174,10 @@ export default function JobCard({ job, index }: JobCardProps) {
     let urlToCopy = effectiveUrl;
     if (!isValidApplicationUrl(urlToCopy) && job.id) {
       try {
-        const res = await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`);
+        const res = await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.job?.url && isValidApplicationUrl(data.job.url)) {
@@ -240,7 +252,10 @@ export default function JobCard({ job, index }: JobCardProps) {
     try {
       let targetUrl = '';
       if (job.id) {
-        const res = await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`);
+        const res = await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.job?.url && isValidApplicationUrl(data.job.url)) {
@@ -358,24 +373,41 @@ export default function JobCard({ job, index }: JobCardProps) {
       {/* 2. Header: Title & Company */}
       <div className={styles.header}>
         <h3 className={styles.title}>{job.title}</h3>
-        <div
-          className={styles.company}
-          title={isAuthenticated ? job.company : 'Sign in to reveal employer details'}
-          aria-label={isAuthenticated ? `Company: ${job.company}` : 'Company undisclosed'}
-        >
-          <span
-            className={`${styles.companyIconWrapper} ${
-              !isAuthenticated ? styles.companyIconStealth : ''
-            }`}
+        {isAuthenticated ? (
+          <div
+            className={styles.company}
+            title={displayedCompany ? `Company: ${displayedCompany}` : 'Company'}
+            aria-label={displayedCompany ? `Company: ${displayedCompany}` : 'Company'}
           >
-            {isAuthenticated ? (
+            <span className={styles.companyIconWrapper}>
               <Building2 size={13} strokeWidth={2.2} />
-            ) : (
+            </span>
+            <span>{displayedCompany}</span>
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => openAuthModal('🔒 Sign in to reveal employer details.')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openAuthModal('🔒 Sign in to reveal employer details.');
+              }
+            }}
+            className={`${styles.company} ${styles.companyMaskedBtn}`}
+            title="Sign in to reveal employer details"
+            aria-label="Company hidden. Sign in to reveal employer."
+          >
+            <span className={`${styles.companyIconWrapper} ${styles.companyIconStealth}`}>
               <Lock size={12} strokeWidth={2.2} />
-            )}
-          </span>
-          <span>{displayedCompany}</span>
-        </div>
+            </span>
+            <div className={styles.companyMaskedContent}>
+              <span className={styles.companyHiddenLabel}>Company hidden</span>
+              <span className={styles.companyRevealPrompt}>Sign in to reveal employer</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3. Contextual Badges Row: Workplace, India, Seniority, Employment */}
@@ -479,13 +511,33 @@ export default function JobCard({ job, index }: JobCardProps) {
 
       {/* 6. Footer Actions: Branded Source Badge & Apply Actions */}
       <div className={styles.actions}>
-        <div
-          className={`${styles.sourceBadge} ${PALETTE_CLASSES[sourceBadge.palette]}`}
-          title={sourceBadge.title}
-        >
-          <SourceIcon size={13} strokeWidth={2.2} />
-          <span>{sourceBadge.label}</span>
-        </div>
+        {isAuthenticated ? (
+          <div
+            className={`${styles.sourceBadge} ${PALETTE_CLASSES[sourceBadge.palette]}`}
+            title={sourceBadge.title}
+          >
+            <SourceIcon size={13} strokeWidth={2.2} />
+            <span>{sourceBadge.label}</span>
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => openAuthModal('🔒 Sign in to reveal verified job source and provider details.')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openAuthModal('🔒 Sign in to reveal verified job source and provider details.');
+              }
+            }}
+            className={`${styles.sourceBadge} ${styles.sourceBadgeMasked}`}
+            title="Sign in to reveal job source"
+            aria-label={`${ANONYMOUS_SOURCE_LABEL}. Sign in to reveal source.`}
+          >
+            <Lock size={11} strokeWidth={2.2} />
+            <span>{ANONYMOUS_SOURCE_LABEL}</span>
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           {/* Share / Copy Link Button */}

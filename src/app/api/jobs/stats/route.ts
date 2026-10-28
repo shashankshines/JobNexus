@@ -1,14 +1,33 @@
 import { NextResponse } from 'next/server';
 import { JobSearchService } from '@/modules/jobs/services/job-search.service';
+import {
+  validateSession,
+  extractSessionId,
+} from '@/modules/auth/server/session.store';
 
 const searchService = new JobSearchService();
 
-export async function GET() {
+export async function GET(request: Request = new Request('http://localhost:3000/api/jobs/stats')) {
   try {
+    const sessionId = extractSessionId(request);
+    const auth = validateSession(sessionId);
+    const isAuthenticated = Boolean(auth.valid && auth.user);
+
     const stats = await searchService.getJobStats();
-    return NextResponse.json(stats, {
+    const safeStats = isAuthenticated
+      ? stats
+      : {
+          ...stats,
+          sources: stats.sources.map(() => 'Job source hidden'),
+          providerBreakdown: {},
+        };
+
+    return NextResponse.json(safeStats, {
       headers: {
-        'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
+        'Vary': 'Cookie, Authorization',
+        'Cache-Control': isAuthenticated
+          ? 'private, no-cache, no-store, must-revalidate'
+          : 'public, s-maxage=60, stale-while-revalidate=120',
       },
     });
   } catch (error) {

@@ -1254,6 +1254,38 @@ a {
   flex-shrink: 0;
 }
 
+/* Location Dropdown Tier Badges */
+.loc-tier-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.48rem;
+  border-radius: 6px;
+  letter-spacing: 0.03em;
+  margin-left: auto;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+.loc-tier-tier1 {
+  background: var(--badge-emerald-bg);
+  border: 1px solid var(--badge-emerald-border);
+  color: var(--badge-emerald-text);
+}
+.loc-tier-tier2 {
+  background: var(--badge-indigo-bg);
+  border: 1px solid var(--badge-indigo-border);
+  color: var(--badge-indigo-text);
+}
+.loc-tier-remote {
+  background: var(--badge-cyan-bg);
+  border: 1px solid var(--badge-cyan-border);
+  color: var(--badge-cyan-text);
+}
+.loc-tier-global {
+  background: var(--badge-amber-bg);
+  border: 1px solid var(--badge-amber-border);
+  color: var(--badge-amber-text);
+}
+
 /* Media Queries for Responsive Perfection */
 @media (max-width: 900px) {
   .site-header-subtitle {

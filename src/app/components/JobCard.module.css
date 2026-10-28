@@ -145,6 +145,53 @@
   color: var(--accent-amber);
 }
 
+.companyMaskedBtn {
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0.2rem 0.4rem 0.2rem 0;
+  border-radius: 8px;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  user-select: none;
+}
+
+.companyMaskedBtn:hover {
+  opacity: 0.92;
+}
+
+.companyMaskedBtn:hover .companyHiddenLabel {
+  color: var(--primary);
+}
+
+.companyMaskedBtn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.companyMaskedContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.companyHiddenLabel {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.25;
+  transition: color 0.2s ease;
+}
+
+.companyRevealPrompt {
+  font-size: 0.72rem;
+  color: var(--accent-amber, #f59e0b);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
 /* Contextual Badges Row (Workplace, Seniority, India, Employment) */
 .badgesRow {
   display: flex;
@@ -427,6 +474,26 @@
 
 .sourceBadge:hover {
   transform: translateY(-1px);
+}
+
+.sourceBadgeMasked {
+  cursor: pointer;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+  color: var(--accent-amber, #f59e0b);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.sourceBadgeMasked:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.6);
+  transform: translateY(-1px);
+}
+
+.sourceBadgeMasked:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .iconBtn {

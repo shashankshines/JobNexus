@@ -658,7 +658,7 @@ describe('JobNexus — Complete Sign In, Sign Up, and Google Login Flow Test Sui
     });
 
     it('verifies anonymous company label constant', () => {
-      assert.strictEqual(ANONYMOUS_COMPANY_LABEL, 'Company undisclosed');
+      assert.strictEqual(ANONYMOUS_COMPANY_LABEL, 'Company hidden');
     });
   });
 });

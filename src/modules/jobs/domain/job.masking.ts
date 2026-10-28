@@ -1,7 +1,24 @@
 import { LegacyJob } from './job.types';
 import { isValidHttpUrl } from './job.normalization';
 
-export const ANONYMOUS_COMPANY_LABEL = 'Company undisclosed';
+export const ANONYMOUS_COMPANY_LABEL = 'Company hidden';
+export const ANONYMOUS_SOURCE_LABEL = 'Job source hidden';
+
+/**
+ * Checks whether a company label represents an anonymous placeholder.
+ */
+export function isCompanyMasked(company?: string): boolean {
+  if (!company) return false;
+  return company === ANONYMOUS_COMPANY_LABEL || company === 'Company undisclosed';
+}
+
+/**
+ * Checks whether a source label represents an anonymous placeholder.
+ */
+export function isSourceMasked(source?: string): boolean {
+  if (!source) return false;
+  return source === ANONYMOUS_SOURCE_LABEL || source.toLowerCase().includes('hidden');
+}
 
 /**
  * Validates that an application URL is safe to open (valid HTTP/HTTPS, no javascript: or data: schemes).
@@ -45,32 +62,27 @@ function sanitizeText(text: string, realCompany: string): string {
 
 /**
  * Masks a single job for anonymous public consumers:
- * - Replaces company name with neutral ANONYMOUS_COMPANY_LABEL ("Company undisclosed").
+ * - Replaces company name with neutral ANONYMOUS_COMPANY_LABEL ("Company hidden").
+ * - Replaces source name with neutral ANONYMOUS_SOURCE_LABEL ("Job source hidden").
  * - Clears external ATS application URL so anonymous visitors cannot access direct links.
- * - Filters out tags matching the company name.
- * - Sanitizes source name if it contains the company name.
+ * - Filters out tags matching the company name or source provider.
  * - Sanitizes description if it explicitly mentions the company name.
  */
 export function maskJobForAnonymous(job: LegacyJob): LegacyJob {
   const realCompany = job.company || '';
 
-  // Filter tags: remove any tag that matches the company name
+  // Filter tags: remove any tag that matches the company name or provider
   const cleanTags = (job.tags || []).filter((tag) => {
     if (!tag) return false;
     const lowerTag = tag.trim().toLowerCase();
     const lowerCompany = realCompany.trim().toLowerCase();
-    if (lowerTag === lowerCompany) return false;
+    if (lowerCompany && lowerTag === lowerCompany) return false;
     // Also remove tag if it is a company-specific board indicator
-    if (lowerTag.includes(lowerCompany) && lowerCompany.length > 2) return false;
+    if (lowerCompany && lowerCompany.length > 2 && lowerTag.includes(lowerCompany)) return false;
+    const lowerSource = (job.source || '').trim().toLowerCase();
+    if (lowerSource && lowerSource.length > 2 && lowerTag.includes(lowerSource)) return false;
     return true;
   });
-
-  // Clean source name: e.g. "Ashby ATS (Linear)" -> "Ashby ATS"
-  let cleanSource = job.source || 'Verified ATS';
-  const parenIdx = cleanSource.indexOf('(');
-  if (parenIdx > 0) {
-    cleanSource = cleanSource.slice(0, parenIdx).trim();
-  }
 
   // Clean description of direct company references
   const cleanDescription = job.description
@@ -80,9 +92,9 @@ export function maskJobForAnonymous(job: LegacyJob): LegacyJob {
   return {
     ...job,
     company: ANONYMOUS_COMPANY_LABEL,
+    source: ANONYMOUS_SOURCE_LABEL,
     url: '', // Masked for anonymous visitors; revealed only upon authenticated session
     tags: cleanTags,
-    source: cleanSource,
     description: cleanDescription,
   };
 }
@@ -110,7 +122,13 @@ export function getFallbackApplicationUrl(job: {
 
   const src = (job.source || '').toLowerCase();
   const title = encodeURIComponent(job.title || 'software engineer');
-  const comp = encodeURIComponent(job.company && job.company !== ANONYMOUS_COMPANY_LABEL ? job.company : '');
+  const comp = encodeURIComponent(job.company && !isCompanyMasked(job.company) ? job.company : '');
+
+  if (isSourceMasked(job.source)) {
+    return comp
+      ? `https://www.google.com/search?q=${comp}+${title}+careers+apply`
+      : `https://www.google.com/search?q=${title}+remote+jobs+apply`;
+  }
 
   if (src.includes('weworkremotely') || src.includes('we work remotely')) {
     return `https://weworkremotely.com/remote-jobs?term=${title}`;

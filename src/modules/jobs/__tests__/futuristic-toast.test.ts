@@ -25,7 +25,7 @@ describe('JobNexus — Futuristic Cyber-HUD Toast Component Test Suite', () => {
     };
 
     const element = renderToastToStaticHtml(toast);
-    assert.ok(element);
+    assert.ok(element && element.props.toast);
     assert.strictEqual(element.props.toast.id, 'toast-succ-1');
     assert.strictEqual(element.props.toast.type, 'success');
     assert.strictEqual(element.props.toast.message, 'Welcome back, Alex Rivera!');
@@ -39,7 +39,7 @@ describe('JobNexus — Futuristic Cyber-HUD Toast Component Test Suite', () => {
     };
 
     const element = renderToastToStaticHtml(toast);
-    assert.ok(element);
+    assert.ok(element && element.props.toast);
     assert.strictEqual(element.props.toast.id, 'toast-err-1');
     assert.strictEqual(element.props.toast.type, 'error');
     assert.strictEqual(element.props.toast.message, 'Authentication failed. Please check your credentials.');
@@ -53,7 +53,7 @@ describe('JobNexus — Futuristic Cyber-HUD Toast Component Test Suite', () => {
     };
 
     const element = renderToastToStaticHtml(toast);
-    assert.ok(element);
+    assert.ok(element && element.props.toast);
     assert.strictEqual(element.props.toast.id, 'toast-info-1');
     assert.strictEqual(element.props.toast.type, 'info');
     assert.strictEqual(element.props.toast.message, 'Signed in with Google (Dev Mode). Add credentials to .env.local for live accounts.');
@@ -68,7 +68,7 @@ describe('JobNexus — Futuristic Cyber-HUD Toast Component Test Suite', () => {
     };
 
     const element = renderToastToStaticHtml(toast);
-    assert.ok(element);
+    assert.ok(element && element.props.toast);
     assert.strictEqual(element.props.toast.message, longMessage);
   });
 

@@ -3,12 +3,7 @@ import assert from 'node:assert';
 import {
   filterAndRankJobs,
   matchesLocation,
-  matchesQuery,
-  matchesSingleLocation,
   parseQueryTokens,
-  matchesType,
-  matchesLevel,
-  matchesRemote,
 } from '../domain/job.ranking';
 import { NormalizedJob } from '../domain/job.types';
 
@@ -210,6 +205,70 @@ describe('Search by City Suite', () => {
     assert.ok(matchesLocation(kolkataJob, 'Kolkata'));
   });
 
+  it('supports Indian Tier 2 cities and regional tech hub synonyms', () => {
+    const kochiJob = makeJob({ location: 'Kochi, Kerala' });
+    const cochinJob = makeJob({ location: 'Cochin, India' });
+    const chdJob = makeJob({ location: 'Chandigarh' });
+    const mohaliJob = makeJob({ location: 'Mohali, Punjab' });
+    const vizagJob = makeJob({ location: 'Visakhapatnam, Andhra Pradesh' });
+    const vtgSynJob = makeJob({ location: 'Vizag, India' });
+    const vadodaraJob = makeJob({ location: 'Vadodara, Gujarat' });
+    const barodaJob = makeJob({ location: 'Baroda, India' });
+    const mysuruJob = makeJob({ location: 'Mysuru, Karnataka' });
+    const mysoreJob = makeJob({ location: 'Mysore, India' });
+    const tvmJob = makeJob({ location: 'Thiruvananthapuram, Kerala' });
+    const trivandrumJob = makeJob({ location: 'Trivandrum, India' });
+    const indoreJob = makeJob({ location: 'Indore, Madhya Pradesh' });
+    const jaipurJob = makeJob({ location: 'Jaipur, Rajasthan' });
+    const cbeJob = makeJob({ location: 'Coimbatore, Tamil Nadu' });
+    const bbsrJob = makeJob({ location: 'Bhubaneswar, Odisha' });
+    const nagpurJob = makeJob({ location: 'Nagpur, Maharashtra' });
+    const lkoJob = makeJob({ location: 'Lucknow, Uttar Pradesh' });
+    const suratJob = makeJob({ location: 'Surat, Gujarat' });
+    const mangaloreJob = makeJob({ location: 'Mangalore, Karnataka' });
+    const mangaluruJob = makeJob({ location: 'Mangaluru, India' });
+    const nashikJob = makeJob({ location: 'Nashik, Maharashtra' });
+
+    // Kochi <-> Cochin
+    assert.ok(matchesLocation(kochiJob, 'Cochin'));
+    assert.ok(matchesLocation(cochinJob, 'Kochi'));
+
+    // Chandigarh <-> Mohali
+    assert.ok(matchesLocation(chdJob, 'Mohali'));
+    assert.ok(matchesLocation(mohaliJob, 'Chandigarh'));
+
+    // Visakhapatnam <-> Vizag
+    assert.ok(matchesLocation(vizagJob, 'Vizag'));
+    assert.ok(matchesLocation(vtgSynJob, 'Visakhapatnam'));
+
+    // Vadodara <-> Baroda
+    assert.ok(matchesLocation(vadodaraJob, 'Baroda'));
+    assert.ok(matchesLocation(barodaJob, 'Vadodara'));
+
+    // Mysuru <-> Mysore
+    assert.ok(matchesLocation(mysuruJob, 'Mysore'));
+    assert.ok(matchesLocation(mysoreJob, 'Mysuru'));
+
+    // Thiruvananthapuram <-> Trivandrum
+    assert.ok(matchesLocation(tvmJob, 'Trivandrum'));
+    assert.ok(matchesLocation(trivandrumJob, 'Thiruvananthapuram'));
+
+    // Mangalore <-> Mangaluru
+    assert.ok(matchesLocation(mangaloreJob, 'Mangaluru'));
+    assert.ok(matchesLocation(mangaluruJob, 'Mangalore'));
+
+    // Direct Tier 2 checks
+    assert.ok(matchesLocation(indoreJob, 'Indore'));
+    assert.ok(matchesLocation(jaipurJob, 'Jaipur'));
+    assert.ok(matchesLocation(cbeJob, 'Coimbatore'));
+    assert.ok(matchesLocation(bbsrJob, 'Bhubaneswar'));
+    assert.ok(matchesLocation(nagpurJob, 'Nagpur'));
+    assert.ok(matchesLocation(lkoJob, 'Lucknow'));
+    assert.ok(matchesLocation(suratJob, 'Surat'));
+    assert.ok(matchesLocation(nashikJob, 'Nashik'));
+    assert.ok(matchesLocation(nashikJob, 'Nasik'));
+  });
+
   it('supports US cities and synonyms (SF <-> San Francisco, NYC <-> New York, Austin, Seattle)', () => {
     const sfJob = makeJob({ location: 'San Francisco, CA' });
     const nycJob = makeJob({ location: 'New York, NY' });
@@ -364,6 +423,48 @@ describe('Compound Location Filter & Suggestion Suite', () => {
     const filter = 'London, UK';
     assert.ok(matchesLocation(londonJob, filter));
     assert.strictEqual(matchesLocation(mcrJob, filter), false);
+  });
+
+  it('handles compound Tier 2 suggestions with parenthetical aliases and slashes', () => {
+    // Kochi (Cochin)
+    const kochiJob = makeJob({ location: 'Kochi, Kerala' });
+    const cochinJob = makeJob({ location: 'Cochin, India' });
+    const indoreJob = makeJob({ location: 'Indore, Madhya Pradesh' });
+    assert.ok(matchesLocation(kochiJob, 'Kochi (Cochin), Kerala'));
+    assert.ok(matchesLocation(cochinJob, 'Kochi (Cochin), Kerala'));
+    assert.strictEqual(matchesLocation(indoreJob, 'Kochi (Cochin), Kerala'), false);
+
+    // Chandigarh / Mohali
+    const chdJob = makeJob({ location: 'Chandigarh, India' });
+    const mohaliJob = makeJob({ location: 'Mohali, Punjab' });
+    const jaipurJob = makeJob({ location: 'Jaipur, Rajasthan' });
+    assert.ok(matchesLocation(chdJob, 'Chandigarh / Mohali'));
+    assert.ok(matchesLocation(mohaliJob, 'Chandigarh / Mohali'));
+    assert.strictEqual(matchesLocation(jaipurJob, 'Chandigarh / Mohali'), false);
+
+    // Visakhapatnam (Vizag)
+    const vizagJob = makeJob({ location: 'Visakhapatnam, Andhra Pradesh' });
+    const vizagSynJob = makeJob({ location: 'Vizag, India' });
+    assert.ok(matchesLocation(vizagJob, 'Visakhapatnam (Vizag), Andhra Pradesh'));
+    assert.ok(matchesLocation(vizagSynJob, 'Visakhapatnam (Vizag), Andhra Pradesh'));
+
+    // Vadodara (Baroda)
+    const vadodaraJob = makeJob({ location: 'Vadodara, Gujarat' });
+    const barodaJob = makeJob({ location: 'Baroda, India' });
+    assert.ok(matchesLocation(vadodaraJob, 'Vadodara (Baroda), Gujarat'));
+    assert.ok(matchesLocation(barodaJob, 'Vadodara (Baroda), Gujarat'));
+
+    // Mysuru (Mysore)
+    const mysuruJob = makeJob({ location: 'Mysuru, Karnataka' });
+    const mysoreJob = makeJob({ location: 'Mysore, India' });
+    assert.ok(matchesLocation(mysuruJob, 'Mysuru (Mysore), Karnataka'));
+    assert.ok(matchesLocation(mysoreJob, 'Mysuru (Mysore), Karnataka'));
+
+    // Thiruvananthapuram (Trivandrum)
+    const tvmJob = makeJob({ location: 'Thiruvananthapuram, Kerala' });
+    const trivandrumJob = makeJob({ location: 'Trivandrum, India' });
+    assert.ok(matchesLocation(tvmJob, 'Thiruvananthapuram (Trivandrum), Kerala'));
+    assert.ok(matchesLocation(trivandrumJob, 'Thiruvananthapuram (Trivandrum), Kerala'));
   });
 });
 
