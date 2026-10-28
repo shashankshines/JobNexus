@@ -3295,30 +3295,24 @@ export default function Home() {
               </motion.button>
             </motion.div>
 
-            {/* Verified Public Network Trust Strip */}
+            {/* Candidate Trust & Quality Assurance Standards Strip */}
             <div style={{ marginTop: '3rem', textAlign: 'center' }}>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1.2rem' }}>
-                AGGREGATING DIRECTLY FROM 9 VERIFIED PUBLIC PORTAL FEEDS &amp; ATS
+                JOBNEXUS VERIFIED CAREER DISCOVERY STANDARDS
               </p>
               <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
                 {[
-                  { name: 'Greenhouse ATS', isIndia: false },
-                  { name: 'Ashby ATS', isIndia: false },
-                  { name: 'National Career Service (NCS)', isIndia: true },
-                  { name: 'Himalayas', isIndia: false },
-                  { name: 'WeWorkRemotely', isIndia: false },
-                  { name: 'Jobicy', isIndia: false },
-                  { name: 'RemoteOK', isIndia: false },
-                  { name: 'Remotive', isIndia: false },
-                  { name: 'Arbeitnow', isIndia: false },
-                ].map((source, sIdx) => (
-                  <span key={sIdx} className="trust-badge">
-                    {source.isIndia ? (
-                      <span style={{ fontSize: '0.85rem' }}>🇮🇳</span>
-                    ) : (
-                      <ShieldCheck size={13} color="var(--accent-emerald)" />
-                    )}
-                    <span>{source.name}</span>
+                  { label: 'Direct Employer ATS Pipelines', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
+                  { label: '100% Verified Tech Opportunities', icon: <Zap size={13} color="#38bdf8" /> },
+                  { label: 'Zero Recruiter Spam', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
+                  { label: 'Tier 1 & Tier 2 India Tech Hubs', icon: <span style={{ fontSize: '0.85rem' }}>🇮🇳</span> },
+                  { label: 'Worldwide Distributed & Remote Roles', icon: <Globe size={13} color="#6366f1" /> },
+                  { label: 'Real-Time Hourly Synchronization', icon: <Clock size={13} color="#f59e0b" /> },
+                  { label: 'Authentic Direct Application Access', icon: <Sparkles size={13} color="#a855f7" /> },
+                ].map((item, idx) => (
+                  <span key={idx} className="trust-badge">
+                    {item.icon}
+                    <span>{item.label}</span>
                   </span>
                 ))}
               </div>

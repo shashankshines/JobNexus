@@ -952,7 +952,7 @@ export default function LandingView() {
         </div>
       </section>
 
-      {/* Verified Sources Trust Strip */}
+      {/* Candidate Trust & Quality Assurance Standards Strip */}
       <section style={{ padding: '3.5rem 1.5rem', textAlign: 'center' }}>
         <div className="container" style={{ maxWidth: 960 }}>
           <p
@@ -965,31 +965,37 @@ export default function LandingView() {
               marginBottom: '1.4rem',
             }}
           >
-            AGGREGATING DIRECTLY FROM VERIFIED PUBLIC SOURCES &amp; EMPLOYER ATS PLATFORMS
+            JOBNEXUS VERIFIED CAREER DISCOVERY STANDARDS
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-            {['Greenhouse ATS', 'Ashby ATS', 'Himalayas', 'WeWorkRemotely', 'Jobicy', 'RemoteOK', 'Remotive', 'Arbeitnow'].map(
-              (src, sIdx) => (
-                <span
-                  key={sIdx}
-                  className="trust-badge"
-                  style={{
-                    padding: '0.45rem 0.95rem',
-                    fontSize: '0.84rem',
-                    background: 'rgba(15, 23, 42, 0.75)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: 9999,
-                    color: '#e2e8f0',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.45rem',
-                  }}
-                >
-                  <ShieldCheck size={14} color="var(--accent-emerald)" />
-                  <span>{src}</span>
-                </span>
-              )
-            )}
+            {[
+              { label: 'Direct Employer ATS Pipelines', icon: <ShieldCheck size={14} color="var(--accent-emerald)" /> },
+              { label: '100% Verified Tech Roles', icon: <Zap size={14} color="#38bdf8" /> },
+              { label: 'Zero Recruiter Spam & No Dead Links', icon: <ShieldCheck size={14} color="var(--accent-emerald)" /> },
+              { label: 'Tier 1 & Tier 2 India Hubs', icon: <span style={{ fontSize: '0.85rem' }}>🇮🇳</span> },
+              { label: 'Worldwide Distributed & Remote', icon: <Globe size={14} color="#6366f1" /> },
+              { label: 'Real-Time Hourly Synchronization', icon: <Clock size={14} color="#f59e0b" /> },
+              { label: 'Authentic Direct Apply Access', icon: <Sparkles size={14} color="#a855f7" /> },
+            ].map((item, idx) => (
+              <span
+                key={idx}
+                className="trust-badge"
+                style={{
+                  padding: '0.45rem 0.95rem',
+                  fontSize: '0.84rem',
+                  background: 'rgba(15, 23, 42, 0.75)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 9999,
+                  color: '#e2e8f0',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </span>
+            ))}
           </div>
         </div>
       </section>
