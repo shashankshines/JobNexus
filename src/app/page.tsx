@@ -1999,9 +1999,9 @@ export default function Home() {
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
                         left: 0,
-                        width: '100%',
-                        minWidth: 'min(100%, 300px)',
-                        maxWidth: 'min(420px, calc(100vw - 2.5rem))',
+                        width: 'max-content',
+                        minWidth: 'max(100%, 320px)',
+                        maxWidth: 'min(440px, calc(100vw - 2.5rem))',
                         maxHeight: 380,
                         zIndex: 250,
                         background: 'var(--dropdown-bg)',
@@ -2091,9 +2091,9 @@ export default function Home() {
                             if (selectedRole !== '') e.currentTarget.style.background = 'transparent';
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Briefcase size={13} color="var(--primary-start)" />
-                            <span>All Roles & Categories</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+                            <Briefcase size={13} color="var(--primary-start)" style={{ flexShrink: 0 }} />
+                            <span style={{ whiteSpace: 'nowrap' }}>All Roles & Categories</span>
                           </div>
                           {selectedRole === '' && <Check size={14} color="var(--primary-start)" />}
                         </div>
@@ -2169,8 +2169,8 @@ export default function Home() {
                 className="search-refinement-industry"
                 style={{
                   position: 'relative',
-                  flex: '1.8',
-                  minWidth: 220,
+                  flex: '1.4',
+                  minWidth: 190,
                 }}
               >
                 <button
@@ -2266,7 +2266,7 @@ export default function Home() {
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
                         left: 0,
-                        width: '100%',
+                        width: 'max-content',
                         minWidth: 'max(100%, 280px)',
                         maxWidth: 'calc(100vw - 32px)',
                         maxHeight: 320,
@@ -2330,8 +2330,8 @@ export default function Home() {
                 className="search-refinement-workplace"
                 style={{
                   position: 'relative',
-                  flex: '0.75',
-                  minWidth: 125,
+                  flex: '0.85',
+                  minWidth: 140,
                 }}
               >
                 <button
@@ -2427,8 +2427,9 @@ export default function Home() {
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
                         left: 0,
-                        width: '100%',
-                        minWidth: 'min(100%, 175px)',
+                        width: 'max-content',
+                        minWidth: 'max(100%, 190px)',
+                        maxWidth: 'calc(100vw - 32px)',
                         zIndex: 250,
                         background: 'var(--dropdown-bg)',
                         borderRadius: 12,
@@ -2468,11 +2469,11 @@ export default function Home() {
                               if (!isSelected) e.currentTarget.style.background = 'transparent';
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <span>{opt.icon}</span>
-                              <span>{opt.label}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: 1 }}>
+                              <span style={{ flexShrink: 0 }}>{opt.icon}</span>
+                              <span style={{ whiteSpace: 'nowrap' }}>{opt.label}</span>
                             </div>
-                            {isSelected && <Check size={14} color="var(--primary-start)" />}
+                            {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
                           </div>
                         );
                       })}
@@ -2487,8 +2488,8 @@ export default function Home() {
                 className="search-refinement-type"
                 style={{
                   position: 'relative',
-                  flex: '0.65',
-                  minWidth: 110,
+                  flex: '0.75',
+                  minWidth: 120,
                 }}
               >
                 <button
@@ -2581,8 +2582,8 @@ export default function Home() {
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
                         left: 0,
-                        width: '100%',
-                        minWidth: 'min(100%, 160px)',
+                        width: 'max-content',
+                        minWidth: 'max(100%, 175px)',
                         maxWidth: 'calc(100vw - 32px)',
                         zIndex: 250,
                         background: 'var(--dropdown-bg)',
@@ -2623,8 +2624,8 @@ export default function Home() {
                               if (!isSelected) e.currentTarget.style.background = 'transparent';
                             }}
                           >
-                            <span>{opt.label}</span>
-                            {isSelected && <Check size={14} color="var(--primary-start)" />}
+                            <span style={{ whiteSpace: 'nowrap', flex: 1 }}>{opt.label}</span>
+                            {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
                           </div>
                         );
                       })}
@@ -2639,8 +2640,8 @@ export default function Home() {
                 className="search-refinement-level"
                 style={{
                   position: 'relative',
-                  flex: '0.65',
-                  minWidth: 110,
+                  flex: '0.8',
+                  minWidth: 130,
                 }}
               >
                 <button
@@ -2733,8 +2734,8 @@ export default function Home() {
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
                         left: 0,
-                        width: '100%',
-                        minWidth: 'min(100%, 160px)',
+                        width: 'max-content',
+                        minWidth: 'max(100%, 185px)',
                         maxWidth: 'calc(100vw - 32px)',
                         zIndex: 250,
                         background: 'var(--dropdown-bg)',
@@ -2775,8 +2776,8 @@ export default function Home() {
                               if (!isSelected) e.currentTarget.style.background = 'transparent';
                             }}
                           >
-                            <span>{opt.label}</span>
-                            {isSelected && <Check size={14} color="var(--primary-start)" />}
+                            <span style={{ whiteSpace: 'nowrap', flex: 1 }}>{opt.label}</span>
+                            {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
                           </div>
                         );
                       })}

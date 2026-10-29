@@ -1980,23 +1980,23 @@ a {
 }
 
 .search-refinement-industry {
-  flex: 1.8;
-  min-width: 220px;
+  flex: 1.4;
+  min-width: 190px;
 }
 
 .search-refinement-workplace {
-  flex: 0.75;
-  min-width: 125px;
+  flex: 0.85;
+  min-width: 140px;
 }
 
 .search-refinement-type {
-  flex: 0.65;
-  min-width: 110px;
+  flex: 0.75;
+  min-width: 120px;
 }
 
 .search-refinement-level {
-  flex: 0.65;
-  min-width: 110px;
+  flex: 0.8;
+  min-width: 130px;
 }
 
 /* Workplace Category Selector with Fluid Sliding Tabs */

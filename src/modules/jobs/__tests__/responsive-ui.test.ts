@@ -93,12 +93,22 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
       assert.ok(cssContent.includes('grid-template-columns: 1fr 1fr !important;'), 'Should arrange filter dropdowns in a neat 2x2 grid on mobile');
     });
 
-    it('allocates expanded width to Industry dropdown while balancing compact widths for other components', () => {
-      assert.ok(cssContent.includes('.search-refinement-industry {\n  flex: 1.8;\n  min-width: 220px;'), 'Industry must have flex: 1.8 and min-width: 220px in globals.css');
-      assert.ok(cssContent.includes('.search-refinement-workplace {\n  flex: 0.75;\n  min-width: 125px;'), 'Workplace must have compact width');
-      assert.ok(cssContent.includes('.search-refinement-type {\n  flex: 0.65;\n  min-width: 110px;'), 'Type must have compact width');
-      assert.ok(cssContent.includes('.search-refinement-level {\n  flex: 0.65;\n  min-width: 110px;'), 'Level must have compact width');
+    it('allocates balanced desktop widths to refinement dropdowns in globals.css', () => {
+      assert.ok(cssContent.includes('.search-refinement-role {\n  flex: 1.1;\n  min-width: 160px;'), 'Role must have flex: 1.1 and min-width: 160px in globals.css');
+      assert.ok(cssContent.includes('.search-refinement-industry {\n  flex: 1.4;\n  min-width: 190px;'), 'Industry must have flex: 1.4 and min-width: 190px in globals.css');
+      assert.ok(cssContent.includes('.search-refinement-workplace {\n  flex: 0.85;\n  min-width: 140px;'), 'Workplace must have flex: 0.85 and min-width: 140px in globals.css');
+      assert.ok(cssContent.includes('.search-refinement-type {\n  flex: 0.75;\n  min-width: 120px;'), 'Type must have flex: 0.75 and min-width: 120px in globals.css');
+      assert.ok(cssContent.includes('.search-refinement-level {\n  flex: 0.8;\n  min-width: 130px;'), 'Level must have flex: 0.8 and min-width: 130px in globals.css');
+    });
+
+    it('ensures dropdown items in All Roles, Any Workplace, Any Level render on a single line with nowrap', () => {
+      assert.ok(pageContent.includes("minWidth: 'max(100%, 320px)'"), 'Role popover must have minWidth >= 320px');
       assert.ok(pageContent.includes("minWidth: 'max(100%, 280px)'"), 'Industry popover must guarantee at least 280px width for all items');
+      assert.ok(pageContent.includes("minWidth: 'max(100%, 190px)'"), 'Workplace popover must guarantee at least 190px width for all items');
+      assert.ok(pageContent.includes("minWidth: 'max(100%, 175px)'"), 'Type popover must guarantee at least 175px width for all items');
+      assert.ok(pageContent.includes("minWidth: 'max(100%, 185px)'"), 'Level popover must guarantee at least 185px width for all items');
+      assert.ok(pageContent.includes("<span style={{ whiteSpace: 'nowrap' }}>All Roles & Categories</span>"), 'Role header item must be nowrap');
+      assert.ok(pageContent.includes("<span style={{ whiteSpace: 'nowrap' }}>{opt.label}</span>"), 'Workplace option must be nowrap');
     });
 
     it('defines dropdown-popover-right to avoid right-edge clipping on mobile touch screens', () => {
