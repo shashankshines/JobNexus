@@ -22,6 +22,7 @@ export interface User {
   initials: string;
   createdAt?: string;
   savedJobsCount?: number;
+  isAdmin?: boolean;
 }
 
 export interface SavedJob {
@@ -79,6 +80,7 @@ interface AuthContextType {
   savedJobIds: Set<string>;
   entitlement: UserEntitlement | null;
   isPremium: boolean;
+  isAdmin: boolean;
   isPremiumOfferOpen: boolean;
   openPremiumOfferModal: () => void;
   closePremiumOfferModal: () => void;
@@ -132,6 +134,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isPremium = useMemo(() => {
     return Boolean(entitlement?.isPremium);
   }, [entitlement]);
+
+  const isAdmin = useMemo(() => {
+    return Boolean(user?.isAdmin);
+  }, [user]);
 
   const openPremiumOfferModal = useCallback(() => {
     setIsPremiumOfferOpen(true);
@@ -678,6 +684,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         savedJobIds,
         entitlement,
         isPremium,
+        isAdmin,
         isPremiumOfferOpen,
         openPremiumOfferModal,
         closePremiumOfferModal,

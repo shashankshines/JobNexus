@@ -360,16 +360,26 @@ body {
   background-color: var(--background);
   min-height: 100vh;
   letter-spacing: -0.012em;
-  background-image:
-    radial-gradient(ellipse 90% 55% at 50% -18%, var(--background-radial-1), transparent 70%),
-    radial-gradient(circle 700px at 85% 15%, var(--background-radial-2), transparent 60%),
-    radial-gradient(circle 500px at 15% 45%, var(--background-radial-3), transparent 50%);
-  background-attachment: fixed;
+  position: relative;
   overflow-x: hidden;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 90% 55% at 50% -18%, var(--background-radial-1), transparent 70%),
+    radial-gradient(circle 700px at 85% 15%, var(--background-radial-2), transparent 60%),
+    radial-gradient(circle 500px at 15% 45%, var(--background-radial-3), transparent 50%);
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
 a {
@@ -1643,6 +1653,376 @@ a {
 .site-header-btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(99, 102, 241, 0.5);
+}
+
+/* Dedicated Admin Console Header Action Button */
+.site-header-btn-admin {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.85rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  user-select: none;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(139, 92, 246, 0.22) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  color: #c7d2fe;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.25);
+}
+
+.site-header-btn-admin .admin-btn-icon {
+  color: #a5b4fc;
+  transition: color 0.2s ease;
+}
+
+.admin-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+  display: inline-block;
+  margin-left: 2px;
+  animation: adminPulse 2s infinite ease-in-out;
+}
+
+@keyframes adminPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+.site-header-btn-admin:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.32) 0%, rgba(139, 92, 246, 0.32) 100%);
+  border-color: rgba(99, 102, 241, 0.7);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+:root[data-theme="light"] .site-header-btn-admin {
+  background: #eef2ff !important;
+  border: 1px solid #c7d2fe !important;
+  color: #1e1b4b !important;
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.08) !important;
+}
+
+:root[data-theme="light"] .site-header-btn-admin span {
+  color: #1e1b4b !important;
+}
+
+:root[data-theme="light"] .site-header-btn-admin .admin-btn-icon {
+  color: #4338ca !important;
+}
+
+:root[data-theme="light"] .site-header-btn-admin:hover {
+  background: #e0e7ff !important;
+  border-color: #818cf8 !important;
+  color: #1e1b4b !important;
+  transform: translateY(-1px);
+}
+
+/* User Profile Dropdown Administrator Badge */
+.user-dropdown-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 5px;
+  letter-spacing: 0.03em;
+  background: rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
+  border: 1px solid rgba(99, 102, 241, 0.45);
+}
+
+:root[data-theme="light"] .user-dropdown-admin-badge {
+  background: #eef2ff !important;
+  color: #312e81 !important;
+  border: 1px solid #c7d2fe !important;
+  font-weight: 800 !important;
+}
+
+:root[data-theme="light"] .user-dropdown-admin-badge svg {
+  color: #4338ca !important;
+}
+
+/* Contextual Role Badges */
+.user-dropdown-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 5px;
+  letter-spacing: 0.03em;
+}
+
+.user-dropdown-premium-badge {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+:root[data-theme="light"] .user-dropdown-premium-badge {
+  background: rgba(2, 132, 199, 0.1);
+  color: #0369a1;
+  border-color: rgba(2, 132, 199, 0.3);
+}
+
+.user-dropdown-google-badge {
+  background: rgba(66, 133, 244, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(66, 133, 244, 0.3);
+}
+
+:root[data-theme="light"] .user-dropdown-google-badge {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.user-dropdown-member-badge {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--primary-start);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+:root[data-theme="light"] .user-dropdown-member-badge {
+  background: #eef2ff !important;
+  color: #312e81 !important;
+  border-color: #c7d2fe !important;
+}
+
+/* User Profile Dropdown Icon Wrapper & Aesthetics */
+.dropdown-action-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="light"] .dropdown-action-icon-wrap {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+.dropdown-admin-icon-wrap {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+:root[data-theme="light"] .dropdown-admin-icon-wrap {
+  background: #e0e7ff !important;
+  border-color: #c7d2fe !important;
+}
+
+.dropdown-upgrade-icon-wrap {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+:root[data-theme="light"] .dropdown-upgrade-icon-wrap {
+  background: #e0e7ff !important;
+  border-color: #c7d2fe !important;
+}
+
+.dropdown-signout-icon-wrap {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.user-dropdown-action-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.user-dropdown-action-btn:hover {
+  background: var(--surface-hover);
+}
+
+.dropdown-item-arrow {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.user-dropdown-action-btn:hover .dropdown-item-arrow,
+.user-dropdown-admin-card:hover .dropdown-item-arrow {
+  opacity: 0.9;
+  transform: translateX(2px);
+}
+
+.dropdown-count-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  background: var(--tag-bg);
+  color: var(--text-secondary);
+}
+
+.dropdown-price-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+}
+
+:root[data-theme="light"] .dropdown-price-pill {
+  background: rgba(79, 70, 229, 0.12);
+  color: #4338ca;
+}
+
+/* User Profile Dropdown Admin Console Card */
+.user-dropdown-admin-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  margin-top: 0.35rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, rgba(139, 92, 246, 0.18) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.user-dropdown-admin-card .admin-card-icon {
+  color: #a5b4fc;
+}
+
+.user-dropdown-admin-card .admin-card-title {
+  color: #f8fafc;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.user-dropdown-admin-card .admin-card-subtitle {
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.user-dropdown-admin-card:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.28) 0%, rgba(139, 92, 246, 0.28) 100%);
+  border-color: rgba(99, 102, 241, 0.55);
+}
+
+:root[data-theme="light"] .user-dropdown-admin-card {
+  background: #eef2ff !important;
+  border: 1px solid #c7d2fe !important;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08) !important;
+}
+
+:root[data-theme="light"] .user-dropdown-admin-card .admin-card-icon {
+  color: #4f46e5 !important;
+}
+
+:root[data-theme="light"] .user-dropdown-admin-card .admin-card-title {
+  color: #1e1b4b !important;
+  font-weight: 700 !important;
+  font-size: 0.82rem !important;
+}
+
+:root[data-theme="light"] .user-dropdown-admin-card .admin-card-subtitle {
+  color: #4338ca !important;
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+}
+
+:root[data-theme="light"] .user-dropdown-admin-card .dropdown-item-arrow {
+  color: #4338ca !important;
+}
+
+:root[data-theme="light"] .user-dropdown-admin-card:hover {
+  background: #e0e7ff !important;
+  border-color: #818cf8 !important;
+}
+
+/* User Profile Dropdown Upgrade Button */
+.user-dropdown-upgrade-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  margin-bottom: 0.25rem;
+  transition: all 0.2s ease;
+  background: rgba(99, 102, 241, 0.15);
+  color: #c7d2fe;
+}
+
+.user-dropdown-upgrade-btn .upgrade-btn-icon {
+  color: #a5b4fc;
+}
+
+.user-dropdown-upgrade-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  color: #ffffff;
+}
+
+:root[data-theme="light"] .user-dropdown-upgrade-btn {
+  background: #eef2ff !important;
+  border: 1px solid #c7d2fe !important;
+  color: #1e1b4b !important;
+}
+
+:root[data-theme="light"] .user-dropdown-upgrade-btn span {
+  color: #1e1b4b !important;
+}
+
+:root[data-theme="light"] .user-dropdown-upgrade-btn .upgrade-btn-icon {
+  color: #4f46e5 !important;
+}
+
+:root[data-theme="light"] .user-dropdown-upgrade-btn:hover {
+  background: #e0e7ff !important;
+  border-color: #818cf8 !important;
+  color: #1e1b4b !important;
 }
 
 /* User Capsule Button */

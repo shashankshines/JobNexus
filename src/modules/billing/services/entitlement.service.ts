@@ -3,13 +3,23 @@ import {
   SubscriptionRecord,
 } from '../domain/subscription.types';
 import { getSubscriptionByUserId } from './subscription.store';
+import { getFirestoreSubscriptionByUserId } from '@/modules/storage/firestore/subscription.store';
 
 /**
- * Authoritative Single Source of Truth for JobNexus User Entitlement.
- * Evaluates durable subscription state, grace periods, and payment validity.
- * Always fails closed to free access on uncertainty or expired records.
+ * Pure entitlement evaluation engine.
+ * Evaluates subscription status, validity window, grace periods, and payment state.
+ *
+ * Invariants:
+ * 1. Fails closed to free access on null/undefined, unverified, or expired records.
+ * 2. Pending or unverified checkouts/submissions strictly receive free tier.
+ * 3. An active subscription with valid currentPeriodEnd receives Premium access.
+ * 4. cancelAtPeriodEnd inside valid periodEnd receives Premium with status 'cancelled_grace'.
+ * 5. Expired periods lapse to free tier with status 'expired'.
  */
-export function getUserEntitlement(userId: string): UserEntitlement {
+export function evaluateSubscriptionEntitlement(
+  userId: string,
+  sub: SubscriptionRecord | null | undefined
+): UserEntitlement {
   if (!userId) {
     return {
       userId: '',
@@ -20,7 +30,6 @@ export function getUserEntitlement(userId: string): UserEntitlement {
     };
   }
 
-  const sub: SubscriptionRecord | undefined = getSubscriptionByUserId(userId);
   if (!sub) {
     return {
       userId,
@@ -165,9 +174,48 @@ export function getUserEntitlement(userId: string): UserEntitlement {
   };
 }
 
+/**
+ * Authoritative Async Entitlement Accessor.
+ * Queries Cloud Firestore as the single production source of truth.
+ * Throws explicit error on Firestore operational failures (fail closed).
+ */
+export async function getAuthoritativeUserEntitlement(userId: string): Promise<UserEntitlement> {
+  if (!userId) {
+    return evaluateSubscriptionEntitlement('', null);
+  }
+
+  const sub = await getFirestoreSubscriptionByUserId(userId);
+  return evaluateSubscriptionEntitlement(userId, sub);
+}
 
 /**
- * Convenience helper returning whether a given user currently has active Premium access.
+ * Authoritative async helper returning whether a given user currently has active Premium access.
+ */
+export async function hasAuthoritativePremiumAccess(userId: string): Promise<boolean> {
+  const entitlement = await getAuthoritativeUserEntitlement(userId);
+  return entitlement.isPremium;
+}
+
+/**
+ * Alias for getAuthoritativeUserEntitlement.
+ */
+export const getUserEntitlementAsync = getAuthoritativeUserEntitlement;
+
+/**
+ * Synchronous legacy accessor reading from DurableStore.
+ * Retained for synchronous test fixtures and backward-compatibility.
+ * Production routes MUST use getAuthoritativeUserEntitlement.
+ */
+export function getUserEntitlement(userId: string): UserEntitlement {
+  if (!userId) {
+    return evaluateSubscriptionEntitlement('', null);
+  }
+  const sub = getSubscriptionByUserId(userId);
+  return evaluateSubscriptionEntitlement(userId, sub);
+}
+
+/**
+ * Synchronous legacy helper.
  */
 export function hasActivePremiumAccess(userId: string): boolean {
   return getUserEntitlement(userId).isPremium;

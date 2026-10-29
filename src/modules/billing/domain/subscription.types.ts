@@ -7,7 +7,7 @@ export const PREMIUM_PLAN = {
   id: 'premium_monthly' as const,
   name: 'JobNexus Premium',
   description: 'Uncapped direct ATS application links, priority company unmasking, and unlimited verified job saving.',
-  currency: 'INR',
+  currency: 'INR' as const,
   priceInr: 499,
   amountInPaise: 49900,
   interval: 'monthly' as const,
@@ -36,9 +36,10 @@ export type SubscriptionStatus =
 export interface SubscriptionRecord {
   id: string;
   userId: string;
+  userEmail?: string;
   planId: 'premium_monthly';
   status: SubscriptionStatus;
-  provider: 'razorpay' | 'manual' | 'test';
+  provider: 'manual_upi' | 'razorpay' | 'manual' | 'test';
   providerSubscriptionId?: string;
   providerCustomerId?: string;
   providerPaymentId?: string;

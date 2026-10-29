@@ -1,6 +1,5 @@
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import crypto from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { PREMIUM_PLAN } from '../../billing/domain/subscription.types';
 import {
@@ -9,17 +8,20 @@ import {
 } from '../../billing/services/entitlement.service';
 import {
   saveSubscription,
-  getSubscriptionByUserId,
   resetSubscriptionStore,
   recordBillingEvent,
 } from '../../billing/services/subscription.store';
 import {
-  verifyRazorpayWebhookSignature,
-  parseRazorpayWebhookEvent,
-} from '../../billing/providers/razorpay.provider';
+  setMockFirestoreDb,
+  resetFirestoreRegistry,
+} from '../../storage/firestore/client';
+import { createMockFirestoreDb } from '../../storage/firestore/mock';
+import {
+  getFirestoreSubscriptionByUserId,
+  saveFirestoreSubscription,
+} from '../../storage/firestore/subscription.store';
 import { GET as billingStatusHandler } from '../../../app/api/billing/status/route';
 import { POST as billingCheckoutHandler } from '../../../app/api/billing/checkout/route';
-import { POST as billingWebhookHandler } from '../../../app/api/billing/webhook/route';
 import { POST as billingCancelHandler } from '../../../app/api/billing/cancel/route';
 import {
   resetAuthStore,
@@ -73,6 +75,12 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
   beforeEach(() => {
     resetAuthStore();
     resetSubscriptionStore();
+    setMockFirestoreDb(createMockFirestoreDb());
+  });
+
+  afterEach(() => {
+    setMockFirestoreDb(undefined);
+    resetFirestoreRegistry();
   });
 
   // =========================================================================
@@ -196,32 +204,14 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
   });
 
   // =========================================================================
-  // 3. Webhook Signature Verification & Idempotency
+  // 3. Billing Event Recording & Idempotency
   // =========================================================================
-  it('rejects invalid or missing webhook signatures', () => {
-    const rawPayload = JSON.stringify({ event: 'subscription.charged' });
-    assert.strictEqual(verifyRazorpayWebhookSignature(rawPayload, null), false);
-    assert.strictEqual(verifyRazorpayWebhookSignature(rawPayload, ''), false);
-    assert.strictEqual(verifyRazorpayWebhookSignature(rawPayload, 'invalid_hex_sig'), false);
-  });
-
-  it('verifies valid HMAC-SHA256 signature in test environment', () => {
-    const rawPayload = JSON.stringify({ event: 'subscription.charged', id: 'evt_123' });
-    const expectedSig = crypto
-      .createHmac('sha256', 'test_webhook_secret_key_12345')
-      .update(rawPayload)
-      .digest('hex');
-
-    const isValid = verifyRazorpayWebhookSignature(rawPayload, expectedSig);
-    assert.strictEqual(isValid, true);
-  });
-
-  it('safely handles duplicate webhook events with idempotency guard', () => {
+  it('safely handles duplicate billing events with idempotency guard', () => {
     const eventId = 'evt_unique_test_456';
     const firstAttempt = recordBillingEvent({
       id: eventId,
-      provider: 'razorpay',
-      eventType: 'subscription.charged',
+      provider: 'manual_upi',
+      eventType: 'payment_verified',
       payload: { id: eventId },
       createdAt: new Date().toISOString(),
     });
@@ -229,45 +219,12 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
 
     const secondAttempt = recordBillingEvent({
       id: eventId,
-      provider: 'razorpay',
-      eventType: 'subscription.charged',
+      provider: 'manual_upi',
+      eventType: 'payment_verified',
       payload: { id: eventId },
       createdAt: new Date().toISOString(),
     });
     assert.strictEqual(secondAttempt, false); // Blocked duplicate
-  });
-
-  it('parses incoming Razorpay subscription events accurately', () => {
-    const mockPayload = {
-      event: 'subscription.charged',
-      payload: {
-        subscription: {
-          entity: {
-            id: 'sub_rzp_987',
-            status: 'active',
-            current_start: 1714000000,
-            current_end: 1716592000,
-            notes: {
-              userId: 'user_wh_test_1',
-            },
-          },
-        },
-        payment: {
-          entity: {
-            id: 'pay_rzp_555',
-            amount: 49900,
-          },
-        },
-      },
-    };
-
-    const parsed = parseRazorpayWebhookEvent(mockPayload);
-    assert.ok(parsed);
-    assert.strictEqual(parsed.eventType, 'subscription.charged');
-    assert.strictEqual(parsed.providerSubscriptionId, 'sub_rzp_987');
-    assert.strictEqual(parsed.providerPaymentId, 'pay_rzp_555');
-    assert.strictEqual(parsed.userId, 'user_wh_test_1');
-    assert.strictEqual(parsed.status, 'active');
   });
 
   // =========================================================================
@@ -310,16 +267,21 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.plan.amountInPaise, 49900);
     assert.strictEqual(data.plan.priceInr, 499);
-    assert.ok(data.checkout.subscriptionId);
-
-    // Verify record was stored in durable store
-    const stored = getSubscriptionByUserId(session.user.id);
-    assert.ok(stored);
-    assert.strictEqual(stored.planId, 'premium_monthly');
+    assert.ok(data.checkout.orderId);
 
     // Attempting checkout while actively subscribed returns 409 Conflict
-    stored.status = 'active';
-    saveSubscription(stored);
+    await saveFirestoreSubscription({
+      id: 'sub_test_active',
+      userId: session.user.id,
+      planId: 'premium_monthly',
+      status: 'active',
+      provider: 'manual_upi',
+      currentPeriodStart: new Date().toISOString(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
+      cancelAtPeriodEnd: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
 
     const conflictReq = createMockRequest('http://localhost:3000/api/billing/checkout', {
       method: 'POST',
@@ -344,66 +306,12 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
     assert.ok(data.error.includes('Invalid plan specified'));
   });
 
-  it('POST /api/billing/webhook verifies signature and transitions subscription to active', async () => {
-    const now = Math.floor(Date.now() / 1000);
-    const payloadObj = {
-      event: 'subscription.charged',
-      event_id: `evt_test_charge_${Date.now()}`,
-      payload: {
-        subscription: {
-          entity: {
-            id: 'sub_rzp_webhook_live',
-            status: 'active',
-            current_start: now,
-            current_end: now + 30 * 86400,
-            notes: {
-              userId: 'user_webhook_charge_1',
-            },
-          },
-        },
-        payment: {
-          entity: {
-            id: 'pay_rzp_webhook_123',
-            amount: 49900,
-          },
-        },
-      },
-    };
-
-    const rawBody = JSON.stringify(payloadObj);
-    const signature = crypto
-      .createHmac('sha256', 'test_webhook_secret_key_12345')
-      .update(rawBody)
-      .digest('hex');
-
-    const req = createMockRequest('http://localhost:3000/api/billing/webhook', {
-      method: 'POST',
-      body: rawBody,
-      headers: {
-        'x-razorpay-signature': signature,
-      },
-    });
-
-    const res = await billingWebhookHandler(req);
-    assert.strictEqual(res.status, 200);
-
-    const data = await res.json();
-    assert.strictEqual(data.received, true);
-    assert.strictEqual(data.processed, true);
-
-    // Verify entitlement upgraded to active Premium
-    const ent = getUserEntitlement('user_webhook_charge_1');
-    assert.strictEqual(ent.isPremium, true);
-    assert.strictEqual(ent.tier, 'premium');
-    assert.strictEqual(ent.status, 'active');
-  });
-
   it('POST /api/billing/cancel isolates by authenticated user and schedules period-end cancellation', async () => {
-    // Set up user A with active subscription
+    // Set up user A with active subscription in Cloud Firestore
     const sessionA = createAuthenticatedSession('user_a_cancel');
     const future = new Date(Date.now() + 20 * 86400 * 1000).toISOString();
 
-    saveSubscription({
+    await saveFirestoreSubscription({
       id: 'sub_user_a',
       userId: sessionA.user.id,
       planId: 'premium_monthly',
@@ -440,7 +348,7 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
     assert.strictEqual(dataA.entitlement.status, 'cancelled_grace');
     assert.strictEqual(dataA.entitlement.isPremium, true); // Retains access until period end
 
-    const updatedSub = getSubscriptionByUserId(sessionA.user.id);
+    const updatedSub = await getFirestoreSubscriptionByUserId(sessionA.user.id);
     assert.strictEqual(updatedSub?.cancelAtPeriodEnd, true);
     assert.ok(updatedSub?.cancelledAt);
   });

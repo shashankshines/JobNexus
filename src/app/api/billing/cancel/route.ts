@@ -3,11 +3,12 @@ import {
   extractSessionId,
   validateSession,
 } from '@/modules/auth/server/session.store';
+import { getAuthoritativeUserEntitlement } from '@/modules/billing/services/entitlement.service';
 import {
-  getSubscriptionByUserId,
-  saveSubscription,
-} from '@/modules/billing/services/subscription.store';
-import { getUserEntitlement } from '@/modules/billing/services/entitlement.service';
+  getFirestoreSubscriptionByUserId,
+  saveFirestoreSubscription,
+} from '@/modules/storage/firestore/subscription.store';
+import type { SubscriptionRecord } from '@/modules/billing/domain/subscription.types';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -21,8 +22,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Strict user isolation: look up subscription only for the authenticated user ID
-    const sub = getSubscriptionByUserId(auth.user.id);
+    // Strict user isolation: look up subscription exclusively in Cloud Firestore
+    let sub: SubscriptionRecord | null = null;
+    try {
+      sub = await getFirestoreSubscriptionByUserId(auth.user.id);
+    } catch (err) {
+      console.error('[Billing Cancel Error]: Firestore subscription lookup failed:', err);
+      return NextResponse.json(
+        { error: 'Subscription service temporarily unavailable. Please try again shortly.' },
+        { status: 503 }
+      );
+    }
+
     if (!sub || sub.userId !== auth.user.id) {
       return NextResponse.json(
         { error: 'No active subscription found for this account' },
@@ -31,10 +42,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     if (sub.status === 'cancelled') {
+      const entitlement = await getAuthoritativeUserEntitlement(auth.user.id);
       return NextResponse.json(
         {
           message: 'Subscription is already cancelled',
-          entitlement: getUserEntitlement(auth.user.id),
+          entitlement,
         },
         { status: 200 }
       );
@@ -46,9 +58,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     sub.cancelledAt = now;
     sub.updatedAt = now;
 
-    saveSubscription(sub);
+    try {
+      await saveFirestoreSubscription(sub, { lastUpdatedFrom: 'user_cancel' });
+    } catch (err) {
+      console.error('[Billing Cancel Error]: Firestore save failed:', err);
+      return NextResponse.json(
+        { error: 'Failed to record cancellation. Please try again shortly.' },
+        { status: 503 }
+      );
+    }
 
-    const entitlement = getUserEntitlement(auth.user.id);
+    const entitlement = await getAuthoritativeUserEntitlement(auth.user.id);
 
     return NextResponse.json({
       success: true,

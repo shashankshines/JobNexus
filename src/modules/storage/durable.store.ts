@@ -10,6 +10,9 @@ function resolveDataDir(): string {
   if (process.env.JOBNEXUS_DATA_DIR) {
     return process.env.JOBNEXUS_DATA_DIR;
   }
+  if (process.env.NODE_ENV === 'test') {
+    return path.join(process.cwd(), '.jobnexus-test-data');
+  }
   // If running in Vercel or read-only container, use /tmp
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     return path.join('/tmp', '.jobnexus-data');

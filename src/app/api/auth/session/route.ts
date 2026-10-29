@@ -4,6 +4,7 @@ import {
   destroySession,
   extractSessionId,
 } from '@/modules/auth/server/session.store';
+import { isAllowedAdminEmail } from '@/modules/auth/server/admin.auth';
 
 export async function GET(request: Request) {
   const sessionId = extractSessionId(request);
@@ -12,6 +13,8 @@ export async function GET(request: Request) {
   if (!result.valid || !result.user) {
     return NextResponse.json({ authenticated: false });
   }
+
+  const isAdmin = result.user.provider === 'google' && isAllowedAdminEmail(result.user.email);
 
   return NextResponse.json({
     authenticated: true,
@@ -25,6 +28,7 @@ export async function GET(request: Request) {
       initials: result.user.initials,
       createdAt: result.user.createdAt,
       savedJobsCount: result.user.savedJobs.length,
+      isAdmin,
     },
   });
 }

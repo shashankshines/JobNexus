@@ -434,6 +434,25 @@ export function removeSavedJobForUser(
 }
 
 /**
+ * Looks up a user record by their unique userId.
+ */
+export function getUserById(userId: string): UserRecord | null {
+  if (!userId) return null;
+  return users.get(userId) || null;
+}
+
+/**
+ * Looks up a user record by email address.
+ */
+export function getUserByEmail(email: string): UserRecord | null {
+  if (!email) return null;
+  const cleanEmail = email.trim().toLowerCase();
+  const mapping = usersByEmail.get(cleanEmail);
+  if (!mapping) return null;
+  return users.get(mapping.userId) || null;
+}
+
+/**
  * Resets the in-memory store. Useful for clean isolated tests.
  */
 export function resetAuthStore(): void {

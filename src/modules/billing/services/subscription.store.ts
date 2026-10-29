@@ -1,3 +1,8 @@
+/**
+ * @deprecated LEGACY LOCAL STORE — Retained exclusively for isolated historical unit test fixtures.
+ * NOT REACHABLE by any production API route or service. All production subscription state
+ * is persisted and queried exclusively via Cloud Firestore (billing_subscriptions collection).
+ */
 import { DurableStore } from '@/modules/storage/durable.store';
 import {
   SubscriptionRecord,
@@ -56,7 +61,7 @@ export function getSubscriptionById(idOrProviderId: string): SubscriptionRecord 
 export function saveSubscription(sub: SubscriptionRecord): SubscriptionRecord {
   const updated: SubscriptionRecord = {
     ...sub,
-    updatedAt: new Date().toISOString(),
+    updatedAt: sub.updatedAt || new Date().toISOString(),
   };
   subscriptions.set(updated.id, updated);
   subscriptionsByUser.set(updated.userId, { id: updated.userId, subscriptionId: updated.id });

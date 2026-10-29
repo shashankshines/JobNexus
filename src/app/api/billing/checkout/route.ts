@@ -1,15 +1,13 @@
-import { NextResponse } from 'next/server';
-import crypto from 'node:crypto';
+import { NextRequest, NextResponse } from 'next/server';
 import { validateSession, extractSessionId } from '@/modules/auth/server/session.store';
-import { PREMIUM_PLAN, SubscriptionRecord } from '@/modules/billing/domain/subscription.types';
-import { getUserEntitlement } from '@/modules/billing/services/entitlement.service';
+import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
+import { getAuthoritativeUserEntitlement } from '@/modules/billing/services/entitlement.service';
 import {
-  saveSubscription,
-  getSubscriptionByUserId,
-} from '@/modules/billing/services/subscription.store';
-import { createRazorpayCheckout } from '@/modules/billing/providers/razorpay.provider';
+  createPaymentOrder,
+  getActiveOrderForUser,
+} from '@/modules/storage/firestore/order.store';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const sessionId = extractSessionId(request);
   const auth = validateSession(sessionId);
 
@@ -36,9 +34,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user already has an active subscription
-    const currentEntitlement = getUserEntitlement(auth.user.id);
-    if (currentEntitlement.isPremium && currentEntitlement.status === 'active' && !currentEntitlement.subscription?.cancelAtPeriodEnd) {
+    // Check if user already has an active subscription via authoritative Firestore
+    let currentEntitlement;
+    try {
+      currentEntitlement = await getAuthoritativeUserEntitlement(auth.user.id);
+    } catch (err) {
+      console.error('[Billing Checkout Error]: Firestore entitlement lookup failed:', err);
+      return NextResponse.json(
+        { error: 'Subscription service temporarily unavailable. Please try again shortly.' },
+        { status: 503 }
+      );
+    }
+
+    if (
+      currentEntitlement.isPremium &&
+      currentEntitlement.status === 'active' &&
+      !currentEntitlement.subscription?.cancelAtPeriodEnd
+    ) {
       return NextResponse.json(
         {
           error: 'You already have an active JobNexus Premium membership.',
@@ -49,31 +61,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate checkout payload (server enforces ₹499 amount)
-    const checkoutResult = await createRazorpayCheckout(auth.user.id, auth.user.email);
-
-    // Save pending subscription record in durable store
-    const now = new Date();
-    const periodEnd = new Date(now);
-    periodEnd.setDate(periodEnd.getDate() + 30);
-
-    const existingSub = getSubscriptionByUserId(auth.user.id);
-    const subRecord: SubscriptionRecord = {
-      id: existingSub?.id || `sub_${crypto.randomBytes(8).toString('hex')}`,
-      userId: auth.user.id,
-      planId: PREMIUM_PLAN.id,
-      status: 'created',
-      provider: checkoutResult.isMock ? 'test' : 'razorpay',
-      providerSubscriptionId: checkoutResult.subscriptionId,
-      currentPeriodStart: now.toISOString(),
-      currentPeriodEnd: periodEnd.toISOString(),
-      cancelAtPeriodEnd: false,
-      createdAt: existingSub?.createdAt || now.toISOString(),
-      updatedAt: now.toISOString(),
-      idempotencyKey: checkoutResult.subscriptionId,
-    };
-
-    saveSubscription(subRecord);
+    // Retrieve or create authoritative payment order
+    let order;
+    try {
+      const active = await getActiveOrderForUser(auth.user.id);
+      if (active) {
+        order = active;
+      } else {
+        order = await createPaymentOrder({ userId: auth.user.id });
+      }
+    } catch (err) {
+      console.error('[Billing Checkout Error]: Order creation failed:', err);
+      return NextResponse.json(
+        { error: 'Failed to initialize payment order. Please try again shortly.' },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -85,7 +88,16 @@ export async function POST(request: Request) {
         currency: PREMIUM_PLAN.currency,
         interval: PREMIUM_PLAN.interval,
       },
-      checkout: checkoutResult,
+      order,
+      checkout: {
+        orderId: order.orderId,
+        amount: order.amountInPaise,
+        currency: order.currency,
+        planId: order.planId,
+        upiId: order.upiId,
+        payeeName: order.payeeName,
+        isManualUpi: true,
+      },
     });
   } catch (error) {
     console.error('[Billing Checkout Error]:', error);
@@ -95,4 +107,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

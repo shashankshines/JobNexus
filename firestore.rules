@@ -1,0 +1,176 @@
+rules_version = '2';
+
+/**
+ * ============================================================================
+ * JobNexus — Production Cloud Firestore Security Rules
+ * ============================================================================
+ *
+ * ARCHITECTURAL CONTEXT & SECURITY INVARIANTS:
+ * 1. Zero Direct Client Access:
+ *    Direct client-side reads and writes to all Cloud Firestore collections via
+ *    the public Firebase Web SDK (e.g., firebase/firestore) are strictly FORBIDDEN.
+ *    Any client attempting direct Firestore access is denied by default (allow read, write: if false;).
+ *
+ * 2. Privileged Server-Side Execution Model:
+ *    All operations across the JobNexus platform—including the manual UPI payment lifecycle,
+ *    order generation, payment submission and SLA tracking, atomic UTR reservation locking,
+ *    subscription lifecycle state transitions, immutable audit logging, and transactional email
+ *    dispatch—are orchestrated exclusively on the server side via the Firebase Admin SDK.
+ *    The Firebase Admin SDK uses Google Cloud Service Account credentials (or ADC) and
+ *    deliberately bypasses Cloud Firestore Security Rules.
+ *
+ * 3. Next.js App Router API Boundaries:
+ *    All client interactions occur through strictly typed, authenticated, and rate-limited Next.js
+ *    Route Handlers (under /api/billing/*, /api/admin/*, etc.). The server layer enforces user session
+ *    validation, role-based authorization (admin vs. regular user), input sanitization, and ACID
+ *    database transactions before committing any change to Firestore.
+ *
+ * ============================================================================
+ * Assumed Data Model
+ * ============================================================================
+ *
+ * Collection: upi_orders
+ * Document ID: orderId (e.g., ord_xxx or UUID)
+ * Fields:
+ *   - orderId: string (required) - Unique payment order identifier
+ *   - userId: string (required) - Authenticated user account ID
+ *   - planId: string (required) - Subscription plan ('premium_monthly')
+ *   - amountInr: number (required) - Order cost in Indian Rupees (e.g., 499)
+ *   - amountInPaise: number (required) - Cost in Paise (e.g., 49900)
+ *   - currency: string (required) - Currency identifier ('INR')
+ *   - status: string (required) - Lifecycle state ('created' | 'submitted' | 'expired')
+ *   - upiId: string (required) - Merchant UPI VPA address
+ *   - payeeName: string (required) - Merchant payee name
+ *   - createdAt: string (required) - ISO 8601 timestamp of creation
+ *   - expiresAt: string (required) - ISO 8601 timestamp of payment window expiry
+ *
+ * Collection: upi_submissions
+ * Document ID: submissionId (e.g., sub_xxx)
+ * Fields:
+ *   - submissionId: string (required) - Unique payment submission identifier
+ *   - orderId: string (required) - Associated order reference ID
+ *   - userId: string (required) - User ID who made the submission
+ *   - utrNumber: string (required) - 12-digit normalized uppercase alphanumeric UTR
+ *   - declaredAmount: number (required) - User-declared payment amount in INR
+ *   - paymentDate: string (required) - Date payment was completed (YYYY-MM-DD)
+ *   - receiptPath: string (optional) - Storage path for uploaded payment screenshot
+ *   - receiptContentType: string (optional) - MIME type of uploaded receipt
+ *   - submittedAt: string (required) - ISO 8601 timestamp of submission
+ *   - slaDeadlineAt: string (required) - ISO 8601 timestamp of 12-hour SLA deadline
+ *   - status: string (required) - Status ('pending_verification' | 'approved' | 'rejected')
+ *   - decisionReason: string (optional) - Explanation if rejected or approved
+ *   - reviewedBy: string (optional) - Admin user email who approved/rejected
+ *   - reviewedAt: string (optional) - ISO 8601 timestamp when reviewed
+ *   - verificationNotes: string (optional) - Internal administrative review notes
+ *
+ * Collection: upi_utr_reservations
+ * Document ID: utrNumber (Normalized 12-digit UTR string)
+ * Fields:
+ *   - utrNumber: string (required) - Primary key normalized transaction reference
+ *   - orderId: string (required) - Associated order ID
+ *   - submissionId: string (required) - Associated submission ID
+ *   - userId: string (required) - User ID holding the reservation
+ *   - status: string (required) - State ('reserved' | 'consumed' | 'released')
+ *   - reservedAt: string (required) - ISO 8601 timestamp when reservation was created
+ *   - consumedAt: string (optional) - ISO 8601 timestamp when payment approved
+ *
+ * Collection: billing_subscriptions
+ * Document ID: userId (User account ID)
+ * Fields:
+ *   - userId: string (required) - Unique user account ID
+ *   - plan: string (required) - Tier ('free' | 'premium_monthly')
+ *   - status: string (required) - State ('active' | 'expired' | 'canceled' | 'grace_period')
+ *   - startDate: string (required) - ISO 8601 timestamp of subscription start
+ *   - currentPeriodEnd: string (required) - ISO 8601 timestamp of period expiry
+ *   - autoRenew: boolean (required) - Automatic renewal indicator
+ *   - paymentMethod: string (optional) - Method ('manual_upi' | 'razorpay' | 'stripe' | 'admin_grant')
+ *   - lastPaymentDate: string (optional) - ISO 8601 timestamp of last confirmed payment
+ *   - lastPaymentReference: string (optional) - Order ID or UTR reference
+ *   - metadata: map (optional) - Additional subscription metadata
+ *   - lastUpdatedFrom: string (optional) - Source ('webhook' | 'admin_manual' | 'admin_grant' | 'system_expiry')
+ *
+ * Collection: admin_audit_logs
+ * Document ID: id (Unique log identifier)
+ * Fields:
+ *   - id: string (required) - Unique audit entry ID
+ *   - actorId: string (required) - ID of admin or system actor executing change
+ *   - actorEmail: string (required) - Email address of admin actor
+ *   - action: string (required) - Action ('payment_approved' | 'payment_rejected' | 'admin_grant' | 'admin_deactivate' | 'utr_released')
+ *   - targetUserId: string (required) - User account impacted by action
+ *   - targetEntityId: string (required) - Target submission, order, or subscription ID
+ *   - previousState: map (optional) - Pre-mutation document snapshot
+ *   - newState: map (optional) - Post-mutation document snapshot
+ *   - reason: string (optional) - Administrative justification or notes
+ *   - timestamp: string (required) - ISO 8601 timestamp of audit event
+ *
+ * Collection: email_outbox
+ * Document ID: id (Unique outbox item identifier)
+ * Fields:
+ *   - id: string (required) - Unique notification task ID
+ *   - idempotencyKey: string (required) - Deduplication key preventing duplicate sends
+ *   - recipientEmail: string (required) - Target recipient email address
+ *   - recipientName: string (optional) - Display name of recipient
+ *   - templateType: string (required) - Identifier for transactional template
+ *   - payload: map (required) - Key-value parameters for email body rendering
+ *   - status: string (required) - Outbox dispatch state ('pending' | 'sent' | 'failed')
+ *   - attempts: number (required) - Delivery attempts executed
+ *   - maxAttempts: number (required) - Maximum allowed delivery retries
+ *   - lastAttemptAt: string (optional) - ISO 8601 timestamp of last attempt
+ *   - sentAt: string (optional) - ISO 8601 timestamp of successful delivery
+ *   - error: string (optional) - Error details if delivery failed
+ *   - createdAt: string (required) - ISO 8601 timestamp when queued
+ *
+ * ============================================================================
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================================================
+    // Root Fallback: Default Deny All Direct Client-Side Reads and Writes
+    // ========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ========================================================================
+    // Canonical Collection Security Lockdowns
+    // ========================================================================
+
+    // 1. UPI Payment Orders
+    // Direct client access disallowed. Managed via /api/billing/manual-upi/create-order.
+    match /upi_orders/{orderId} {
+      allow read, write: if false;
+    }
+
+    // 2. UPI Payment Submissions
+    // Direct client access disallowed. Managed via /api/billing/manual-upi/submit-payment.
+    match /upi_submissions/{submissionId} {
+      allow read, write: if false;
+    }
+
+    // 3. UPI UTR Reservations (Anti-Replay / ACID Locking)
+    // Direct client access disallowed. Handled atomically via server-side transactions.
+    match /upi_utr_reservations/{utrNumber} {
+      allow read, write: if false;
+    }
+
+    // 4. Billing Subscriptions (Authoritative User Entitlements)
+    // Direct client access disallowed. Read/updated via /api/billing/status and admin routes.
+    match /billing_subscriptions/{userId} {
+      allow read, write: if false;
+    }
+
+    // 5. Admin Audit Trail (Immutable Governance & Security Logs)
+    // Direct client access disallowed. Append-only via Firebase Admin SDK on admin mutations.
+    match /admin_audit_logs/{logId} {
+      allow read, write: if false;
+    }
+
+    // 6. Transactional Email Outbox (Reliable Worker Queue)
+    // Direct client access disallowed. Enqueued and processed exclusively by server workers.
+    match /email_outbox/{outboxId} {
+      allow read, write: if false;
+    }
+  }
+}

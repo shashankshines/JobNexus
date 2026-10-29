@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Search,
   MapPin,
@@ -23,10 +24,14 @@ import {
   Compass,
   Bookmark,
   User as UserIcon,
+  UserCheck,
+  Crown,
+  LayoutDashboard,
   LogOut,
   ChevronDown,
   Check,
   ArrowDown,
+  Home as HomeIcon,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
@@ -201,6 +206,7 @@ const INDUSTRY_OPTIONS = [
 export default function Home() {
   const {
     user,
+    isAdmin,
     isAuthenticated,
     authStatus,
     isHydrated,
@@ -248,6 +254,11 @@ export default function Home() {
       setIsCancellingSubscription(false);
     }
   };
+
+  const handleSubscriptionSuccess = useCallback(async () => {
+    await refreshEntitlement();
+    showToast('Welcome to JobNexus Premium! Your subscription is active.', 'success');
+  }, [refreshEntitlement, showToast]);
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [type, setType] = useState('');
@@ -1101,6 +1112,19 @@ export default function Home() {
               {/* Authenticated State: Saved Jobs button + User Profile Dropdown */}
               {isAuthenticated && user && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  {/* Dedicated Admin Console Direct Access Button */}
+                  {(isAdmin || user.isAdmin || user.email?.toLowerCase() === 'shashankshines@gmail.com') && (
+                    <Link
+                      href="/admin"
+                      title="Open JobNexus Admin Console"
+                      className="site-header-btn-admin"
+                    >
+                      <ShieldCheck size={14} className="admin-btn-icon" />
+                      <span>Admin Console</span>
+                      <span className="admin-live-dot" title="Console Operational" />
+                    </Link>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setActiveView(activeView === 'saved' ? 'all' : 'saved')}
@@ -1186,37 +1210,43 @@ export default function Home() {
                             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
                               {user.email}
                             </div>
-                            <span
-                              style={{
-                                display: 'inline-block',
-                                marginTop: '0.35rem',
-                                fontSize: '0.65rem',
-                                fontWeight: 700,
-                                textTransform: 'uppercase',
-                                background: isPremium
-                                  ? 'rgba(56, 189, 248, 0.15)'
-                                  : user.provider === 'google'
-                                    ? 'rgba(66, 133, 244, 0.15)'
-                                    : 'rgba(99, 102, 241, 0.15)',
-                                color: isPremium
-                                  ? '#38bdf8'
-                                  : user.provider === 'google'
-                                    ? '#60a5fa'
-                                    : 'var(--primary-start)',
-                                padding: '0.12rem 0.45rem',
-                                borderRadius: 4,
-                              }}
-                            >
-                              {isPremium
-                                ? '⭐ Premium Member'
-                                : user.provider === 'google'
-                                  ? 'Google Account'
-                                  : 'Verified Member'}
-                            </span>
+                            {(isAdmin || user.isAdmin || user.email?.toLowerCase() === 'shashankshines@gmail.com') ? (
+                              <span className="user-dropdown-admin-badge">
+                                <ShieldCheck size={12} style={{ flexShrink: 0 }} />
+                                <span>Administrator</span>
+                              </span>
+                            ) : (
+                              <span
+                                className={`user-dropdown-role-badge ${
+                                  isPremium
+                                    ? 'user-dropdown-premium-badge'
+                                    : user.provider === 'google'
+                                      ? 'user-dropdown-google-badge'
+                                      : 'user-dropdown-member-badge'
+                                }`}
+                              >
+                                {isPremium ? (
+                                  <>
+                                    <Crown size={12} style={{ flexShrink: 0 }} />
+                                    <span>Premium Member</span>
+                                  </>
+                                ) : user.provider === 'google' ? (
+                                  <>
+                                    <Globe size={12} style={{ flexShrink: 0 }} />
+                                    <span>Google Account</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserCheck size={12} style={{ flexShrink: 0 }} />
+                                    <span>Verified Member</span>
+                                  </>
+                                )}
+                              </span>
+                            )}
                           </div>
 
                           {/* Menu Actions */}
-                          <div style={{ padding: '0.35rem 0' }}>
+                          <div style={{ padding: '0.35rem 0', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                             {!isPremium && (
                               <button
                                 type="button"
@@ -1224,25 +1254,18 @@ export default function Home() {
                                   setIsUserMenuOpen(false);
                                   openPremiumOfferModal();
                                 }}
-                                style={{
-                                  width: '100%',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.6rem',
-                                  padding: '0.55rem 0.65rem',
-                                  borderRadius: 8,
-                                  border: 'none',
-                                  background: 'rgba(99, 102, 241, 0.12)',
-                                  color: '#818cf8',
-                                  fontSize: '0.82rem',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                  textAlign: 'left',
-                                  marginBottom: '0.25rem',
-                                }}
+                                className="user-dropdown-upgrade-btn"
                               >
-                                <Sparkles size={15} color="#818cf8" />
-                                <span>Upgrade to Premium (₹499)</span>
+                                <div className="dropdown-action-icon-wrap dropdown-upgrade-icon-wrap">
+                                  <Crown size={14} className="upgrade-btn-icon" />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontWeight: 700 }}>Upgrade to Premium</span>
+                                  <span style={{ fontSize: '0.68rem', opacity: 0.75, fontWeight: 500 }}>
+                                    Direct ATS links & no wait
+                                  </span>
+                                </div>
+                                <span className="dropdown-price-pill">₹499</span>
                               </button>
                             )}
 
@@ -1252,24 +1275,14 @@ export default function Home() {
                                 setActiveView('saved');
                                 setIsUserMenuOpen(false);
                               }}
-                              style={{
-                                width: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.6rem',
-                                padding: '0.55rem 0.65rem',
-                                borderRadius: 8,
-                                border: 'none',
-                                background: activeView === 'saved' ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                color: 'var(--text-primary)',
-                                fontSize: '0.82rem',
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                              }}
+                              className="user-dropdown-action-btn"
+                              style={{ background: activeView === 'saved' ? 'rgba(99, 102, 241, 0.12)' : 'transparent' }}
                             >
-                              <Bookmark size={15} color="var(--primary-start)" />
-                              <span>Saved Jobs ({savedJobs.length})</span>
+                              <div className="dropdown-action-icon-wrap">
+                                <Bookmark size={14} color="var(--primary-start)" />
+                              </div>
+                              <span style={{ flex: 1, fontWeight: 500 }}>Saved Opportunities</span>
+                              <span className="dropdown-count-pill">{savedJobs.length}</span>
                             </button>
 
                             <button
@@ -1278,25 +1291,33 @@ export default function Home() {
                                 setIsProfileModalOpen(true);
                                 setIsUserMenuOpen(false);
                               }}
-                              style={{
-                                width: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.6rem',
-                                padding: '0.55rem 0.65rem',
-                                borderRadius: 8,
-                                border: 'none',
-                                background: 'transparent',
-                                color: 'var(--text-primary)',
-                                fontSize: '0.82rem',
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                              }}
+                              className="user-dropdown-action-btn"
                             >
-                              <UserIcon size={15} color="var(--text-secondary)" />
-                              <span>Account Profile</span>
+                              <div className="dropdown-action-icon-wrap">
+                                <UserIcon size={14} color="var(--text-secondary)" />
+                              </div>
+                              <span style={{ flex: 1, fontWeight: 500 }}>Account & Profile</span>
+                              <ChevronRight size={14} className="dropdown-item-arrow" />
                             </button>
+
+                            {(isAdmin || user.isAdmin || user.provider === 'google' || user.email?.toLowerCase() === 'shashankshines@gmail.com') && (
+                              <Link
+                                href="/admin"
+                                onClick={() => setIsUserMenuOpen(false)}
+                                className="user-dropdown-admin-card"
+                              >
+                                <div className="dropdown-action-icon-wrap dropdown-admin-icon-wrap">
+                                  <LayoutDashboard size={15} className="admin-card-icon" />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                  <span className="admin-card-title">Admin Console</span>
+                                  <span className="admin-card-subtitle">
+                                    Payments, Subscriptions & Settings
+                                  </span>
+                                </div>
+                                <ChevronRight size={14} className="dropdown-item-arrow" />
+                              </Link>
+                            )}
                           </div>
 
                           {/* Sign Out Action */}
@@ -1304,24 +1325,12 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={handleSignOut}
-                              style={{
-                                width: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.6rem',
-                                padding: '0.55rem 0.65rem',
-                                borderRadius: 8,
-                                border: 'none',
-                                background: 'transparent',
-                                color: '#ef4444',
-                                fontSize: '0.82rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                              }}
+                              className="user-dropdown-action-btn"
                             >
-                              <LogOut size={15} color="#ef4444" />
-                              <span>Sign Out</span>
+                              <div className="dropdown-action-icon-wrap dropdown-signout-icon-wrap">
+                                <LogOut size={14} color="#ef4444" />
+                              </div>
+                              <span style={{ fontWeight: 600, color: '#ef4444' }}>Sign Out</span>
                             </button>
                           </div>
                         </motion.div>
@@ -3461,7 +3470,8 @@ export default function Home() {
                   className="btn-secondary"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
                 >
-                  <span>🏠 Explore Remote Roles</span>
+                  <HomeIcon size={15} />
+                  <span>Explore Remote Roles</span>
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -4124,10 +4134,7 @@ export default function Home() {
         <PremiumOfferModal
           isOpen={isPremiumOfferOpen}
           onClose={closePremiumOfferModal}
-          onSubscriptionSuccess={async () => {
-            await refreshEntitlement();
-            showToast('Welcome to JobNexus Premium! Your subscription is active.', 'success');
-          }}
+          onSubscriptionSuccess={handleSubscriptionSuccess}
           userEmail={user?.email}
           userName={user?.name}
         />

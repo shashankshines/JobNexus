@@ -7,6 +7,7 @@
   background: var(--surface-card);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  transform: translateZ(0);
   position: relative;
   overflow: hidden;
   border-radius: 16px;
