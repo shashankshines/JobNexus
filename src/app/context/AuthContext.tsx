@@ -136,7 +136,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [entitlement]);
 
   const isAdmin = useMemo(() => {
-    return Boolean(user?.isAdmin);
+    return Boolean(
+      user?.isAdmin &&
+      user?.email?.toLowerCase().trim() === 'shashankshines@gmail.com'
+    );
   }, [user]);
 
   const openPremiumOfferModal = useCallback(() => {

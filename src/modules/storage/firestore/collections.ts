@@ -128,18 +128,24 @@ export interface AdminAuditLogDocument {
 export interface EmailOutboxDocument {
   id: string;
   idempotencyKey: string;
+  userId: string;
+  orderId: string;
+  submissionId: string;
   recipientEmail: string;
   recipientName?: string;
+  subject: string;
   templateType:
     | 'payment_submitted'
-    | 'premium_activated'
+    | 'payment_approved'
     | 'payment_rejected'
+    | 'premium_activated'
     | 'premium_deactivated'
     | 'sla_breach_alert';
   payload: Record<string, unknown>;
-  status: 'pending' | 'sent' | 'failed';
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'retryable_failure';
   attempts: number;
   maxAttempts: number;
+  providerMessageId?: string;
   lastAttemptAt?: string;
   sentAt?: string;
   error?: string;

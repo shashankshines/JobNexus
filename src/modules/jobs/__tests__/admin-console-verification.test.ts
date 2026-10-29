@@ -747,4 +747,40 @@ describe('JobNexus — Admin Console Forensic Verification & Entitlement Control
       assert.strictEqual(auditLogs[0].targetUserId, subscriber.id);
     });
   });
+
+  // ==========================================================================
+  // Section 9: Admin Option UI Visibility Strictly Gated to Designated Email
+  // ==========================================================================
+  describe('9. Admin Option UI Visibility Strictly Gated to shashankshines@gmail.com', () => {
+    it('verifies that page.tsx strictly gates admin console options to shashankshines@gmail.com', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const pagePath = path.resolve(process.cwd(), 'src/app/page.tsx');
+      const pageContent = fs.readFileSync(pagePath, 'utf8');
+
+      // 1. isDesignatedAdmin check must require shashankshines@gmail.com
+      assert.ok(
+        pageContent.includes("user.email?.toLowerCase().trim() === 'shashankshines@gmail.com'"),
+        'Must strictly check user email against shashankshines@gmail.com'
+      );
+
+      // 2. Must NOT allow generic Google accounts to access the admin UI
+      assert.ok(
+        !pageContent.includes("user.provider === 'google' || user.email?.toLowerCase() === 'shashankshines@gmail.com'"),
+        'Must not grant admin console UI visibility to all Google accounts'
+      );
+
+      // 3. Header button must use isDesignatedAdmin
+      assert.ok(
+        pageContent.includes('{isDesignatedAdmin && (\n                    <Link\n                      href="/admin"'),
+        'Header admin button must be guarded by isDesignatedAdmin'
+      );
+
+      // 4. Dropdown admin card must use isDesignatedAdmin
+      assert.ok(
+        pageContent.includes('{isDesignatedAdmin && (\n                              <Link\n                                href="/admin"'),
+        'Dropdown admin card must be guarded by isDesignatedAdmin'
+      );
+    });
+  });
 });

@@ -19,20 +19,58 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId') || searchParams.get('query') || undefined;
+  const query = searchParams.get('userId') || searchParams.get('query') || undefined;
+  const rawStatus = searchParams.get('status') || searchParams.get('entitlementStatus');
+  const entitlementStatus = (
+    rawStatus === 'active' || rawStatus === 'free' || rawStatus === 'expired' || rawStatus === 'suspended' || rawStatus === 'cancelled'
+      ? rawStatus
+      : 'all'
+  ) as 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled';
+
+  const rawSource = searchParams.get('source');
+  const source = (
+    rawSource === 'payment_backed' || rawSource === 'manual_grant'
+      ? rawSource
+      : 'all'
+  ) as 'all' | 'payment_backed' | 'manual_grant';
+
+  const expiringSoon = searchParams.get('expiringSoon') === 'true';
+
+  const rawSortBy = searchParams.get('sortBy');
+  const sortBy = (
+    rawSortBy === 'currentPeriodEnd' || rawSortBy === 'userId' || rawSortBy === 'status' || rawSortBy === 'updatedAt'
+      ? rawSortBy
+      : 'currentPeriodEnd'
+  ) as 'currentPeriodEnd' | 'userId' | 'status' | 'updatedAt';
+
+  const rawSortDir = searchParams.get('sortDir');
+  const sortDir = (rawSortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
   const limitParam = parseInt(searchParams.get('limit') || '50', 10);
+  const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
     const rawSubs = await getAdminSubscriptions({
-      userId,
-      query: userId,
+      query,
+      entitlementStatus,
+      source,
+      expiringSoon,
+      sortBy,
+      sortDir,
       limit: isNaN(limitParam) ? 50 : limitParam,
+      offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
 
     const enrichedSubs = rawSubs.map((sub) => {
       const entitlement = evaluateSubscriptionEntitlement(sub.userId, sub);
+      const isPayment =
+        sub.lastUpdatedFrom === 'manual_upi' ||
+        sub.provider === 'manual_upi' ||
+        sub.provider === 'razorpay';
+      const source: 'payment_backed' | 'manual_grant' = isPayment ? 'payment_backed' : 'manual_grant';
+
       return {
         ...sub,
+        source,
         entitlement,
       };
     });

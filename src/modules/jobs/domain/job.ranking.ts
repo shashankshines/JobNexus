@@ -872,7 +872,33 @@ export function matchesQuery(
       }
     }
 
-    // If query specified roles/skills, this job MUST match at least one role token!
+    // If direct token match did not match, check contextual mappings across roles & industries
+    if (!hasRoleMatch) {
+      const candidates = [parsed.rolePhrase, ...parsed.roleTokens].filter(Boolean);
+      for (const candidate of candidates) {
+        const contextualSynonyms = ROLE_CONTEXTUAL_MAPPINGS[candidate.toLowerCase()] || [];
+        for (const syn of contextualSynonyms) {
+          const escaped = syn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+          if (regex.test(title)) {
+            score += 12;
+            hasRoleMatch = true;
+            break;
+          } else if (tags.some((t) => regex.test(t))) {
+            score += 8;
+            hasRoleMatch = true;
+            break;
+          } else if (regex.test(desc)) {
+            score += 2;
+            hasRoleMatch = true;
+            break;
+          }
+        }
+        if (hasRoleMatch) break;
+      }
+    }
+
+    // If query specified roles/skills, this job MUST match at least one role token or contextual synonym!
     if (!hasRoleMatch) {
       return { matches: false, baseScore: 0 };
     }
@@ -902,6 +928,192 @@ export function matchesQuery(
 
   // Case 3: Empty query or stop words only
   return { matches: true, baseScore: 10 };
+}
+
+// ============================================================================
+// Comprehensive Contextual Role Mappings Across All Major Industries
+// ============================================================================
+
+export const ROLE_CONTEXTUAL_MAPPINGS: Record<string, string[]> = {
+  // Web & Frontend
+  react: ['frontend', 'front end', 'javascript', 'typescript', 'nextjs', 'next.js', 'ui developer', 'web developer', 'react native'],
+  nextjs: ['react', 'frontend', 'javascript', 'typescript', 'fullstack', 'full stack', 'web developer'],
+  vue: ['frontend', 'javascript', 'typescript', 'nuxt', 'web developer', 'ui engineer'],
+  angular: ['frontend', 'typescript', 'javascript', 'web developer', 'ui engineer'],
+  frontend: ['react', 'vue', 'angular', 'javascript', 'typescript', 'nextjs', 'ui engineer', 'web developer', 'html', 'css'],
+  
+  // Backend & Languages
+  backend: ['node', 'nodejs', 'python', 'java', 'golang', 'go', 'c#', '.net', 'rust', 'c++', 'django', 'fastapi', 'spring boot', 'express'],
+  node: ['nodejs', 'backend', 'javascript', 'typescript', 'express', 'nest', 'nestjs', 'api developer'],
+  python: ['backend', 'django', 'fastapi', 'flask', 'data science', 'machine learning', 'data engineer', 'automation'],
+  java: ['backend', 'spring', 'spring boot', 'microservices', 'enterprise', 'j2ee', 'kotlin'],
+  golang: ['backend', 'go', 'microservices', 'cloud', 'systems', 'distributed systems'],
+  'c++': ['embedded', 'systems', 'gaming', 'high frequency', 'backend', 'c/c++'],
+  rust: ['systems', 'backend', 'blockchain', 'infrastructure', 'webassembly'],
+  
+  // Full Stack
+  fullstack: ['full stack', 'frontend', 'backend', 'react', 'node', 'javascript', 'typescript', 'python', 'mern', 'mean'],
+  'full stack': ['fullstack', 'frontend', 'backend', 'react', 'node', 'web developer'],
+  
+  // Mobile
+  mobile: ['react native', 'flutter', 'ios', 'android', 'swift', 'kotlin', 'mobile developer'],
+  ios: ['swift', 'objective-c', 'mobile', 'ios developer', 'xcode'],
+  android: ['kotlin', 'java', 'mobile', 'android developer', 'android sdk'],
+  flutter: ['mobile', 'dart', 'cross-platform', 'app developer'],
+  
+  // Cloud, DevOps & Infrastructure
+  devops: ['cloud', 'aws', 'azure', 'gcp', 'kubernetes', 'k8s', 'docker', 'terraform', 'ci/cd', 'sre', 'site reliability'],
+  cloud: ['aws', 'azure', 'gcp', 'cloud architect', 'devops', 'infrastructure', 'serverless'],
+  aws: ['cloud', 'devops', 'amazon web services', 'ec2', 's3', 'lambda', 'terraform'],
+  azure: ['cloud', 'devops', 'microsoft azure', 'azure devops'],
+  sre: ['site reliability', 'devops', 'infrastructure', 'kubernetes', 'observability', 'monitoring'],
+  
+  // Data, AI & Machine Learning
+  data: ['data engineer', 'data analyst', 'data scientist', 'analytics', 'sql', 'python', 'bi', 'etl', 'big data'],
+  'data engineer': ['etl', 'spark', 'sql', 'python', 'pipeline', 'snowflake', 'databricks', 'kafka', 'bigquery', 'data'],
+  'data analyst': ['sql', 'excel', 'tableau', 'power bi', 'analytics', 'reporting', 'business intelligence', 'data'],
+  'data scientist': ['machine learning', 'python', 'statistics', 'deep learning', 'pandas', 'modeling', 'data science'],
+  ai: ['artificial intelligence', 'machine learning', 'ml', 'deep learning', 'nlp', 'llm', 'genai', 'computer vision'],
+  'machine learning': ['ml', 'ai', 'deep learning', 'pytorch', 'tensorflow', 'nlp', 'model'],
+  
+  // QA & Testing
+  qa: ['quality assurance', 'test engineer', 'automation', 'sdet', 'manual testing', 'selenium', 'cypress', 'testing'],
+  sdet: ['qa', 'test automation', 'software development engineer in test', 'selenium', 'automation testing'],
+  
+  // Cybersecurity
+  security: ['cybersecurity', 'infosec', 'penetration testing', 'soc', 'threat intelligence', 'vulnerability', 'ciso'],
+  cybersecurity: ['security', 'infosec', 'soc analyst', 'network security', 'application security'],
+  
+  // Product, Design & Management
+  product: ['product manager', 'pm', 'product owner', 'product analyst', 'product strategy'],
+  'product manager': ['pm', 'product owner', 'agile', 'scrum', 'roadmap', 'product strategy'],
+  design: ['ui', 'ux', 'product designer', 'ui/ux', 'figma', 'interaction designer', 'visual designer'],
+  'ui/ux': ['product designer', 'ux designer', 'ui designer', 'figma', 'user experience', 'design'],
+  
+  // Healthcare & Life Sciences
+  healthcare: ['medical', 'hospital', 'nurse', 'clinical', 'doctor', 'patient care', 'health', 'clinic'],
+  medical: ['healthcare', 'physician', 'doctor', 'clinical', 'radiologist', 'surgeon', 'hospital'],
+  nurse: ['nursing', 'healthcare', 'registered nurse', 'patient care', 'rn', 'clinical nurse'],
+  doctor: ['physician', 'medical officer', 'specialist', 'surgeon', 'resident', 'consultant'],
+  pharmacy: ['pharmacist', 'chemist', 'pharma', 'clinical research', 'drug safety'],
+  
+  // Education & Academics
+  education: ['teacher', 'faculty', 'professor', 'lecturer', 'instructor', 'tutor', 'trainer', 'academic'],
+  teacher: ['educator', 'instructor', 'school', 'faculty', 'teaching', 'tutor', 'curriculum'],
+  professor: ['faculty', 'assistant professor', 'lecturer', 'academic', 'research scholar'],
+  
+  // Finance, Banking & Accounting
+  finance: ['financial analyst', 'accounting', 'investment', 'banking', 'fintech', 'portfolio', 'wealth'],
+  accounting: ['accountant', 'ca', 'chartered accountant', 'audit', 'tax', 'bookkeeper', 'payroll', 'gst'],
+  ca: ['chartered accountant', 'audit', 'taxation', 'statutory audit', 'internal audit', 'accounting'],
+  banking: ['investment banking', 'retail banking', 'credit analyst', 'loan officer', 'relationship manager'],
+  
+  // Construction, Architecture & Engineering
+  construction: ['civil engineer', 'site engineer', 'project engineer', 'builder', 'structural', 'contractor'],
+  civil: ['civil engineer', 'structural engineer', 'construction', 'site supervisor', 'autocad'],
+  mechanical: ['mechanical engineer', 'design engineer', 'hvac', 'thermal', 'cad', 'manufacturing'],
+  electrical: ['electrical engineer', 'electrician', 'power systems', 'electronics', 'circuit'],
+  architecture: ['architect', 'interior designer', 'cad', 'revit', 'urban planning', 'bim'],
+  
+  // Manufacturing, Operations & Logistics
+  manufacturing: ['production engineer', 'plant manager', 'quality engineer', 'machinist', 'industrial engineer'],
+  logistics: ['supply chain', 'warehouse', 'procurement', 'inventory', 'dispatch', 'freight', 'transport'],
+  'supply chain': ['procurement', 'logistics', 'inventory management', 'sourcing', 'vendor management'],
+  
+  // HR, Admin & Operations
+  hr: ['human resources', 'recruiter', 'talent acquisition', 'people operations', 'hrbp', 'hiring', 'payroll'],
+  recruiter: ['talent acquisition', 'technical recruiter', 'sourcing', 'recruitment', 'hr executive'],
+  operations: ['operations manager', 'coo', 'business operations', 'process improvement', 'ops'],
+  
+  // Sales, Marketing & Business Development
+  sales: ['business development', 'bde', 'bdm', 'account executive', 'inside sales', 'sales executive', 'sales manager'],
+  marketing: ['digital marketing', 'growth', 'seo', 'sem', 'content marketing', 'brand manager', 'performance marketing'],
+  bde: ['business development executive', 'sales', 'lead generation', 'inside sales', 'client acquisition'],
+  
+  // Customer Support & BPO
+  support: ['customer support', 'customer service', 'technical support', 'helpdesk', 'customer success', 'bpo'],
+  customer: ['customer support', 'customer service', 'support', 'helpdesk', 'call center'],
+  service: ['customer service', 'customer support', 'client services', 'helpdesk'],
+  'customer service': ['customer support', 'call center', 'helpdesk', 'voice process', 'chat support'],
+  'customer support': ['customer service', 'helpdesk', 'technical support', 'call center', 'bpo'],
+};
+
+// ============================================================================
+// Company Normalization & Matching
+// ============================================================================
+
+export const COMPANY_ALIASES: Record<string, string[]> = {
+  tcs: ['tata consultancy services', 'tata consultancy'],
+  tata: ['tata consultancy services', 'tcs', 'tata elxsi', 'tata motors', 'tata digital'],
+  infosys: ['infosys limited', 'infy'],
+  wipro: ['wipro limited', 'wipro technologies'],
+  hcl: ['hcl technologies', 'hcltech'],
+  accenture: ['accenture solutions'],
+  cognizant: ['cognizant technology solutions', 'cts'],
+  google: ['alphabet', 'google llc', 'google cloud'],
+  meta: ['facebook', 'meta platforms'],
+  amazon: ['aws', 'amazon web services', 'amazon.com'],
+  aws: ['amazon web services', 'amazon'],
+  microsoft: ['msft', 'microsoft corporation'],
+  apple: ['apple inc.'],
+  netflix: ['netflix, inc.'],
+  uber: ['uber technologies'],
+  flipkart: ['flipkart internet'],
+  zomato: ['zomato limited', 'blinkit'],
+  swiggy: ['bundl technologies', 'swiggy'],
+  paytm: ['one97 communications', 'paytm'],
+  ola: ['ani technologies', 'ola cabs'],
+};
+
+/**
+ * Normalizes a company name by stripping legal suffixes and punctuation.
+ */
+export function normalizeCompanyName(company: string): string {
+  if (!company) return '';
+  return company
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+    .replace(/\b(inc|incorporated|corp|corporation|llc|ltd|limited|pvt|private|co|company|technologies|solutions|services|group|holdings)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Matches a job's employer against a requested company filter string.
+ * Supports exact matching, token containment, legal name variations, and alias expansions.
+ */
+export function matchesCompany(job: NormalizedJob, filterCompany?: string): boolean {
+  if (!filterCompany || !filterCompany.trim()) return true;
+  const target = filterCompany.trim().toLowerCase();
+  const rawJobCompany = (job.company || '').toLowerCase();
+
+  // 1. Direct raw check
+  if (rawJobCompany.includes(target) || target.includes(rawJobCompany)) {
+    return true;
+  }
+
+  // 2. Normalized check (without legal entity noise)
+  const normTarget = normalizeCompanyName(target);
+  const normJobComp = normalizeCompanyName(rawJobCompany);
+  if (normTarget && normJobComp) {
+    if (normJobComp.includes(normTarget) || normTarget.includes(normJobComp)) {
+      return true;
+    }
+  }
+
+  // 3. Known Company Aliases (e.g. TCS <-> Tata Consultancy Services, AWS <-> Amazon, Meta <-> Facebook)
+  for (const [key, aliases] of Object.entries(COMPANY_ALIASES)) {
+    const allGroupNames = [key, ...aliases].map((n) => normalizeCompanyName(n));
+    const targetInGroup = allGroupNames.some((n) => normTarget === n || normTarget.includes(n) || n.includes(normTarget));
+    if (targetInGroup) {
+      const jobInGroup = allGroupNames.some((n) => normJobComp === n || normJobComp.includes(n) || n.includes(normJobComp));
+      if (jobInGroup) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function matchesRemote(job: NormalizedJob, filterRemote?: string): boolean {
@@ -971,6 +1183,7 @@ export function filterAndRankJobs(
   params: JobSearchParams
 ): NormalizedJob[] {
   const query = params.query || '';
+  const company = params.company || '';
   const location = params.location || '';
   const type = params.type || '';
   const level = params.level || '';
@@ -986,22 +1199,30 @@ export function filterAndRankJobs(
     const queryResult = matchesQuery(job, query);
     if (!queryResult.matches) continue;
 
-    // 2. Check location (City, Country, Region, Synonyms, Compound parts)
+    // 2. Check company filter
+    if (!matchesCompany(job, company)) continue;
+
+    // 3. Check location (City, Country, Region, Synonyms, Compound parts)
     if (!matchesLocation(job, location)) continue;
 
-    // 3. Check remote / workplace model
+    // 4. Check remote / workplace model
     if (!matchesRemote(job, remote)) continue;
 
-    // 4. Check employment type
+    // 5. Check employment type
     if (!matchesType(job, type)) continue;
 
-    // 5. Check seniority level
+    // 6. Check seniority level
     if (!matchesLevel(job, level)) continue;
 
-    // 6. Check industry taxonomy
+    // 7. Check industry taxonomy
     if (!matchesIndustry(job, industry)) continue;
 
     let score = queryResult.baseScore;
+
+    // Company filter match boost
+    if (company && matchesCompany(job, company)) {
+      score += 25;
+    }
 
     // Bounded location boost when explicit location filter is set
     if (location && matchesLocation(job, location)) {

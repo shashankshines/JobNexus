@@ -45,6 +45,7 @@ export async function GET(request: Request) {
     }
 
     const query = searchParams.get('query') || '';
+    const company = searchParams.get('company') || '';
     const location = searchParams.get('location') || '';
     const type = searchParams.get('type') || '';
     const level = searchParams.get('level') || '';
@@ -55,6 +56,7 @@ export async function GET(request: Request) {
     // Step 1: Execute server-side job aggregation, deduplication, and ranking on raw data
     const result = await searchService.searchJobs({
       query,
+      company,
       location,
       type,
       level,
@@ -96,7 +98,7 @@ export async function GET(request: Request) {
         count: shapedJobs.length,
         sources: isAuthenticated ? result.sources : [],
         diagnostics: isAuthenticated ? result.diagnostics : undefined,
-        externalDiscovery: buildExternalPlatformSearchLinks({ query, location }),
+        externalDiscovery: buildExternalPlatformSearchLinks({ query, company, location }),
       },
       {
         headers: responseHeaders,

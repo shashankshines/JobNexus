@@ -32,6 +32,7 @@ import {
   Check,
   ArrowDown,
   Home as HomeIcon,
+  Building2,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
@@ -44,6 +45,7 @@ import { useElapsedJobCounter } from '@/modules/jobs/hooks/useElapsedJobCounter'
 import {
   isValidApplicationUrl,
   getFallbackApplicationUrl,
+  isCompanyMasked,
 } from '@/modules/jobs/domain/job.masking';
 import {
   getSuggestions,
@@ -206,7 +208,6 @@ const INDUSTRY_OPTIONS = [
 export default function Home() {
   const {
     user,
-    isAdmin,
     isAuthenticated,
     authStatus,
     isHydrated,
@@ -229,6 +230,13 @@ export default function Home() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+
+  // Admin UI visibility strictly locked to designated administrator
+  const isDesignatedAdmin = Boolean(
+    isAuthenticated &&
+    user &&
+    user.email?.toLowerCase().trim() === 'shashankshines@gmail.com'
+  );
 
   const handleCancelSubscription = async () => {
     if (
@@ -260,6 +268,7 @@ export default function Home() {
     showToast('Welcome to JobNexus Premium! Your subscription is active.', 'success');
   }, [refreshEntitlement, showToast]);
   const [query, setQuery] = useState('');
+  const [company, setCompany] = useState('');
   const [location, setLocation] = useState('');
   const [type, setType] = useState('');
   const [level, setLevel] = useState('');
@@ -291,6 +300,8 @@ export default function Home() {
   const [industry, setIndustry] = useState('');
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
   const [showIndustryDropdown, setShowIndustryDropdown] = useState(false);
   const [showWorkplaceDropdown, setShowWorkplaceDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
@@ -301,6 +312,7 @@ export default function Home() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const headerWrapperRef = useRef<HTMLDivElement>(null);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
+  const companyDropdownRef = useRef<HTMLDivElement>(null);
   const industryDropdownRef = useRef<HTMLDivElement>(null);
   const workplaceDropdownRef = useRef<HTMLDivElement>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
@@ -316,13 +328,15 @@ export default function Home() {
       searchLevel = level,
       roleCategory = selectedRole,
       searchRemote = remote,
-      searchIndustry = industry
+      searchIndustry = industry,
+      searchCompany = company
     ) => {
       setLoading(true);
       setSearched(true);
       setShowJobDropdown(false);
       setShowLocDropdown(false);
       setShowRoleDropdown(false);
+      setShowCompanyDropdown(false);
       setShowIndustryDropdown(false);
       setShowWorkplaceDropdown(false);
       setShowTypeDropdown(false);
@@ -332,6 +346,7 @@ export default function Home() {
         const params = new URLSearchParams();
         const effectiveQuery = [searchQuery, roleCategory].filter(Boolean).join(' ').trim();
         if (effectiveQuery) params.append('query', effectiveQuery);
+        if (searchCompany) params.append('company', searchCompany);
         if (searchLoc) params.append('location', searchLoc);
         if (searchType) params.append('type', searchType);
         if (searchLevel) params.append('level', searchLevel);
@@ -414,11 +429,12 @@ export default function Home() {
         setLoading(false);
       }
     },
-    [query, location, type, level, selectedRole, remote, industry, syncFromJobsCount]
+    [query, company, location, type, level, selectedRole, remote, industry, syncFromJobsCount]
   );
 
   const resetToDiscovery = useCallback(() => {
     setQuery('');
+    setCompany('');
     setLocation('');
     setType('');
     setLevel('');
@@ -428,6 +444,7 @@ export default function Home() {
     setSortBy('relevance');
     setActiveView('all');
     setShowRoleDropdown(false);
+    setShowCompanyDropdown(false);
     setShowIndustryDropdown(false);
     setShowWorkplaceDropdown(false);
     setShowTypeDropdown(false);
@@ -435,6 +452,7 @@ export default function Home() {
     setShowJobDropdown(false);
     setShowLocDropdown(false);
     setRoleSearchQuery('');
+    setCompanySearchQuery('');
     setJobs([]);
     setSearched(false);
     setVisibleCount(JOBS_BATCH_SIZE);
@@ -611,6 +629,9 @@ export default function Home() {
       if (roleDropdownRef.current && !roleDropdownRef.current.contains(target)) {
         setShowRoleDropdown(false);
       }
+      if (companyDropdownRef.current && !companyDropdownRef.current.contains(target)) {
+        setShowCompanyDropdown(false);
+      }
       if (industryDropdownRef.current && !industryDropdownRef.current.contains(target)) {
         setShowIndustryDropdown(false);
       }
@@ -742,6 +763,31 @@ export default function Home() {
     [industry]
   );
 
+  const handleSelectCompany = useCallback(
+    (selectedComp: string) => {
+      setCompany(selectedComp);
+      setShowCompanyDropdown(false);
+      executeSearch(query, location, type, level, selectedRole, remote, industry, selectedComp);
+    },
+    [query, location, type, level, selectedRole, remote, industry, executeSearch]
+  );
+
+  const availableCompanies = useMemo(() => {
+    const compSet = new Set<string>();
+    for (const j of jobs) {
+      if (j.company && !isCompanyMasked(j.company)) {
+        compSet.add(j.company.trim());
+      }
+    }
+    return Array.from(compSet).sort((a, b) => a.localeCompare(b));
+  }, [jobs]);
+
+  const filteredCompanies = useMemo(() => {
+    if (!companySearchQuery.trim()) return availableCompanies;
+    const q = companySearchQuery.toLowerCase().trim();
+    return availableCompanies.filter((c) => c.toLowerCase().includes(q));
+  }, [availableCompanies, companySearchQuery]);
+
   const handleWorkplaceCategoryClick = (categoryRemoteParam: string) => {
     setRemote(categoryRemoteParam);
     executeSearch(query, location, type, level, selectedRole, categoryRemoteParam);
@@ -761,6 +807,7 @@ export default function Home() {
 
   const clearAllFilters = () => {
     setQuery('');
+    setCompany('');
     setLocation('');
     setType('');
     setLevel('');
@@ -768,12 +815,14 @@ export default function Home() {
     setRemote('');
     setIndustry('');
     setShowRoleDropdown(false);
+    setShowCompanyDropdown(false);
     setShowIndustryDropdown(false);
     setShowWorkplaceDropdown(false);
     setShowTypeDropdown(false);
     setShowLevelDropdown(false);
     setRoleSearchQuery('');
-    executeSearch('', '', '', '', '', '', '');
+    setCompanySearchQuery('');
+    executeSearch('', '', '', '', '', '', '', '');
   };
 
   // Client-side instant sorting & activeView filtering
@@ -798,7 +847,7 @@ export default function Home() {
     }
     setIsLoadingMore(false);
     setVisibleCount(JOBS_BATCH_SIZE);
-  }, [query, location, type, level, selectedRole, remote, industry, sortBy, activeView, jobs]);
+  }, [query, company, location, type, level, selectedRole, remote, industry, sortBy, activeView, jobs]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -873,23 +922,16 @@ export default function Home() {
     };
   }, [hasMore, loading, loadMore]);
 
-  // Sticky Header Scroll-State IntersectionObserver (Modern Web Guidance fallback)
+  // Fixed Header Scroll-State Elevation (glass tint on scroll)
   useEffect(() => {
-    const node = headerWrapperRef.current;
-    if (!node) return;
+    const handleScroll = () => {
+      const isScrolled = window.scrollY > 8;
+      headerWrapperRef.current?.classList.toggle('is-stuck', isScrolled);
+    };
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        node.classList.toggle('is-stuck', entry.boundingClientRect.top <= 14);
-      },
-      {
-        threshold: [1],
-        rootMargin: '-13px 0px 0px 0px',
-      }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
   }, [isHydrated]);
 
   if (!isHydrated) {
@@ -1112,15 +1154,15 @@ export default function Home() {
               {/* Authenticated State: Saved Jobs button + User Profile Dropdown */}
               {isAuthenticated && user && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  {/* Dedicated Admin Console Direct Access Button */}
-                  {(isAdmin || user.isAdmin || user.email?.toLowerCase() === 'shashankshines@gmail.com') && (
+                  {/* Dedicated Admin Console Direct Access Button — strictly visible only to shashankshines@gmail.com */}
+                  {isDesignatedAdmin && (
                     <Link
                       href="/admin"
                       title="Open JobNexus Admin Console"
                       className="site-header-btn-admin"
                     >
                       <ShieldCheck size={14} className="admin-btn-icon" />
-                      <span>Admin Console</span>
+                      <span className="admin-btn-text">Admin Console</span>
                       <span className="admin-live-dot" title="Console Operational" />
                     </Link>
                   )}
@@ -1210,7 +1252,7 @@ export default function Home() {
                             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
                               {user.email}
                             </div>
-                            {(isAdmin || user.isAdmin || user.email?.toLowerCase() === 'shashankshines@gmail.com') ? (
+                            {isDesignatedAdmin ? (
                               <span className="user-dropdown-admin-badge">
                                 <ShieldCheck size={12} style={{ flexShrink: 0 }} />
                                 <span>Administrator</span>
@@ -1300,7 +1342,7 @@ export default function Home() {
                               <ChevronRight size={14} className="dropdown-item-arrow" />
                             </button>
 
-                            {(isAdmin || user.isAdmin || user.provider === 'google' || user.email?.toLowerCase() === 'shashankshines@gmail.com') && (
+                            {isDesignatedAdmin && (
                               <Link
                                 href="/admin"
                                 onClick={() => setIsUserMenuOpen(false)}
@@ -1356,9 +1398,10 @@ export default function Home() {
             </div>
           </header>
         </div>
+        <div className="site-header-spacer" aria-hidden="true" />
 
         {/* Hero Section */}
-        <section style={{ margin: '3.2rem 0 2rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
+        <section style={{ margin: '1.5rem 0 2rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <motion.div
             key={searched ? `hero-searched-${displayedJobs.length}` : `hero-total-${formattedCount}`}
             initial={{ opacity: 0, y: -8 }}
@@ -1464,7 +1507,7 @@ export default function Home() {
                       padding: '0.62rem 0.85rem',
                       borderRadius: 10,
                       fontSize: '0.86rem',
-                      fontWeight: isActive ? 600 : 500,
+                      fontWeight: 600,
                       cursor: 'pointer',
                       border: '1px solid transparent',
                       background: 'transparent',
@@ -2172,6 +2215,229 @@ export default function Home() {
                 </AnimatePresence>
               </div>
 
+              {/* Company Custom Dropdown */}
+              <div
+                ref={companyDropdownRef}
+                className="search-refinement-company"
+                style={{
+                  position: 'relative',
+                  flex: '1.1',
+                  minWidth: 155,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCompanyDropdown((prev) => !prev);
+                    setShowRoleDropdown(false);
+                    setShowIndustryDropdown(false);
+                    setShowWorkplaceDropdown(false);
+                    setShowTypeDropdown(false);
+                    setShowLevelDropdown(false);
+                  }}
+                  aria-expanded={showCompanyDropdown}
+                  aria-haspopup="listbox"
+                  aria-label="Filter by company"
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.4rem',
+                    background: 'var(--input-bg)',
+                    borderRadius: 10,
+                    padding: '0.62rem 0.75rem',
+                    border: showCompanyDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
+                    boxShadow: showCompanyDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
+                    color: company ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontSize: '0.85rem',
+                    fontWeight: company ? 600 : 400,
+                    cursor: 'pointer',
+                    outline: 'none',
+                    transition: 'all 0.2s ease',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden', minWidth: 0 }}>
+                    <Building2 size={15} color={company ? 'var(--primary-start)' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {company || 'All Companies'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                    {company && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCompany('');
+                          executeSearch(query, location, type, level, selectedRole, remote, industry, '');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setCompany('');
+                            executeSearch(query, location, type, level, selectedRole, remote, industry, '');
+                          }
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          padding: 2,
+                          borderRadius: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: 'var(--text-secondary)',
+                        }}
+                        title="Clear company filter"
+                      >
+                        <X size={13} />
+                      </span>
+                    )}
+                    <ChevronDown
+                      size={14}
+                      color="var(--text-secondary)"
+                      style={{
+                        transform: showCompanyDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                        flexShrink: 0,
+                      }}
+                    />
+                  </div>
+                </button>
+
+                <AnimatePresence>
+                  {showCompanyDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      className="glass-panel dropdown-popover-right"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        width: 'max-content',
+                        minWidth: 'max(100%, 260px)',
+                        maxWidth: 'calc(100vw - 32px)',
+                        maxHeight: 320,
+                        overflowY: 'auto',
+                        zIndex: 250,
+                        background: 'var(--dropdown-bg)',
+                        borderRadius: 12,
+                        border: '1px solid var(--border)',
+                        boxShadow: 'var(--shadow-lg)',
+                        padding: '0.4rem 0',
+                      }}
+                    >
+                      {availableCompanies.length > 5 && (
+                        <div style={{ padding: '0.35rem 0.65rem 0.5rem', borderBottom: '1px solid var(--border)' }}>
+                          <input
+                            type="text"
+                            placeholder="Search employer..."
+                            value={companySearchQuery}
+                            onChange={(e) => setCompanySearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              width: '100%',
+                              padding: '0.45rem 0.65rem',
+                              borderRadius: 8,
+                              background: 'var(--input-bg)',
+                              border: '1px solid var(--border)',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.8rem',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* All Companies option */}
+                      <div
+                        onClick={() => {
+                          setCompany('');
+                          setShowCompanyDropdown(false);
+                          setCompanySearchQuery('');
+                          executeSearch(query, location, type, level, selectedRole, remote, industry, '');
+                        }}
+                        style={{
+                          padding: '0.62rem 0.95rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '0.5rem',
+                          fontSize: '0.84rem',
+                          color: company === '' ? 'var(--primary-start)' : 'var(--text-primary)',
+                          fontWeight: company === '' ? 600 : 400,
+                          background: company === '' ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                          transition: 'background 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (company !== '') e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (company !== '') e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                          <Building2 size={14} color={company === '' ? 'var(--primary-start)' : 'var(--text-secondary)'} />
+                          <span>All Companies</span>
+                        </div>
+                        {company === '' && <Check size={14} color="var(--primary-start)" />}
+                      </div>
+
+                      {filteredCompanies.length === 0 ? (
+                        <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                          No companies found matching &quot;{companySearchQuery}&quot;
+                        </div>
+                      ) : (
+                        filteredCompanies.map((compName) => {
+                          const isSelected = company.toLowerCase() === compName.toLowerCase();
+                          return (
+                            <div
+                              key={compName}
+                              onClick={() => {
+                                handleSelectCompany(compName);
+                              }}
+                              style={{
+                                padding: '0.55rem 0.95rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.5rem',
+                                fontSize: '0.84rem',
+                                color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
+                                fontWeight: isSelected ? 600 : 400,
+                                background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                                transition: 'background 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', overflow: 'hidden', minWidth: 0 }}>
+                                <Building2 size={13} color={isSelected ? 'var(--primary-start)' : 'var(--text-secondary)'} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {compName}
+                                </span>
+                              </div>
+                              {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
+                            </div>
+                          );
+                        })
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               {/* Industry Custom Dropdown */}
               <div
                 ref={industryDropdownRef}
@@ -2796,7 +3062,7 @@ export default function Home() {
               </div>
 
               {/* Clear Filters CTA if active */}
-              {(query || location || remote || selectedRole || type || level || industry) && (
+              {(query || company || location || remote || selectedRole || type || level || industry) && (
                 <button
                   type="button"
                   onClick={clearAllFilters}
@@ -2822,7 +3088,7 @@ export default function Home() {
             </div>
 
             {/* Active Filter Chips Bar */}
-            {(query || location || remote || selectedRole || type || level || industry) && (
+            {(query || company || location || remote || selectedRole || type || level || industry) && (
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2859,10 +3125,41 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setQuery('');
-                        executeSearch('', location, type, level, selectedRole, remote);
+                        executeSearch('', location, type, level, selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove keyword filter"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {company && (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.22rem 0.6rem',
+                      borderRadius: 9999,
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      color: '#10b981',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Building2 size={11} />
+                    <span>{company}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCompany('');
+                        executeSearch(query, location, type, level, selectedRole, remote, industry, '');
+                      }}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
+                      title="Remove company filter"
                     >
                       <X size={12} />
                     </button>
@@ -3353,7 +3650,12 @@ export default function Home() {
                   }}
                 >
                   {visibleJobs.map((job, index) => (
-                    <JobCard key={job.id || `saved-${index}`} job={job} index={index} />
+                    <JobCard
+                      key={job.id || `saved-${index}`}
+                      job={job}
+                      index={index}
+                      onSelectCompany={handleSelectCompany}
+                    />
                   ))}
                 </div>
 
@@ -3495,7 +3797,12 @@ export default function Home() {
                 }}
               >
                 {visibleJobs.map((job, index) => (
-                  <JobCard key={job.id || `job-${index}`} job={job} index={index} />
+                  <JobCard
+                    key={job.id || `job-${index}`}
+                    job={job}
+                    index={index}
+                    onSelectCompany={handleSelectCompany}
+                  />
                 ))}
               </div>
 

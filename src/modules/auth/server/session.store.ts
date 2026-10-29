@@ -83,8 +83,25 @@ const rateLimitMap = globalForAuth.__jobnexus_auth_registry.rateLimitMap;
 export function extractSessionId(request?: Request | null): string | null {
   if (!request) return null;
 
+  // 0. NextRequest / Web Request cookies object
+  const anyReq = request as { cookies?: { get?: (name: string) => { value?: string } | string | undefined } };
+  if (anyReq.cookies && typeof anyReq.cookies.get === 'function') {
+    const c = anyReq.cookies.get(SESSION_COOKIE_NAME);
+    const val = typeof c === 'string' ? c : c?.value;
+    if (val && typeof val === 'string' && val.trim()) {
+      const clean = val.trim().replace(/^"|"$/g, '');
+      if (clean) {
+        try {
+          return decodeURIComponent(clean);
+        } catch {
+          return clean;
+        }
+      }
+    }
+  }
+
   // 1. Check HTTP-only cookie
-  const cookieHeader = request.headers.get('cookie') || '';
+  const cookieHeader = request.headers?.get ? request.headers.get('cookie') || '' : '';
   if (cookieHeader) {
     const cookies = cookieHeader.split(';');
     for (const cookie of cookies) {
@@ -105,8 +122,8 @@ export function extractSessionId(request?: Request | null): string | null {
   }
 
   // 2. Check Authorization Bearer header
-  const authHeader = request.headers.get('authorization') || '';
-  if (authHeader.startsWith('Bearer ')) {
+  const authHeader = request.headers?.get ? request.headers.get('authorization') || '' : '';
+  if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7).trim();
     if (token) return token;
   }
@@ -178,9 +195,11 @@ export function validateSession(sessionId: string | null | undefined): {
     return { valid: false, error: 'Session expired' };
   }
 
-  const user = users.get(session.userId);
+  let user = users.get(session.userId);
   if (!user) {
-    sessions.delete(sessionId);
+    user = getUserByEmail(session.userId) || undefined;
+  }
+  if (!user) {
     return { valid: false, error: 'User not found' };
   }
 
@@ -450,6 +469,13 @@ export function getUserByEmail(email: string): UserRecord | null {
   const mapping = usersByEmail.get(cleanEmail);
   if (!mapping) return null;
   return users.get(mapping.userId) || null;
+}
+
+/**
+ * Returns all registered users from the store.
+ */
+export function getAllUsers(): UserRecord[] {
+  return Array.from(users.values());
 }
 
 /**

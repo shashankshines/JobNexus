@@ -49,6 +49,7 @@ export class JobSearchService {
   }> {
     const isUnfiltered =
       !params.query &&
+      !params.company &&
       !params.location &&
       !params.type &&
       !params.level &&
@@ -129,7 +130,7 @@ export class JobSearchService {
   }
 
   async searchJobs(params: JobSearchParams): Promise<JobSearchResponse> {
-    const cacheKey = `${params.query || ''}::${params.location || ''}::${params.type || ''}::${params.level || ''}::${params.remote || ''}::${params.industry || ''}::${params.limit || ''}`;
+    const cacheKey = `${params.query || ''}::${params.company || ''}::${params.location || ''}::${params.type || ''}::${params.level || ''}::${params.remote || ''}::${params.industry || ''}::${params.limit || ''}`;
 
     if (!this.isCustom) {
       const cached = JobSearchService.searchCache.get(cacheKey);

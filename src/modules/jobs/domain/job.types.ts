@@ -27,6 +27,7 @@ export interface NormalizedJob {
 
 export interface JobSearchParams {
   query?: string;
+  company?: string;
   location?: string;
   type?: string;
   level?: string;

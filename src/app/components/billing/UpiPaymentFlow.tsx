@@ -19,6 +19,7 @@ import {
   AlertCircle,
   AlertOctagon,
   X,
+  Mail,
 } from 'lucide-react';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 import { buildUpiPaymentUri } from './upi-payment-uri';
@@ -62,6 +63,7 @@ export function UpiPaymentFlow({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ utr?: string; date?: string }>({});
   const [copySuccess, setCopySuccess] = useState(false);
+  const [emailDeliveryNotice, setEmailDeliveryNotice] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Check Existing Status on Mount / Open
@@ -296,6 +298,11 @@ export function UpiPaymentFlow({
 
       if (data.submission) {
         setSubmission(data.submission);
+        if (data.emailStatus?.status === 'sent') {
+          setEmailDeliveryNotice('A payment submission acknowledgement email has been dispatched to your registered address.');
+        } else if (data.emailStatus?.status === 'pending' || data.emailStatus?.status === 'retryable_failure') {
+          setEmailDeliveryNotice('Payment reference recorded. Confirmation email delivery is queued.');
+        }
         setStep('status_view');
       } else {
         throw new Error('Invalid response from submission service.');
@@ -1364,6 +1371,27 @@ export function UpiPaymentFlow({
                 This is an estimated administrative review target window, not an automatic timer. Premium access activates in the system only after an authorized billing administrator independently verifies bank records and records approval. Refreshing or waiting does not trigger automatic activation.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Email Delivery Acknowledgement Callout */}
+        {emailDeliveryNotice && (
+          <div
+            style={{
+              margin: '0 2rem 1rem 2rem',
+              padding: '0.75rem 1rem',
+              borderRadius: 12,
+              background: 'rgba(99, 102, 241, 0.1)',
+              border: '1px solid rgba(129, 140, 248, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              fontSize: '0.78rem',
+              color: '#c7d2fe',
+            }}
+          >
+            <Mail size={16} style={{ color: '#818cf8', flexShrink: 0 }} />
+            <span>{emailDeliveryNotice}</span>
           </div>
         )}
 

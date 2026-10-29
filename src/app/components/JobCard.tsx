@@ -69,9 +69,10 @@ interface JobCardProps {
     category?: string;
   };
   index: number;
+  onSelectCompany?: (company: string) => void;
 }
 
-function JobCardComponent({ job, index }: JobCardProps) {
+function JobCardComponent({ job, index, onSelectCompany }: JobCardProps) {
   const { isAuthenticated, isJobSaved, toggleSaveJob, openAuthModal, showToast } = useAuth();
   const [copied, setCopied] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>(job.url || '');
@@ -378,8 +379,21 @@ function JobCardComponent({ job, index }: JobCardProps) {
         <h3 className={styles.title}>{job.title}</h3>
         {isAuthenticated ? (
           <div
-            className={styles.company}
-            title={displayedCompany ? `Company: ${displayedCompany}` : 'Company'}
+            className={`${styles.company} ${onSelectCompany && displayedCompany && !isCompanyMasked(displayedCompany) ? styles.companyClickable : ''}`}
+            onClick={() => {
+              if (onSelectCompany && displayedCompany && !isCompanyMasked(displayedCompany)) {
+                onSelectCompany(displayedCompany);
+              }
+            }}
+            role={onSelectCompany && displayedCompany && !isCompanyMasked(displayedCompany) ? 'button' : undefined}
+            tabIndex={onSelectCompany && displayedCompany && !isCompanyMasked(displayedCompany) ? 0 : undefined}
+            onKeyDown={(e) => {
+              if (onSelectCompany && displayedCompany && !isCompanyMasked(displayedCompany) && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onSelectCompany(displayedCompany);
+              }
+            }}
+            title={displayedCompany ? (onSelectCompany && !isCompanyMasked(displayedCompany) ? `Click to filter jobs at ${displayedCompany}` : `Company: ${displayedCompany}`) : 'Company'}
             aria-label={displayedCompany ? `Company: ${displayedCompany}` : 'Company'}
           >
             <span className={styles.companyIconWrapper}>

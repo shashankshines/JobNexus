@@ -13,7 +13,12 @@ import {
   UtrReservationDocument,
 } from './collections';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
-import { getUserById } from '@/modules/auth/server/session.store';
+import { getUserById, getAllUsers } from '@/modules/auth/server/session.store';
+import { evaluateSubscriptionEntitlement } from '@/modules/billing/services/entitlement.service';
+import {
+  sendPaymentApprovalNotification,
+  sendPaymentRejectionNotification,
+} from '@/modules/email/email.service';
 
 // ============================================================================
 // Types & Domain Errors
@@ -30,6 +35,106 @@ export interface AdminOverviewMetrics {
   totalApprovedCount: number;
   totalRejectedCount: number;
   totalAuditLogsCount: number;
+  // Phase 2B.3C Financial & Subscriber Metrics
+  verifiedRevenueInr: number;
+  pendingClaimedRevenueInr: number;
+  paymentBackedSubscribersCount: number;
+  manualGrantSubscribersCount: number;
+  expiringSoonCount: number;
+}
+
+export interface User360Identity {
+  userId: string;
+  email: string | null;
+  name: string | null;
+  provider: string | null;
+  createdAt: string | null;
+  isEmailVerified: boolean;
+  status: string;
+}
+
+export interface User360Subscription {
+  status: string;
+  planId: string;
+  source: 'payment_backed' | 'manual_grant' | 'unknown';
+  updateOrigin?: string;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  isPremium: boolean;
+  isEntitled: boolean;
+  entitlementStatus: string;
+  remainingDays: number;
+  gracePeriod: boolean;
+  notes?: string;
+}
+
+export interface User360TimelineEvent {
+  id: string;
+  timestamp: string;
+  category: 'order' | 'submission' | 'approval' | 'rejection' | 'subscription' | 'admin_action';
+  action: string;
+  summary: string;
+  actor: string;
+  details?: Record<string, unknown>;
+  badgeColor?: 'emerald' | 'amber' | 'rose' | 'indigo' | 'slate';
+}
+
+export interface User360Dossier {
+  identity: User360Identity;
+  subscription: User360Subscription | null;
+  orders: PaymentOrderDocument[];
+  submissions: SubmissionWithOrder[];
+  auditLogs: AdminAuditLogDocument[];
+  timeline: User360TimelineEvent[];
+}
+
+export interface PaymentLedgerItem {
+  id: string;
+  orderId: string;
+  submissionId?: string;
+  userId: string;
+  userEmail?: string;
+  amount: number;
+  currency: string;
+  utr?: string;
+  status: 'verified' | 'pending' | 'rejected' | 'unsubmitted' | 'expired';
+  orderCreatedAt: string;
+  paymentDate?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  decisionReason?: string;
+  verificationNotes?: string;
+  upiIdSnapshot?: string;
+  isOrphan?: boolean;
+  isDuplicateUtr?: boolean;
+  source: 'payment';
+}
+
+export interface PaymentLedgerSummary {
+  verifiedPaymentAmountInr: number;
+  verifiedRevenueInr: number; // Backward-compatible alias
+  pendingClaimedAmountInr: number;
+  pendingClaimedRevenueInr: number; // Backward-compatible alias
+  rejectedClaimedAmountInr: number;
+  totalOrdersCount: number;
+  verifiedPaymentsCount: number;
+  pendingSubmissionsCount: number;
+  rejectedSubmissionsCount: number;
+  unsubmittedOrdersCount: number;
+  expiredOrdersCount: number;
+  manualGrantsExcludedCount: number;
+  unresolvedReviewCount: number;
+  refundPolicyNote: string;
+}
+
+export interface PaymentLedgerFilter {
+  status?: 'all' | 'verified' | 'pending' | 'rejected' | 'unsubmitted' | 'expired';
+  query?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export class SubmissionNotFoundError extends Error {
@@ -80,11 +185,13 @@ export async function getAdminOverview(): Promise<AdminOverviewMetrics> {
   let slaBreachCount = 0;
   let totalApprovedCount = 0;
   let totalRejectedCount = 0;
+  let pendingClaimedRevenueInr = 0;
 
   for (const doc of submissionsSnap.docs) {
     const data = doc.data();
     if (data.status === 'pending_verification') {
       pendingCount++;
+      pendingClaimedRevenueInr += Number(data.declaredAmount) || 499;
       const deadline = new Date(data.slaDeadlineAt).getTime();
       if (!isNaN(deadline) && deadline < now) {
         slaBreachCount++;
@@ -97,15 +204,35 @@ export async function getAdminOverview(): Promise<AdminOverviewMetrics> {
   }
 
   let activeSubscribersCount = 0;
+  let paymentBackedSubscribersCount = 0;
+  let manualGrantSubscribersCount = 0;
+  let expiringSoonCount = 0;
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
   for (const doc of subscriptionsSnap.docs) {
     const data = doc.data();
     if (data.status === 'active') {
       const endMs = new Date(data.currentPeriodEnd).getTime();
       if (!isNaN(endMs) && endMs > now) {
         activeSubscribersCount++;
+        if (
+          data.lastUpdatedFrom === 'manual_upi' ||
+          data.provider === 'manual_upi' ||
+          data.provider === 'razorpay'
+        ) {
+          paymentBackedSubscribersCount++;
+        } else {
+          manualGrantSubscribersCount++;
+        }
+        if (endMs <= now + sevenDaysMs) {
+          expiringSoonCount++;
+        }
       }
     }
   }
+
+  // Authoritative verified revenue: approved payment count * ₹499
+  const verifiedRevenueInr = totalApprovedCount * 499;
 
   return {
     pendingCount,
@@ -114,6 +241,11 @@ export async function getAdminOverview(): Promise<AdminOverviewMetrics> {
     totalApprovedCount,
     totalRejectedCount,
     totalAuditLogsCount: auditLogsSnap.size,
+    verifiedRevenueInr,
+    pendingClaimedRevenueInr,
+    paymentBackedSubscribersCount,
+    manualGrantSubscribersCount,
+    expiringSoonCount,
   };
 }
 
@@ -157,7 +289,18 @@ export async function getAdminSubmissions(filter?: {
       }
 
       const localUser = getUserById(sub.userId);
-      const userEmail = sub.userEmail || order?.userEmail || localUser?.email || undefined;
+      let userEmail = sub.userEmail || order?.userEmail || localUser?.email || undefined;
+
+      if (!userEmail) {
+        try {
+          const subDocSnap = await getSubscriptionsCollection().doc(sub.userId).get();
+          if (subDocSnap.exists && subDocSnap.data()?.userEmail) {
+            userEmail = subDocSnap.data()!.userEmail;
+          }
+        } catch {
+          // fallback ignore
+        }
+      }
 
       return {
         ...sub,
@@ -210,7 +353,7 @@ export async function approvePaymentSubmissionInTransaction(params: {
   const subscriptionsCol = getSubscriptionsCollection();
   const auditLogsCol = getAuditLogsCollection();
 
-  return await db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     // 1. Fetch submission document
     const submissionRef = submissionsCol.doc(submissionId);
     const submissionSnap = await transaction.get(submissionRef);
@@ -406,6 +549,25 @@ export async function approvePaymentSubmissionInTransaction(params: {
       subscription: updatedSubscription,
     };
   });
+
+  // Trigger Event B: Transactional Payment Approval Email
+  if (!result.idempotent) {
+    try {
+      await sendPaymentApprovalNotification({
+        userId: result.submission.userId,
+        orderId: result.submission.orderId,
+        submissionId: result.submission.submissionId,
+        userEmail: result.subscription.userEmail || result.submission.userEmail,
+        amountInr: 499,
+        currentPeriodStart: result.subscription.currentPeriodStart,
+        currentPeriodEnd: result.subscription.currentPeriodEnd,
+      });
+    } catch (emailErr) {
+      console.error('[AdminBilling] Approval email failed to dispatch:', emailErr);
+    }
+  }
+
+  return result;
 }
 
 // ============================================================================
@@ -444,7 +606,7 @@ export async function rejectPaymentSubmissionInTransaction(params: {
   const reservationsCol = getUtrReservationsCollection();
   const auditLogsCol = getAuditLogsCollection();
 
-  return await db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     // 1. All Reads: Read submission document
     const submissionRef = submissionsCol.doc(submissionId);
     const submissionSnap = await transaction.get(submissionRef);
@@ -544,6 +706,25 @@ export async function rejectPaymentSubmissionInTransaction(params: {
       submission: updatedSubmission,
     };
   });
+
+  // Trigger Event C: Transactional Payment Rejection Email
+  if (!result.idempotent) {
+    try {
+      await sendPaymentRejectionNotification({
+        userId: result.submission.userId,
+        orderId: result.submission.orderId,
+        submissionId: result.submission.submissionId,
+        userEmail: result.submission.userEmail,
+        maskedUtr: result.submission.utrNumber,
+        rejectionReason: result.submission.decisionReason || trimmedReason,
+        submittedAt: result.submission.submittedAt,
+      });
+    } catch (emailErr) {
+      console.error('[AdminBilling] Rejection email failed to dispatch:', emailErr);
+    }
+  }
+
+  return result;
 }
 
 // ============================================================================
@@ -974,18 +1155,487 @@ export async function adminRevokeSubscriptionInTransaction(params: {
 }
 
 // ============================================================================
+// User 360° Profile Dossier Query
+// ============================================================================
+
+export async function getUser360Profile(userIdOrEmail: string): Promise<User360Dossier> {
+  const normalized = (userIdOrEmail || '').trim().toLowerCase();
+  if (!normalized) {
+    throw new Error('User ID or email is required to retrieve User 360 profile.');
+  }
+
+  // 1. Resolve canonical user record
+  let user = getUserById(userIdOrEmail);
+  if (!user) {
+    const all = getAllUsers();
+    user = all.find(
+      (u) =>
+        u.id.toLowerCase() === normalized ||
+        u.email?.toLowerCase() === normalized
+    ) || null;
+  }
+
+  const resolvedUserId = user?.id || userIdOrEmail;
+  const resolvedEmail = user?.email || (userIdOrEmail.includes('@') ? userIdOrEmail : null);
+
+  // 2. Fetch subscription
+  const subscriptionsCol = getSubscriptionsCollection();
+  let subscriptionDoc: SubscriptionDocument | null = null;
+  try {
+    const subSnap = await subscriptionsCol.doc(resolvedUserId).get();
+    if (subSnap.exists) {
+      subscriptionDoc = subSnap.data() || null;
+    }
+  } catch {
+    subscriptionDoc = null;
+  }
+
+  // Evaluate authoritative entitlement
+  const entitlement = evaluateSubscriptionEntitlement(resolvedUserId, subscriptionDoc);
+
+  let remainingDays = 0;
+  if (subscriptionDoc?.currentPeriodEnd) {
+    const endMs = new Date(subscriptionDoc.currentPeriodEnd).getTime();
+    if (!isNaN(endMs)) {
+      remainingDays = Math.max(0, Math.ceil((endMs - Date.now()) / (24 * 60 * 60 * 1000)));
+    }
+  }
+
+  let subSource: 'payment_backed' | 'manual_grant' | 'unknown' = 'unknown';
+  if (subscriptionDoc) {
+    if (
+      subscriptionDoc.lastUpdatedFrom === 'manual_upi' ||
+      subscriptionDoc.provider === 'manual_upi' ||
+      subscriptionDoc.provider === 'razorpay' ||
+      !!subscriptionDoc.paymentReference
+    ) {
+      subSource = 'payment_backed';
+    } else if (
+      subscriptionDoc.lastUpdatedFrom === 'admin_manual' ||
+      subscriptionDoc.lastUpdatedFrom === 'admin_grant' ||
+      subscriptionDoc.provider === 'manual' ||
+      !subscriptionDoc.paymentReference
+    ) {
+      subSource = 'manual_grant';
+    }
+  }
+
+  const userSubscription: User360Subscription | null = subscriptionDoc
+    ? {
+        status: subscriptionDoc.status,
+        planId: subscriptionDoc.planId,
+        source: subSource,
+        updateOrigin: subscriptionDoc.lastUpdatedFrom,
+        currentPeriodStart: subscriptionDoc.currentPeriodStart || null,
+        currentPeriodEnd: subscriptionDoc.currentPeriodEnd || null,
+        isPremium: entitlement.isPremium,
+        isEntitled: entitlement.isPremium,
+        entitlementStatus:
+          subscriptionDoc.status === 'halted'
+            ? 'suspended'
+            : subscriptionDoc.status === 'cancelled'
+              ? 'cancelled'
+              : entitlement.status,
+        remainingDays,
+        gracePeriod: entitlement.status === 'cancelled_grace',
+        notes: typeof subscriptionDoc.metadata?.grantReason === 'string'
+          ? (subscriptionDoc.metadata.grantReason as string)
+          : undefined,
+      }
+    : null;
+
+  // 3. Fetch Orders for this user
+  const ordersCol = getOrdersCollection();
+  const ordersSnap = await ordersCol.where('userId', '==', resolvedUserId).get();
+  const orders: PaymentOrderDocument[] = ordersSnap.docs.map((d) => d.data());
+  orders.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+
+  // 4. Fetch Submissions for this user
+  const submissionsCol = getSubmissionsCollection();
+  const submissionsSnap = await submissionsCol.where('userId', '==', resolvedUserId).get();
+  const rawSubmissions: PaymentSubmissionDocument[] = submissionsSnap.docs.map((d) => d.data());
+
+  const submissionsWithOrders: SubmissionWithOrder[] = rawSubmissions.map((sub) => {
+    const matchingOrder = orders.find((o) => o.orderId === sub.orderId) || null;
+    return {
+      ...sub,
+      userEmail: sub.userEmail || resolvedEmail || undefined,
+      order: matchingOrder,
+    };
+  });
+  submissionsWithOrders.sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
+
+  // 5. Fetch Audit Logs targeting this user
+  const auditLogsCol = getAuditLogsCollection();
+  const auditSnap = await auditLogsCol.where('targetUserId', '==', resolvedUserId).get();
+  const auditLogs: AdminAuditLogDocument[] = auditSnap.docs.map((d) => d.data());
+  auditLogs.sort((a, b) => (a.timestamp > b.timestamp ? -1 : 1));
+
+  // 6. Build Chronological Timeline Events
+  const timeline: User360TimelineEvent[] = [];
+
+  for (const ord of orders) {
+    timeline.push({
+      id: `evt_ord_${ord.orderId}`,
+      timestamp: ord.createdAt,
+      category: 'order',
+      action: 'order_created',
+      summary: `Initiated payment order ${ord.orderId} (₹${ord.amountInr} ${ord.currency})`,
+      actor: resolvedEmail || resolvedUserId,
+      badgeColor: 'indigo',
+      details: {
+        orderId: ord.orderId,
+        amount: ord.amountInr,
+        upiId: ord.upiId,
+        expiresAt: ord.expiresAt,
+      },
+    });
+  }
+
+  for (const sub of rawSubmissions) {
+    const utrStr = sub.utrNumber || (sub as unknown as { utr?: string }).utr || 'N/A';
+    timeline.push({
+      id: `evt_sub_${sub.submissionId}`,
+      timestamp: sub.submittedAt,
+      category: 'submission',
+      action: 'payment_submitted',
+      summary: `Submitted UPI claim with UTR ${utrStr} (₹${sub.declaredAmount})`,
+      actor: sub.userEmail || resolvedEmail || resolvedUserId,
+      badgeColor: 'amber',
+      details: {
+        submissionId: sub.submissionId,
+        utr: utrStr,
+        declaredAmount: sub.declaredAmount,
+        paymentDate: sub.paymentDate || 'Not recorded',
+        status: sub.status,
+      },
+    });
+
+    if (sub.reviewedAt && sub.reviewedBy) {
+      const isApp = sub.status === 'approved';
+      timeline.push({
+        id: `evt_dec_${sub.submissionId}`,
+        timestamp: sub.reviewedAt,
+        category: isApp ? 'approval' : 'rejection',
+        action: isApp ? 'payment_approved' : 'payment_rejected',
+        summary: isApp
+          ? `Verified & Approved ₹${sub.declaredAmount} (UTR: ${utrStr})`
+          : `Rejected payment claim (Reason: ${sub.decisionReason || 'Unverified'})`,
+        actor: sub.reviewedBy,
+        badgeColor: isApp ? 'emerald' : 'rose',
+        details: {
+          submissionId: sub.submissionId,
+          utr: utrStr,
+          reviewedBy: sub.reviewedBy,
+          decisionReason: sub.decisionReason,
+          verificationNotes: sub.verificationNotes,
+        },
+      });
+    }
+  }
+
+  for (const log of auditLogs) {
+    if (log.action !== 'payment_approved' && log.action !== 'payment_rejected') {
+      timeline.push({
+        id: `evt_audit_${log.id}`,
+        timestamp: log.timestamp,
+        category: 'admin_action',
+        action: log.action,
+        summary: `Admin action: ${log.action.replace(/_/g, ' ')}${log.reason ? ` — "${log.reason}"` : ''}`,
+        actor: log.actorEmail,
+        badgeColor:
+          log.action.includes('grant') || log.action.includes('extend') || log.action.includes('reinstate')
+            ? 'emerald'
+            : log.action.includes('suspend') || log.action.includes('revoke')
+              ? 'rose'
+              : 'indigo',
+        details: {
+          action: log.action,
+          reason: log.reason,
+          actorEmail: log.actorEmail,
+          previousState: log.previousState,
+          newState: log.newState,
+        },
+      });
+    }
+  }
+
+  // Sort timeline newest first with deterministic tie-breaking
+  timeline.sort((a, b) => {
+    const timeA = new Date(a.timestamp).getTime();
+    const timeB = new Date(b.timestamp).getTime();
+    if (isNaN(timeA) && isNaN(timeB)) return a.id.localeCompare(b.id);
+    if (isNaN(timeA)) return 1;
+    if (isNaN(timeB)) return -1;
+    if (timeB !== timeA) return timeB - timeA;
+    return a.id.localeCompare(b.id);
+  });
+
+  const identity: User360Identity = {
+    userId: resolvedUserId,
+    email: resolvedEmail,
+    name: user?.name || null,
+    provider: user?.provider || null,
+    createdAt: user?.createdAt ? new Date(user.createdAt).toISOString() : null,
+    isEmailVerified: user?.provider === 'google',
+    status: 'active',
+  };
+
+  return {
+    identity,
+    subscription: userSubscription,
+    orders,
+    submissions: submissionsWithOrders,
+    auditLogs,
+    timeline,
+  };
+}
+
+// ============================================================================
+// Consolidated Payment Ledger Query
+// ============================================================================
+
+export async function getConsolidatedPaymentLedger(params?: PaymentLedgerFilter): Promise<{
+  records: PaymentLedgerItem[];
+  summary: PaymentLedgerSummary;
+  total: number;
+}> {
+  const ordersCol = getOrdersCollection();
+  const submissionsCol = getSubmissionsCollection();
+  const subscriptionsCol = getSubscriptionsCollection();
+
+  const [ordersSnap, submissionsSnap, subscriptionsSnap] = await Promise.all([
+    ordersCol.get(),
+    submissionsCol.get(),
+    subscriptionsCol.get(),
+  ]);
+
+  const allOrders: PaymentOrderDocument[] = ordersSnap.docs.map((d) => d.data());
+  const allSubmissions: PaymentSubmissionDocument[] = submissionsSnap.docs.map((d) => d.data());
+  const allSubscriptions: SubscriptionDocument[] = subscriptionsSnap.docs.map((d) => d.data());
+
+  const now = Date.now();
+  const items: PaymentLedgerItem[] = [];
+
+  const orderMap = new Map<string, PaymentOrderDocument>();
+  for (const ord of allOrders) {
+    orderMap.set(ord.orderId, ord);
+  }
+
+  // Pre-calculate UTR frequency to surface collision / duplicate claims
+  const utrOccurrences = new Map<string, number>();
+  for (const sub of allSubmissions) {
+    const rawUtr = (sub.utrNumber || (sub as unknown as { utr?: string }).utr || '').trim().toUpperCase();
+    if (rawUtr) {
+      utrOccurrences.set(rawUtr, (utrOccurrences.get(rawUtr) || 0) + 1);
+    }
+  }
+
+  // 1. Process submissions
+  const handledOrderIds = new Set<string>();
+
+  for (const sub of allSubmissions) {
+    handledOrderIds.add(sub.orderId);
+    const ord = orderMap.get(sub.orderId);
+    const isOrphan = !ord;
+    const localUser = getUserById(sub.userId);
+    const userEmail = sub.userEmail || ord?.userEmail || localUser?.email || undefined;
+
+    let status: 'verified' | 'pending' | 'rejected' = 'pending';
+    if (sub.status === 'approved') status = 'verified';
+    else if (sub.status === 'rejected') status = 'rejected';
+
+    const utrStr = sub.utrNumber || (sub as unknown as { utr?: string }).utr;
+    const normUtr = (utrStr || '').trim().toUpperCase();
+    const isDuplicateUtr = Boolean(normUtr && (utrOccurrences.get(normUtr) || 0) > 1);
+
+    items.push({
+      id: sub.submissionId,
+      orderId: sub.orderId,
+      submissionId: sub.submissionId,
+      userId: sub.userId,
+      userEmail,
+      amount: ord?.amountInr || sub.declaredAmount || 499,
+      currency: ord?.currency || 'INR',
+      utr: utrStr,
+      status,
+      orderCreatedAt: ord?.createdAt || sub.submittedAt,
+      paymentDate: sub.paymentDate || undefined,
+      submittedAt: sub.submittedAt,
+      reviewedAt: sub.reviewedAt,
+      reviewedBy: sub.reviewedBy,
+      decisionReason: sub.decisionReason,
+      verificationNotes: sub.verificationNotes,
+      upiIdSnapshot: ord?.upiId,
+      isOrphan,
+      isDuplicateUtr,
+      source: 'payment',
+    });
+  }
+
+  // 2. Process orders without submissions
+  for (const ord of allOrders) {
+    if (!handledOrderIds.has(ord.orderId)) {
+      const localUser = getUserById(ord.userId);
+      const userEmail = ord.userEmail || localUser?.email || undefined;
+      const isExpired = new Date(ord.expiresAt).getTime() < now;
+
+      items.push({
+        id: ord.orderId,
+        orderId: ord.orderId,
+        userId: ord.userId,
+        userEmail,
+        amount: ord.amountInr || 499,
+        currency: ord.currency || 'INR',
+        status: isExpired ? 'expired' : 'unsubmitted',
+        orderCreatedAt: ord.createdAt,
+        upiIdSnapshot: ord.upiId,
+        source: 'payment',
+      });
+    }
+  }
+
+  // Financial Summary calculations (Strict Deduplication & Metric Separation)
+  let verifiedPaymentAmountInr = 0;
+  let verifiedPaymentsCount = 0;
+  let pendingClaimedAmountInr = 0;
+  let pendingSubmissionsCount = 0;
+  let rejectedClaimedAmountInr = 0;
+  let rejectedSubmissionsCount = 0;
+  let unsubmittedOrdersCount = 0;
+  let expiredOrdersCount = 0;
+  let unresolvedReviewCount = 0;
+
+  // Track distinct approved orders to prevent double-counting across retried or duplicated records
+  const verifiedOrderIds = new Set<string>();
+
+  for (const item of items) {
+    if (item.isOrphan || item.isDuplicateUtr) {
+      unresolvedReviewCount++;
+    }
+
+    if (item.status === 'verified') {
+      if (!item.isOrphan && !verifiedOrderIds.has(item.orderId)) {
+        verifiedOrderIds.add(item.orderId);
+        verifiedPaymentsCount++;
+        verifiedPaymentAmountInr += (item.amount || 499);
+      }
+    } else if (item.status === 'pending') {
+      pendingSubmissionsCount++;
+      pendingClaimedAmountInr += item.amount;
+    } else if (item.status === 'rejected') {
+      rejectedSubmissionsCount++;
+      rejectedClaimedAmountInr += item.amount;
+    } else if (item.status === 'unsubmitted') {
+      unsubmittedOrdersCount++;
+    } else if (item.status === 'expired') {
+      expiredOrdersCount++;
+    }
+  }
+
+  // Count manual grants (strictly excluded from payment ledger revenue)
+  let manualGrantsExcludedCount = 0;
+  for (const sub of allSubscriptions) {
+    const isPayment =
+      sub.lastUpdatedFrom === 'manual_upi' ||
+      sub.provider === 'manual_upi' ||
+      sub.provider === 'razorpay' ||
+      !!sub.paymentReference;
+    if (sub.status === 'active' && !isPayment) {
+      manualGrantsExcludedCount++;
+    }
+  }
+
+  const summary: PaymentLedgerSummary = {
+    verifiedPaymentAmountInr,
+    verifiedRevenueInr: verifiedPaymentAmountInr,
+    pendingClaimedAmountInr,
+    pendingClaimedRevenueInr: pendingClaimedAmountInr,
+    rejectedClaimedAmountInr,
+    totalOrdersCount: allOrders.length,
+    verifiedPaymentsCount,
+    pendingSubmissionsCount,
+    rejectedSubmissionsCount,
+    unsubmittedOrdersCount,
+    expiredOrdersCount,
+    manualGrantsExcludedCount,
+    unresolvedReviewCount,
+    refundPolicyNote:
+      'Refunds and payment reversals are not automated through this interface and must be audited manually against bank statements.',
+  };
+
+  // Filter items
+  let filtered = items;
+
+  if (params?.status && params.status !== 'all') {
+    filtered = filtered.filter((i) => i.status === params.status);
+  }
+
+  if (params?.query) {
+    const q = params.query.trim().toLowerCase();
+    filtered = filtered.filter(
+      (i) =>
+        i.orderId.toLowerCase().includes(q) ||
+        i.userId.toLowerCase().includes(q) ||
+        (i.utr && i.utr.toLowerCase().includes(q)) ||
+        (i.userEmail && i.userEmail.toLowerCase().includes(q))
+    );
+  }
+
+  if (params?.dateFrom) {
+    const fromTime = new Date(params.dateFrom).getTime();
+    if (!isNaN(fromTime)) {
+      filtered = filtered.filter((i) => new Date(i.orderCreatedAt).getTime() >= fromTime);
+    }
+  }
+
+  if (params?.dateTo) {
+    const toTime = new Date(params.dateTo).getTime();
+    if (!isNaN(toTime)) {
+      filtered = filtered.filter((i) => new Date(i.orderCreatedAt).getTime() <= toTime + 86400000);
+    }
+  }
+
+  // Sort descending by orderCreatedAt or submittedAt
+  filtered.sort((a, b) => {
+    const timeA = new Date(a.submittedAt || a.orderCreatedAt).getTime();
+    const timeB = new Date(b.submittedAt || b.orderCreatedAt).getTime();
+    return timeB - timeA;
+  });
+
+  const total = filtered.length;
+  const offset = params?.offset || 0;
+  const limit = Math.min(Math.max(params?.limit || 50, 1), 200);
+  const pagedRecords = filtered.slice(offset, offset + limit);
+
+  return {
+    records: pagedRecords,
+    summary,
+    total,
+  };
+}
+
+// ============================================================================
 // Subscriptions & Audit Queries
 // ============================================================================
 
 export async function getAdminSubscriptions(params?: {
   limit?: number;
+  offset?: number;
   userId?: string;
   query?: string;
+  entitlementStatus?: 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled';
+  source?: 'all' | 'payment_backed' | 'manual_grant';
+  expiringSoon?: boolean;
+  sortBy?: 'currentPeriodEnd' | 'userId' | 'status' | 'updatedAt';
+  sortDir?: 'asc' | 'desc';
 }): Promise<SubscriptionDocument[]> {
   const subscriptionsCol = getSubscriptionsCollection();
 
   const snap = await subscriptionsCol.get();
   const rawDocs: SubscriptionDocument[] = snap.docs.map((d) => d.data());
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
   const enriched = rawDocs.map((sub) => {
     const localUser = getUserById(sub.userId);
@@ -996,47 +1646,72 @@ export async function getAdminSubscriptions(params?: {
     };
   });
 
-  const filterTerm = (params?.query || params?.userId || '').trim().toLowerCase();
   let subs = enriched;
+
+  const filterTerm = (params?.query || params?.userId || '').trim().toLowerCase();
   if (filterTerm) {
-    subs = enriched.filter(
+    subs = subs.filter(
       (s) =>
         s.userId.toLowerCase().includes(filterTerm) ||
         (s.userEmail && s.userEmail.toLowerCase().includes(filterTerm))
     );
   }
 
-  subs.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
-  const limit = Math.min(Math.max(params?.limit || 50, 1), 200);
-  return subs.slice(0, limit);
-}
-
-export async function getAdminAuditLogs(params?: {
-  limit?: number;
-  action?: string;
-  targetUserId?: string;
-}): Promise<AdminAuditLogDocument[]> {
-  const auditLogsCol = getAuditLogsCollection();
-  const snap = await auditLogsCol.get();
-  let logs: AdminAuditLogDocument[] = snap.docs.map((d) => d.data());
-
-  if (params?.action) {
-    logs = logs.filter((l) => l.action === params.action);
-  }
-  if (params?.targetUserId) {
-    logs = logs.filter((l) => l.targetUserId === params.targetUserId);
+  if (params?.entitlementStatus && params.entitlementStatus !== 'all') {
+    subs = subs.filter((s) => {
+      const ent = evaluateSubscriptionEntitlement(s.userId, s);
+      if (params.entitlementStatus === 'active') return ent.isPremium && ent.status === 'active';
+      if (params.entitlementStatus === 'free') return !ent.isPremium && ent.status === 'free';
+      if (params.entitlementStatus === 'expired') return ent.status === 'expired';
+      if (params.entitlementStatus === 'suspended') return s.status === 'halted';
+      if (params.entitlementStatus === 'cancelled') return s.status === 'cancelled';
+      return true;
+    });
   }
 
-  const enriched = logs.map((log) => {
-    const localUser = getUserById(log.targetUserId);
-    const targetUserEmail = log.targetUserEmail || localUser?.email || undefined;
-    return {
-      ...log,
-      targetUserEmail,
-    };
+  if (params?.source && params.source !== 'all') {
+    subs = subs.filter((s) => {
+      const isPayment =
+        s.lastUpdatedFrom === 'manual_upi' || s.provider === 'manual_upi' || s.provider === 'razorpay';
+      if (params.source === 'payment_backed') return isPayment;
+      if (params.source === 'manual_grant') return !isPayment;
+      return true;
+    });
+  }
+
+  if (params?.expiringSoon) {
+    subs = subs.filter((s) => {
+      if (s.status !== 'active') return false;
+      const endMs = new Date(s.currentPeriodEnd).getTime();
+      return !isNaN(endMs) && endMs >= now && endMs <= now + sevenDaysMs;
+    });
+  }
+
+  // Sorting
+  const sortBy = params?.sortBy || 'updatedAt';
+  const sortDir = params?.sortDir === 'asc' ? 1 : -1;
+
+  subs.sort((a, b) => {
+    if (sortBy === 'currentPeriodEnd') {
+      const timeA = new Date(a.currentPeriodEnd).getTime() || 0;
+      const timeB = new Date(b.currentPeriodEnd).getTime() || 0;
+      return (timeA - timeB) * sortDir;
+    }
+    if (sortBy === 'userId') {
+      return a.userId.localeCompare(b.userId) * sortDir;
+    }
+    if (sortBy === 'status') {
+      return a.status.localeCompare(b.status) * sortDir;
+    }
+    // Default updatedAt
+    const timeA = new Date(a.updatedAt).getTime() || 0;
+    const timeB = new Date(b.updatedAt).getTime() || 0;
+    return (timeA - timeB) * sortDir;
   });
 
-  enriched.sort((a, b) => (a.timestamp > b.timestamp ? -1 : 1));
+  const offset = params?.offset || 0;
   const limit = Math.min(Math.max(params?.limit || 50, 1), 200);
-  return enriched.slice(0, limit);
+  return subs.slice(offset, offset + limit);
 }
+
+export { recordAdminAuditLog, getAdminAuditLogs } from './audit.store';

@@ -14,6 +14,7 @@ import {
   UtrCollisionError,
   UtrFormatError,
 } from '@/modules/storage/firestore/utr-reservation';
+import { sendSubmissionAcknowledgement } from '@/modules/email/email.service';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const sessionId = extractSessionId(request);
@@ -86,6 +87,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         verificationNotes,
       });
 
+      // Transactional acknowledgement email (Event A)
+      let emailStatus: 'sent' | 'pending' | 'failed' | 'retryable_failure' | 'skipped_missing_email' = 'pending';
+      try {
+        const emailResult = await sendSubmissionAcknowledgement({
+          userId: auth.user.id,
+          orderId: submission.orderId,
+          submissionId: submission.submissionId,
+          userEmail: auth.user.email,
+          utrNumber: submission.utrNumber,
+          declaredAmount: submission.declaredAmount,
+          currency: 'INR',
+          paymentDate: submission.paymentDate,
+          submittedAt: submission.submittedAt,
+          slaDeadlineAt: submission.slaDeadlineAt,
+        });
+        emailStatus = emailResult.status;
+      } catch (emailErr) {
+        console.error('[BillingSubmit] Acknowledgement email error:', emailErr);
+        emailStatus = 'failed';
+      }
+
       return NextResponse.json(
         {
           success: true,
@@ -99,6 +121,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             slaDeadlineAt: submission.slaDeadlineAt,
             status: submission.status,
           },
+          emailStatus,
           message:
             'Payment reference submitted successfully. Our team will verify and activate your Premium membership within 12 hours.',
         },

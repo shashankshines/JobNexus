@@ -226,6 +226,102 @@ export const JOB_POST_GROUPS: JobPostGroup[] = [
       { label: 'Growth Engineer / Growth Marketer', value: 'Growth Engineer' },
     ],
   },
+  {
+    group: '🏥 Healthcare, Medical & Clinical',
+    posts: [
+      { label: 'Physician / Resident Doctor', value: 'Doctor' },
+      { label: 'Registered Nurse (Staff Nurse / ICU)', value: 'Nurse' },
+      { label: 'Pharmacist / Clinical Pharmacist', value: 'Pharmacist' },
+      { label: 'Medical Lab Technician', value: 'Lab Technician' },
+      { label: 'Radiologist / Medical Imaging', value: 'Radiologist' },
+      { label: 'Clinical Research Associate (CRA)', value: 'Clinical Research' },
+      { label: 'Healthcare Administrator / Hospital Ops', value: 'Healthcare Operations' },
+    ],
+  },
+  {
+    group: '📚 Education, Teaching & Academics',
+    posts: [
+      { label: 'School Teacher (Primary / Secondary)', value: 'Teacher' },
+      { label: 'College Faculty / Assistant Professor', value: 'Professor' },
+      { label: 'Online Instructor / EdTech Educator', value: 'Instructor' },
+      { label: 'Curriculum Developer / Instructional Designer', value: 'Instructional Designer' },
+      { label: 'Academic Counselor & Advisor', value: 'Academic Counselor' },
+      { label: 'Corporate Trainer & Coach', value: 'Corporate Trainer' },
+    ],
+  },
+  {
+    group: '💰 Finance, Banking & Accounting',
+    posts: [
+      { label: 'Chartered Accountant (CA)', value: 'Chartered Accountant' },
+      { label: 'Financial Analyst / Equity Research', value: 'Financial Analyst' },
+      { label: 'Accountant / Senior Accountant', value: 'Accountant' },
+      { label: 'Statutory & Tax Auditor', value: 'Auditor' },
+      { label: 'Investment Banker / Wealth Manager', value: 'Investment Banking' },
+      { label: 'Credit Risk Analyst / Underwriter', value: 'Credit Analyst' },
+      { label: 'Payroll & Compliance Specialist', value: 'Payroll Specialist' },
+    ],
+  },
+  {
+    group: '🏗️ Construction, Architecture & Civil',
+    posts: [
+      { label: 'Civil Site Engineer', value: 'Civil Engineer' },
+      { label: 'Structural Design Engineer', value: 'Structural Engineer' },
+      { label: 'Architect / Architectural Designer', value: 'Architect' },
+      { label: 'Project Construction Manager', value: 'Construction Manager' },
+      { label: 'AutoCAD / BIM Modeler', value: 'BIM Modeler' },
+      { label: 'Quantity Surveyor & Cost Estimator', value: 'Quantity Surveyor' },
+    ],
+  },
+  {
+    group: '🏭 Manufacturing, Industrial & Mechanical',
+    posts: [
+      { label: 'Mechanical Design Engineer', value: 'Mechanical Engineer' },
+      { label: 'Production / Plant Engineer', value: 'Production Engineer' },
+      { label: 'Quality Control (QC / QA) Engineer', value: 'Quality Control Engineer' },
+      { label: 'Electrical Maintenance Engineer', value: 'Electrical Engineer' },
+      { label: 'Industrial Automation & PLC Programmer', value: 'Automation Engineer' },
+      { label: 'EHS (Environment, Health & Safety) Officer', value: 'EHS Officer' },
+    ],
+  },
+  {
+    group: '📦 Supply Chain, Logistics & Operations',
+    posts: [
+      { label: 'Supply Chain Manager', value: 'Supply Chain Manager' },
+      { label: 'Warehouse & Inventory Supervisor', value: 'Warehouse Manager' },
+      { label: 'Procurement & Sourcing Specialist', value: 'Procurement Specialist' },
+      { label: 'Logistics & Dispatch Coordinator', value: 'Logistics Coordinator' },
+      { label: 'Import / Export Compliance Executive', value: 'Export Import' },
+    ],
+  },
+  {
+    group: '👥 Human Resources & Talent Acquisition',
+    posts: [
+      { label: 'Human Resources (HR) Manager', value: 'HR Manager' },
+      { label: 'Talent Acquisition / Technical Recruiter', value: 'Recruiter' },
+      { label: 'HR Generalist / Executive', value: 'HR Generalist' },
+      { label: 'HR Business Partner (HRBP)', value: 'HRBP' },
+      { label: 'Compensation & Benefits Specialist', value: 'Comp and Benefits' },
+    ],
+  },
+  {
+    group: '📈 Sales, Marketing & Business Development',
+    posts: [
+      { label: 'Business Development Executive (BDE)', value: 'Business Development' },
+      { label: 'Enterprise Account Executive (AE)', value: 'Account Executive' },
+      { label: 'Digital Marketing Specialist / SEO', value: 'Digital Marketing' },
+      { label: 'Content Marketer & Copywriter', value: 'Content Marketer' },
+      { label: 'Retail Store Manager / Sales Lead', value: 'Retail Sales' },
+    ],
+  },
+  {
+    group: '🎧 Customer Support, BPO & Client Success',
+    posts: [
+      { label: 'Customer Support Representative', value: 'Customer Support' },
+      { label: 'Technical Helpdesk Specialist', value: 'Helpdesk Specialist' },
+      { label: 'Customer Success Manager (CSM)', value: 'Customer Success Manager' },
+      { label: 'Voice / International Process Associate', value: 'BPO Associate' },
+    ],
+  },
 ];
 
 // Flat list of all job post categories for single dropdown consumption

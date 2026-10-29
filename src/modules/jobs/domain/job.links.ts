@@ -23,6 +23,7 @@ export interface ExternalPlatformSearchLink {
 
 export interface PlatformSearchOptions {
   query?: string;
+  company?: string;
   location?: string;
 }
 
@@ -34,23 +35,27 @@ export function buildExternalPlatformSearchLinks(
   options: PlatformSearchOptions = {}
 ): ExternalPlatformSearchLink[] {
   const query = (options.query || '').trim();
+  const company = (options.company || '').trim();
   const location = (options.location || '').trim();
+
+  // Combine query and company keywords if both are supplied
+  const effectiveKeywords = [query, company].filter(Boolean).join(' ');
 
   // LinkedIn Jobs Search
   const linkedInParams = new URLSearchParams();
-  if (query) linkedInParams.set('keywords', query);
+  if (effectiveKeywords) linkedInParams.set('keywords', effectiveKeywords);
   if (location) linkedInParams.set('location', location);
   const linkedInUrl = `https://www.linkedin.com/jobs/search/?${linkedInParams.toString()}`;
 
   // Indeed Jobs Search
   const indeedParams = new URLSearchParams();
-  if (query) indeedParams.set('q', query);
+  if (effectiveKeywords) indeedParams.set('q', effectiveKeywords);
   if (location) indeedParams.set('l', location);
   const indeedUrl = `https://www.indeed.com/jobs?${indeedParams.toString()}`;
 
   // Glassdoor Jobs Search
   const glassdoorParams = new URLSearchParams();
-  if (query) glassdoorParams.set('sc.keyword', query);
+  if (effectiveKeywords) glassdoorParams.set('sc.keyword', effectiveKeywords);
   if (location) {
     glassdoorParams.set('locKeyword', location);
     glassdoorParams.set('locT', 'C');
@@ -59,7 +64,7 @@ export function buildExternalPlatformSearchLinks(
 
   // ZipRecruiter Jobs Search
   const zipParams = new URLSearchParams();
-  if (query) zipParams.set('search', query);
+  if (effectiveKeywords) zipParams.set('search', effectiveKeywords);
   if (location) zipParams.set('location', location);
   const zipRecruiterUrl = `https://www.ziprecruiter.com/candidate/search?${zipParams.toString()}`;
 

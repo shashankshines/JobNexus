@@ -6,11 +6,19 @@ import crypto from 'node:crypto';
  * Robust, lightweight durable store with memory caching and atomic disk persistence.
  * Compatible with Node.js, Next.js serverless functions (/tmp fallback), and local environments.
  */
+function isTestEnvironment(): boolean {
+  if (process.env.NODE_ENV === 'test') return true;
+  if (process.env.npm_lifecycle_event === 'test') return true;
+  if (process.argv.some((arg) => typeof arg === 'string' && (arg.includes('--test') || arg.includes('__tests__')))) return true;
+  if (process.execArgv.some((arg) => typeof arg === 'string' && arg.includes('--test'))) return true;
+  return false;
+}
+
 function resolveDataDir(): string {
   if (process.env.JOBNEXUS_DATA_DIR) {
     return process.env.JOBNEXUS_DATA_DIR;
   }
-  if (process.env.NODE_ENV === 'test') {
+  if (isTestEnvironment()) {
     return path.join(process.cwd(), '.jobnexus-test-data');
   }
   // If running in Vercel or read-only container, use /tmp
@@ -76,13 +84,22 @@ export class DurableStore<T extends { id?: string }> {
 
       const tmpPath = `${this.filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
       fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-      fs.renameSync(tmpPath, this.filePath);
+      try {
+        fs.renameSync(tmpPath, this.filePath);
+      } catch {
+        fs.copyFileSync(tmpPath, this.filePath);
+        try { fs.unlinkSync(tmpPath); } catch {}
+      }
     } catch (err) {
       console.warn(`[DurableStore] Error persisting collection ${this.collectionName} to disk:`, err);
     }
   }
 
   get(key: string): T | undefined {
+    if (!this.cache.has(key)) {
+      this.isLoaded = false;
+      this.loadFromDisk();
+    }
     return this.cache.get(key);
   }
 
@@ -92,6 +109,10 @@ export class DurableStore<T extends { id?: string }> {
   }
 
   has(key: string): boolean {
+    if (!this.cache.has(key)) {
+      this.isLoaded = false;
+      this.loadFromDisk();
+    }
     return this.cache.has(key);
   }
 

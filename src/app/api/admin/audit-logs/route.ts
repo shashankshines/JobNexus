@@ -18,14 +18,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get('action') || undefined;
+  const adminEmail = searchParams.get('adminEmail') || undefined;
   const targetUserId = searchParams.get('targetUserId') || undefined;
+  const dateFrom = searchParams.get('dateFrom') || undefined;
+  const dateTo = searchParams.get('dateTo') || undefined;
   const limitParam = parseInt(searchParams.get('limit') || '50', 10);
+  const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
     const logs = await getAdminAuditLogs({
       action,
+      adminEmail,
       targetUserId,
+      dateFrom,
+      dateTo,
       limit: isNaN(limitParam) ? 50 : limitParam,
+      offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
 
     return NextResponse.json({
