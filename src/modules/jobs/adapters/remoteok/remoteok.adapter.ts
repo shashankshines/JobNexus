@@ -1,4 +1,5 @@
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
+import { JobSearchParams } from '../../domain/job.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
   normalizeDate,
@@ -29,7 +30,7 @@ export class RemoteOkAdapter implements JobProvider {
 
   private readonly apiUrl = 'https://remoteok.com/api';
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
     // CRITICAL BUG FIX: RemoteOK must use fetchWithTimeout to prevent hanging the API route
     const res = await fetchWithTimeout(
       this.apiUrl,
@@ -38,6 +39,7 @@ export class RemoteOkAdapter implements JobProvider {
           'User-Agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 JobNexus/1.0',
         },
+        signal: params?.signal,
       },
       this.timeoutMs
     );

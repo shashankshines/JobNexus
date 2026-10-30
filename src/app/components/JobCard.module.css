@@ -675,8 +675,8 @@
   border: 1px solid transparent;
   flex: 1 1 auto;
   min-width: 0;
-  max-width: calc(100% - 145px);
-  height: 36px;
+  max-width: 145px;
+  height: 38px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -729,8 +729,8 @@
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 9px;
   display: inline-flex;
   align-items: center;
@@ -755,9 +755,9 @@
 }
 
 .applyBtn {
-  height: 36px;
-  min-width: 90px;
-  padding: 0 0.95rem;
+  height: 38px;
+  min-width: 96px;
+  padding: 0 1.05rem;
   border-radius: 9px;
   font-size: 0.82rem;
   font-weight: 600;

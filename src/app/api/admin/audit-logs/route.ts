@@ -20,6 +20,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const action = searchParams.get('action') || undefined;
   const adminEmail = searchParams.get('adminEmail') || undefined;
   const targetUserId = searchParams.get('targetUserId') || undefined;
+  const cursorParam = searchParams.get('cursor') || undefined;
   const dateFrom = searchParams.get('dateFrom') || undefined;
   const dateTo = searchParams.get('dateTo') || undefined;
   const limitParam = parseInt(searchParams.get('limit') || '5', 10);
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       action,
       adminEmail,
       targetUserId,
+      cursor: cursorParam,
       dateFrom,
       dateTo,
       limit: isNaN(limitParam) ? 5 : limitParam,
@@ -37,11 +39,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     const totalCount = typeof (logs as { total?: number }).total === 'number' ? (logs as { total?: number }).total! : logs.length;
+    const nextCursor = (logs as { nextCursor?: string | null }).nextCursor || null;
+    const hasMore = Boolean((logs as { hasMore?: boolean }).hasMore);
 
     return NextResponse.json({
       success: true,
       logs,
       total: totalCount,
+      nextCursor,
+      prevCursor: null,
+      hasMore,
       limit: isNaN(limitParam) ? 5 : limitParam,
       offset: isNaN(offsetParam) ? 0 : offsetParam,
     });

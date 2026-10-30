@@ -25,6 +25,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status') as PaymentLedgerFilter['status'] | null;
   const query = searchParams.get('query') || undefined;
+  const cursorParam = searchParams.get('cursor') || undefined;
   const dateFrom = searchParams.get('dateFrom') || undefined;
   const dateTo = searchParams.get('dateTo') || undefined;
   const limitParam = parseInt(searchParams.get('limit') || '5', 10);
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const filter: PaymentLedgerFilter = {
     status: statusParam && statusParam !== 'all' ? statusParam : 'all',
     query,
+    cursor: cursorParam,
     dateFrom,
     dateTo,
     limit: isNaN(limitParam) ? 5 : limitParam,
@@ -46,6 +48,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       records: result.records,
       summary: result.summary,
       total: result.total,
+      nextCursor: result.nextCursor || null,
+      prevCursor: null,
+      hasMore: Boolean(result.hasMore),
       limit: isNaN(limitParam) ? 5 : limitParam,
       offset: isNaN(offsetParam) ? 0 : offsetParam,
     });

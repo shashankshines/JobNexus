@@ -34,6 +34,7 @@ export interface JobSearchParams {
   remote?: string;
   industry?: string;
   limit?: number;
+  signal?: AbortSignal;
 }
 
 export interface LegacyJob {

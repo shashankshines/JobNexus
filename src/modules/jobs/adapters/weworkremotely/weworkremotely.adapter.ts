@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
+import { JobSearchParams } from '../../domain/job.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
   canonicalizeUrl,
@@ -16,7 +17,7 @@ export class WeWorkRemotelyAdapter implements JobProvider {
   readonly isRemoteOnly = true;
   private readonly feedUrl = 'https://weworkremotely.com/remote-jobs.rss';
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
     const res = await fetchWithTimeout(
       this.feedUrl,
       {
@@ -25,6 +26,7 @@ export class WeWorkRemotelyAdapter implements JobProvider {
           Accept: 'application/rss+xml, application/xml, text/xml',
         },
         cache: 'no-store',
+        signal: params?.signal,
       },
       7000
     );

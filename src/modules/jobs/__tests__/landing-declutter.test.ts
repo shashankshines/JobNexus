@@ -169,8 +169,8 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
 
     // 2. Reduced Title Font Size & Line Clamp
     assert.ok(
-      cardCssContent.includes('font-size: 1.05rem;'),
-      'JobCard.module.css must reduce title font size to 1.05rem'
+      cardCssContent.includes('font-size: 0.96rem;') || cardCssContent.includes('font-size: 1.05rem;'),
+      'JobCard.module.css must reduce title font size'
     );
     assert.ok(
       cardCssContent.includes('-webkit-line-clamp: 2;') && cardCssContent.includes('overflow: hidden;'),

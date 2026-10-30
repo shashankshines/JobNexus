@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
-import { NormalizedJob } from '../../domain/job.types';
+import { NormalizedJob, JobSearchParams } from '../../domain/job.types';
 import {
   canonicalizeUrl,
   isValidHttpUrl,
@@ -52,14 +52,14 @@ export class TeachingAdapter implements JobProvider {
 
   constructor(private readonly testFixtures?: UkTeachingJobRaw[]) {}
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
     let items: UkTeachingJobRaw[] = [];
 
     if (this.testFixtures && this.testFixtures.length > 0) {
       items = this.testFixtures;
     } else {
       try {
-        const res = await fetchWithTimeout(this.apiUrl, { cache: 'no-store' }, this.timeoutMs);
+        const res = await fetchWithTimeout(this.apiUrl, { cache: 'no-store', signal: params?.signal }, this.timeoutMs);
         if (!res.ok) {
           throw new Error(`Teaching Vacancies API returned HTTP ${res.status}`);
         }

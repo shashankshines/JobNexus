@@ -45,12 +45,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const rawSortDir = searchParams.get('sortDir');
   const sortDir = (rawSortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
+  const cursorParam = searchParams.get('cursor') || undefined;
   const limitParam = parseInt(searchParams.get('limit') || '5', 10);
   const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
     const rawSubs = await getAdminSubscriptions({
       query,
+      cursor: cursorParam,
       entitlementStatus,
       source,
       expiringSoon,
@@ -76,11 +78,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     const totalCount = typeof (rawSubs as { total?: number }).total === 'number' ? (rawSubs as { total?: number }).total! : enrichedSubs.length;
+    const nextCursor = (rawSubs as { nextCursor?: string | null }).nextCursor || null;
+    const hasMore = Boolean((rawSubs as { hasMore?: boolean }).hasMore);
 
     return NextResponse.json({
       success: true,
       subscriptions: enrichedSubs,
       total: totalCount,
+      nextCursor,
+      prevCursor: null,
+      hasMore,
       limit: isNaN(limitParam) ? 5 : limitParam,
       offset: isNaN(offsetParam) ? 0 : offsetParam,
     });

@@ -120,8 +120,27 @@ export function evaluateSubscriptionEntitlement(
     };
   }
 
-  // 3. Cancelled or Halted subscription: check if still within paid-through cycle
-  if (sub.status === 'cancelled' || sub.status === 'halted') {
+  // 3. Administrative Suspension ('halted'): NEVER receives grace period, immediately revoked
+  if (sub.status === 'halted') {
+    return {
+      userId,
+      isPremium: false,
+      tier: 'free',
+      status: 'expired',
+      subscription: {
+        id: sub.id,
+        planId: sub.planId,
+        status: 'halted',
+        currentPeriodEnd: sub.currentPeriodEnd,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+        provider: sub.provider,
+      },
+      reason: 'Subscription suspended by administrator',
+    };
+  }
+
+  // 4. Cancelled subscription: check if still within paid-through cycle
+  if (sub.status === 'cancelled') {
     if (sub.cancelAtPeriodEnd && isPeriodValid) {
       return {
         userId,
@@ -153,7 +172,7 @@ export function evaluateSubscriptionEntitlement(
         cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
         provider: sub.provider,
       },
-      reason: 'Membership cancelled or halted',
+      reason: 'Membership cancelled and period ended',
     };
   }
 
@@ -240,6 +259,14 @@ export async function getAuthoritativeUserEntitlement(
 export async function hasAuthoritativePremiumAccess(userId: string): Promise<boolean> {
   const entitlement = await getAuthoritativeUserEntitlement(userId);
   return entitlement.isPremium;
+}
+
+/**
+ * Security-critical entitlement verification for protected operations.
+ * Unconditionally bypasses memory cache to query authoritative Firestore state.
+ */
+export async function verifyProtectedOperationEntitlement(userId: string): Promise<UserEntitlement> {
+  return getAuthoritativeUserEntitlement(userId, { bypassCache: true });
 }
 
 /**

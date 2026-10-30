@@ -94,14 +94,27 @@ export class JobSearchService {
 
     const fetchPromises = this.providers.map(async (provider) => {
       const startTime = Date.now();
-      // Cap provider timeout to 2500ms max so slow RSS or hung endpoints never stall the app
-      const providerTimeout = Math.min(provider.timeoutMs || 2500, 2500);
+      // Cap provider timeout to 3000ms max so slow RSS or hung endpoints never stall the app
+      const providerTimeout = Math.min(provider.timeoutMs || 3000, 3000);
+      const abortController = new AbortController();
+      let timer: NodeJS.Timeout | null = null;
+
       try {
-        const fetchPromise = provider.fetchJobs(params);
-        const timeoutPromise = new Promise<NormalizedJob[]>((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout after ${providerTimeout}ms`)), providerTimeout)
-        );
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            abortController.abort(new Error(`Timeout after ${providerTimeout}ms`));
+            reject(new Error(`Timeout after ${providerTimeout}ms`));
+          }, providerTimeout);
+        });
+
+        const fetchPromise = provider.fetchJobs({
+          ...(params || {}),
+          signal: abortController.signal,
+        });
+
         const jobs = await Promise.race([fetchPromise, timeoutPromise]);
+        if (timer) clearTimeout(timer);
+
         const latencyMs = Date.now() - startTime;
         diagnostics.push({
           providerId: provider.id,
@@ -112,6 +125,8 @@ export class JobSearchService {
         });
         return jobs;
       } catch (err: unknown) {
+        if (timer) clearTimeout(timer);
+        abortController.abort();
         const latencyMs = Date.now() - startTime;
         const errMsg = err instanceof Error ? err.message : String(err);
         const isTimeout =

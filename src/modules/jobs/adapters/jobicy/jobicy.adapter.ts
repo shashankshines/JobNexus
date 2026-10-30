@@ -1,4 +1,5 @@
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
+import { JobSearchParams } from '../../domain/job.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
   normalizeDate,
@@ -33,8 +34,8 @@ export class JobicyAdapter implements JobProvider {
 
   private readonly apiUrl = 'https://jobicy.com/api/v2/remote-jobs?count=100';
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
-    const res = await fetchWithTimeout(this.apiUrl, {}, this.timeoutMs);
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
+    const res = await fetchWithTimeout(this.apiUrl, { signal: params?.signal }, this.timeoutMs);
     if (!res.ok) {
       throw new Error(`Jobicy API returned HTTP ${res.status}`);
     }

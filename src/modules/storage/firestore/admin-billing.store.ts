@@ -26,7 +26,10 @@ import { invalidateAuditLogsCache } from './audit.store';
 import {
   getBillingSyncVersion,
   bumpBillingSyncVersion,
+  readBillingSyncVersionInTransaction,
+  writeBillingSyncVersionInTransaction,
 } from './billing-sync.store';
+import { encodeCursor, decodeCursor } from './cursor';
 
 // ============================================================================
 // Types & Domain Errors
@@ -139,6 +142,7 @@ export interface PaymentLedgerSummary {
 export interface PaymentLedgerFilter {
   status?: 'all' | 'verified' | 'pending' | 'rejected' | 'unsubmitted' | 'expired';
   query?: string;
+  cursor?: string;
   dateFrom?: string;
   dateTo?: string;
   limit?: number;
@@ -302,8 +306,15 @@ export async function getAdminSubmissions(filter?: {
   status?: 'all' | 'pending_verification' | 'approved' | 'rejected';
   limit?: number;
   offset?: number;
+  cursor?: string;
   query?: string;
-}): Promise<{ submissions: SubmissionWithOrder[]; total: number }> {
+}): Promise<{
+  submissions: SubmissionWithOrder[];
+  total: number;
+  nextCursor?: string | null;
+  prevCursor?: string | null;
+  hasMore: boolean;
+}> {
   const submissionsCol = getSubmissionsCollection();
   const ordersCol = getOrdersCollection();
 
@@ -311,32 +322,47 @@ export async function getAdminSubmissions(filter?: {
     ? submissionsCol.where('status', '==', filter.status)
     : submissionsCol;
 
-  const offset = filter?.offset || 0;
   const limit = Math.min(Math.max(filter?.limit || 5, 1), 100);
+  const offset = filter?.offset || 0;
 
   let pagedSubmissions: PaymentSubmissionDocument[] = [];
   let total = 0;
+  let hasMore = false;
+  let nextCursor: string | null = null;
 
   if (!filter?.query) {
-    // Bounded Firestore query with count aggregation and offset/limit pagination
+    // 1. Efficient count aggregation: read-cost = 1 metadata index entry
     const countPromise = 'count' in baseQuery && typeof (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count === 'function'
       ? (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count().get().then((res) => res.data().count)
       : baseQuery.get().then((res) => res.size);
 
-    const dataPromise = 'offset' in baseQuery && typeof (baseQuery as unknown as { offset: (n: number) => { limit: (n: number) => { get: () => Promise<{ docs: Array<{ data: () => PaymentSubmissionDocument }> }> } } }).offset === 'function'
-      ? (baseQuery as unknown as { orderBy: (f: string, d: string) => { offset: (n: number) => { limit: (n: number) => { get: () => Promise<{ docs: Array<{ data: () => PaymentSubmissionDocument }> }> } } } })
-          .orderBy('submittedAt', 'desc')
-          .offset(offset)
-          .limit(limit)
-          .get()
-      : baseQuery.get();
+    // 2. Cursor pagination vs offset
+    let dataQuery: any = baseQuery.orderBy('submittedAt', 'desc').orderBy('submissionId', 'desc');
 
-    const [totalCount, pageSnap] = await Promise.all([countPromise, dataPromise]);
+    const decodedCursor = filter?.cursor ? decodeCursor(filter.cursor) : null;
+    if (decodedCursor && typeof dataQuery.startAfter === 'function') {
+      dataQuery = dataQuery.startAfter(decodedCursor.primary, decodedCursor.secondary).limit(limit + 1);
+    } else if (typeof dataQuery.offset === 'function' && offset > 0) {
+      dataQuery = dataQuery.offset(offset).limit(limit + 1);
+    } else {
+      dataQuery = dataQuery.limit(limit + 1);
+    }
+
+    const [totalCount, pageSnap] = await Promise.all([countPromise, dataQuery.get()]);
     total = totalCount;
-    pagedSubmissions = pageSnap.docs.map((d) => d.data());
-    if (pagedSubmissions.length > limit) {
-      pagedSubmissions.sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
-      pagedSubmissions = pagedSubmissions.slice(offset, offset + limit);
+
+    const rawDocs: PaymentSubmissionDocument[] = pageSnap.docs.map((d: any) => d.data());
+    if (rawDocs.length > limit) {
+      hasMore = true;
+      pagedSubmissions = rawDocs.slice(0, limit);
+    } else {
+      hasMore = false;
+      pagedSubmissions = rawDocs;
+    }
+
+    if (pagedSubmissions.length > 0) {
+      const last = pagedSubmissions[pagedSubmissions.length - 1];
+      nextCursor = hasMore ? encodeCursor(last.submittedAt, last.submissionId) : null;
     }
   } else {
     const snap = await baseQuery.get();
@@ -356,7 +382,13 @@ export async function getAdminSubmissions(filter?: {
     });
 
     total = allSubmissions.length;
-    pagedSubmissions = allSubmissions.slice(offset, offset + limit);
+    const startIndex = filter.cursor ? 0 : offset;
+    pagedSubmissions = allSubmissions.slice(startIndex, startIndex + limit);
+    hasMore = startIndex + limit < total;
+    if (pagedSubmissions.length > 0 && hasMore) {
+      const last = pagedSubmissions[pagedSubmissions.length - 1];
+      nextCursor = encodeCursor(last.submittedAt, last.submissionId);
+    }
   }
 
   // Attach associated orders and resolve subscriber email
@@ -397,6 +429,9 @@ export async function getAdminSubmissions(filter?: {
   return {
     submissions: submissionsWithOrders,
     total,
+    nextCursor,
+    prevCursor: null,
+    hasMore,
   };
 }
 
@@ -530,6 +565,9 @@ export async function approvePaymentSubmissionInTransaction(params: {
     const subscriptionSnap = await transaction.get(subscriptionRef);
     const existingSub = subscriptionSnap.exists ? (subscriptionSnap.data() as SubscriptionDocument) : null;
 
+    // 4.5. Transactional Read: Prepare billing sync version counter
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
+
     // 5. Calculate new subscription period using established formula:
     // newPeriodEnd = max(now, currentPeriodEnd) + 30 days
     const now = Date.now();
@@ -625,6 +663,13 @@ export async function approvePaymentSubmissionInTransaction(params: {
       timestamp: nowIso,
     };
     transaction.set(auditRef, auditEntry);
+
+    // Atomically increment billing sync version in the exact same transaction batch
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'payment_approved',
+      targetUserId: submission.userId,
+      targetEntityId: submission.submissionId,
+    });
 
     return {
       success: true,
@@ -726,9 +771,10 @@ export async function rejectPaymentSubmissionInTransaction(params: {
       throw new InvalidSubmissionStateError(submissionId, submission.status, 'pending_verification');
     }
 
-    // 2. All Reads: Read UTR reservation document BEFORE any writes
+    // 2. All Reads: Read UTR reservation document and sync version BEFORE any writes
     const reservationRef = reservationsCol.doc(submission.utrNumber);
     const reservationSnap = await transaction.get(reservationRef);
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
 
     if (reservationSnap.exists) {
       const reservation = reservationSnap.data() as UtrReservationDocument;
@@ -795,6 +841,13 @@ export async function rejectPaymentSubmissionInTransaction(params: {
       timestamp: nowIso,
     };
     transaction.set(auditRef, auditEntry);
+
+    // Atomically increment billing sync version in the exact same transaction batch
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'payment_rejected',
+      targetUserId: submission.userId,
+      targetEntityId: submission.submissionId,
+    });
 
     return {
       success: true,
@@ -865,6 +918,7 @@ export async function adminManualGrantSubscriptionInTransaction(params: {
     const subRef = subscriptionsCol.doc(targetUserId);
     const subSnap = await transaction.get(subRef);
     const existingSub = subSnap.exists ? (subSnap.data() as SubscriptionDocument) : null;
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
 
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
@@ -915,6 +969,12 @@ export async function adminManualGrantSubscriptionInTransaction(params: {
     };
     transaction.set(auditRef, auditEntry);
 
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'admin_grant',
+      targetUserId,
+      targetEntityId: newSub.id,
+    });
+
     return newSub;
   });
 
@@ -961,6 +1021,8 @@ export async function adminExtendSubscriptionInTransaction(params: {
       throw new Error(`Cannot extend: No subscription found for user "${targetUserId}". Use manual grant instead.`);
     }
 
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
+
     const existingSub = subSnap.data() as SubscriptionDocument;
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
@@ -1003,6 +1065,12 @@ export async function adminExtendSubscriptionInTransaction(params: {
       timestamp: nowIso,
     };
     transaction.set(auditRef, auditEntry);
+
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'subscription_extended',
+      targetUserId,
+      targetEntityId: existingSub.id,
+    });
 
     return updatedSub;
   });
@@ -1049,6 +1117,8 @@ export async function adminSuspendSubscriptionInTransaction(params: {
     if (!subSnap.exists) {
       throw new Error(`No subscription record found for user "${targetUserId}".`);
     }
+
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
 
     const existingSub = subSnap.data() as SubscriptionDocument;
 
@@ -1101,6 +1171,12 @@ export async function adminSuspendSubscriptionInTransaction(params: {
     };
     transaction.set(auditRef, auditEntry);
 
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'subscription_suspended',
+      targetUserId,
+      targetEntityId: existingSub.id,
+    });
+
     return updatedSub;
   });
 
@@ -1148,6 +1224,8 @@ export async function adminReinstateSubscriptionInTransaction(params: {
     if (!subSnap.exists) {
       throw new Error(`No subscription record found for user "${targetUserId}".`);
     }
+
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
 
     const existingSub = subSnap.data() as SubscriptionDocument;
 
@@ -1221,6 +1299,12 @@ export async function adminReinstateSubscriptionInTransaction(params: {
     };
     transaction.set(auditRef, auditEntry);
 
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'subscription_reinstated',
+      targetUserId,
+      targetEntityId: existingSub.id,
+    });
+
     return updatedSub;
   });
 
@@ -1265,6 +1349,8 @@ export async function adminRevokeSubscriptionInTransaction(params: {
     if (!subSnap.exists) {
       throw new Error(`No subscription record found for user "${targetUserId}".`);
     }
+
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
 
     const existingSub = subSnap.data() as SubscriptionDocument;
 
@@ -1313,6 +1399,12 @@ export async function adminRevokeSubscriptionInTransaction(params: {
       timestamp: nowIso,
     };
     transaction.set(auditRef, auditEntry);
+
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'subscription_revoked',
+      targetUserId,
+      targetEntityId: existingSub.id,
+    });
 
     return updatedSub;
   });
@@ -1579,6 +1671,9 @@ export async function getConsolidatedPaymentLedger(
   records: PaymentLedgerItem[];
   summary: PaymentLedgerSummary;
   total: number;
+  nextCursor?: string | null;
+  prevCursor?: string | null;
+  hasMore?: boolean;
 }> {
   const now = Date.now();
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
@@ -1804,12 +1899,36 @@ export async function getConsolidatedPaymentLedger(
   const total = filtered.length;
   const offset = params?.offset || 0;
   const limit = Math.min(Math.max(params?.limit || 5, 1), 200);
-  const pagedRecords = filtered.slice(offset, offset + limit);
+
+  let startIndex = offset;
+  if (params?.cursor) {
+    const decoded = decodeCursor(params.cursor);
+    if (decoded) {
+      const foundIdx = filtered.findIndex((i) => i.id === decoded.secondary || i.orderId === decoded.secondary);
+      if (foundIdx !== -1) {
+        startIndex = foundIdx + 1;
+      }
+    }
+  }
+
+  const pagedRecords = filtered.slice(startIndex, startIndex + limit);
+  const hasMore = startIndex + limit < total;
+  const nextCursor =
+    pagedRecords.length > 0 && hasMore
+      ? encodeCursor(
+          pagedRecords[pagedRecords.length - 1].submittedAt ||
+            pagedRecords[pagedRecords.length - 1].orderCreatedAt,
+          pagedRecords[pagedRecords.length - 1].id
+        )
+      : null;
 
   return {
     records: pagedRecords,
     summary,
     total,
+    nextCursor,
+    prevCursor: null,
+    hasMore,
   };
 }
 
@@ -1821,6 +1940,7 @@ export async function getAdminSubscriptions(
   params?: {
     limit?: number;
     offset?: number;
+    cursor?: string;
     userId?: string;
     query?: string;
     entitlementStatus?: 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled';
@@ -1830,7 +1950,7 @@ export async function getAdminSubscriptions(
     sortDir?: 'asc' | 'desc';
   },
   options?: { bypassCache?: boolean; forceCache?: boolean }
-): Promise<SubscriptionDocument[]> {
+): Promise<SubscriptionDocument[] & { total: number; nextCursor?: string | null; hasMore?: boolean }> {
   const now = Date.now();
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
   const currentVersion = await getBillingSyncVersion();
@@ -1928,8 +2048,28 @@ export async function getAdminSubscriptions(
   const total = subs.length;
   const offset = params?.offset || 0;
   const limit = Math.min(Math.max(params?.limit || 5, 1), 200);
-  const paged = subs.slice(offset, offset + limit);
-  return Object.assign(paged, { total });
+
+  let startIndex = offset;
+  if (params?.cursor) {
+    const decoded = decodeCursor(params.cursor);
+    if (decoded) {
+      const foundIdx = subs.findIndex(
+        (s) => s.id === decoded.secondary || s.userId === decoded.secondary
+      );
+      if (foundIdx !== -1) {
+        startIndex = foundIdx + 1;
+      }
+    }
+  }
+
+  const paged = subs.slice(startIndex, startIndex + limit);
+  const hasMore = startIndex + limit < total;
+  const nextCursor =
+    paged.length > 0 && hasMore
+      ? encodeCursor(paged[paged.length - 1].updatedAt, paged[paged.length - 1].id)
+      : null;
+
+  return Object.assign(paged, { total, nextCursor, hasMore });
 }
 
 export { recordAdminAuditLog, getAdminAuditLogs } from './audit.store';

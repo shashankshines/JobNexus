@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
-import { NormalizedJob } from '../../domain/job.types';
+import { NormalizedJob, JobSearchParams } from '../../domain/job.types';
 import {
   canonicalizeUrl,
   isValidHttpUrl,
@@ -53,12 +53,12 @@ export class LeverAdapter implements JobProvider {
     return globalEmployerRegistry.getByAts('lever');
   }
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
     const employers = this.getActiveEmployers();
     const allJobs: NormalizedJob[] = [];
 
     const results = await Promise.allSettled(
-      employers.map((emp) => this.fetchBoardJobs(emp))
+      employers.map((emp) => this.fetchBoardJobs(emp, params?.signal))
     );
 
     for (const res of results) {
@@ -70,7 +70,7 @@ export class LeverAdapter implements JobProvider {
     return allJobs;
   }
 
-  async fetchBoardJobs(employer: EmployerConfig): Promise<NormalizedJob[]> {
+  async fetchBoardJobs(employer: EmployerConfig, signal?: AbortSignal): Promise<NormalizedJob[]> {
     const { slug, name: companyName } = employer;
 
     // SSRF & path traversal guard
@@ -94,6 +94,7 @@ export class LeverAdapter implements JobProvider {
             Accept: 'application/json',
           },
           cache: 'no-store',
+          signal,
         },
         this.timeoutMs
       );

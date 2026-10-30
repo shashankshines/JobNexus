@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
+import { JobSearchParams } from '../../domain/job.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
   canonicalizeUrl,
@@ -33,7 +34,7 @@ export class HimalayasAdapter implements JobProvider {
   readonly isRemoteOnly = true;
   private readonly baseUrl = 'https://himalayas.app/jobs/api?limit=50';
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
     const res = await fetchWithTimeout(
       this.baseUrl,
       {
@@ -42,6 +43,7 @@ export class HimalayasAdapter implements JobProvider {
           Accept: 'application/json',
         },
         cache: 'no-store',
+        signal: params?.signal,
       },
       7000
     );

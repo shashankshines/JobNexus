@@ -13,6 +13,7 @@ import {
   getBillingSyncVersion,
   bumpBillingSyncVersion,
 } from './billing-sync.store';
+import { encodeCursor, decodeCursor } from './cursor';
 
 let cachedAuditLogs: { logs: AdminAuditLogDocument[]; timestamp: number; version: number } | null = null;
 const AUDIT_CACHE_TTL_MS = 20 * 1000; // 20-second snapshot cache
@@ -75,6 +76,7 @@ export async function getAdminAuditLogs(
   params?: {
     limit?: number;
     offset?: number;
+    cursor?: string;
     action?: string;
     adminEmail?: string;
     targetUserId?: string;
@@ -82,7 +84,7 @@ export async function getAdminAuditLogs(
     dateTo?: string;
   },
   options?: { bypassCache?: boolean; forceCache?: boolean }
-): Promise<AdminAuditLogDocument[]> {
+): Promise<AdminAuditLogDocument[] & { total: number; nextCursor?: string | null; hasMore?: boolean }> {
   const now = Date.now();
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
   let logs: AdminAuditLogDocument[];
@@ -143,7 +145,27 @@ export async function getAdminAuditLogs(
   const total = enriched.length;
   const offset = params?.offset || 0;
   const limit = Math.min(Math.max(params?.limit || 5, 1), 200);
-  const paged = enriched.slice(offset, offset + limit);
-  return Object.assign(paged, { total });
+
+  let startIndex = offset;
+  if (params?.cursor) {
+    const decoded = decodeCursor(params.cursor);
+    if (decoded) {
+      const foundIdx = enriched.findIndex(
+        (l) => l.id === decoded.secondary || l.timestamp === decoded.primary
+      );
+      if (foundIdx !== -1) {
+        startIndex = foundIdx + 1;
+      }
+    }
+  }
+
+  const paged = enriched.slice(startIndex, startIndex + limit);
+  const hasMore = startIndex + limit < total;
+  const nextCursor =
+    paged.length > 0 && hasMore
+      ? encodeCursor(paged[paged.length - 1].timestamp, paged[paged.length - 1].id)
+      : null;
+
+  return Object.assign(paged, { total, nextCursor, hasMore });
 }
 

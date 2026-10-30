@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
-import { NormalizedJob } from '../../domain/job.types';
+import { NormalizedJob, JobSearchParams } from '../../domain/job.types';
 import {
   canonicalizeUrl,
   isValidHttpUrl,
@@ -41,7 +41,7 @@ export class ReliefWebAdapter implements JobProvider {
 
   constructor(private readonly testFixtures?: ReliefWebItem[]) {}
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
     let items: ReliefWebItem[] = [];
 
     if (this.testFixtures && this.testFixtures.length > 0) {
@@ -57,7 +57,7 @@ export class ReliefWebAdapter implements JobProvider {
         const endpoint = `https://api.reliefweb.int/v2/jobs?appname=${encodeURIComponent(
           appName
         )}&limit=50&profile=full`;
-        const res = await fetchWithTimeout(endpoint, { cache: 'no-store' }, this.timeoutMs);
+        const res = await fetchWithTimeout(endpoint, { cache: 'no-store', signal: params?.signal }, this.timeoutMs);
         if (!res.ok) {
           throw new Error(`ReliefWeb API returned HTTP ${res.status}`);
         }

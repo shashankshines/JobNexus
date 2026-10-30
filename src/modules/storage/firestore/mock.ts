@@ -36,24 +36,38 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
     collection: (collectionName: string) => {
       const colData = store.getCollectionData(collectionName);
 
+      interface OrderSpec {
+        field: string;
+        dir: 'asc' | 'desc';
+      }
+
       const makeQuery = (
         predicate?: (doc: DocumentData) => boolean,
         limitCount?: number,
         offsetCount?: number,
-        orderField?: string,
-        orderDir: 'asc' | 'desc' = 'asc'
+        orderings: OrderSpec[] = [],
+        startAfterValues?: unknown[]
       ) => ({
-        limit: (n: number) => makeQuery(predicate, n, offsetCount, orderField, orderDir),
-        offset: (n: number) => makeQuery(predicate, limitCount, n, orderField, orderDir),
-        orderBy: (f: string, d: 'asc' | 'desc' = 'asc') => makeQuery(predicate, limitCount, offsetCount, f, d),
+        limit: (n: number) => makeQuery(predicate, n, offsetCount, orderings, startAfterValues),
+        offset: (n: number) => makeQuery(predicate, limitCount, n, orderings, startAfterValues),
+        orderBy: (f: string, d: 'asc' | 'desc' = 'asc') =>
+          makeQuery(predicate, limitCount, offsetCount, [...orderings, { field: f, dir: d }], startAfterValues),
+        startAfter: (...args: unknown[]) =>
+          makeQuery(predicate, limitCount, offsetCount, orderings, args),
         where: (field: string, opStr: string, value: unknown) => {
           const nextPredicate = (doc: DocumentData) => {
             const prev = predicate ? predicate(doc) : true;
             if (!prev) return false;
             if (opStr === '==') return doc[field] === value;
+            if (opStr === '!=') return doc[field] !== value;
+            if (opStr === '>') return doc[field] > (value as any);
+            if (opStr === '>=') return doc[field] >= (value as any);
+            if (opStr === '<') return doc[field] < (value as any);
+            if (opStr === '<=') return doc[field] <= (value as any);
+            if (opStr === 'in') return Array.isArray(value) && value.includes(doc[field]);
             return true;
           };
-          return makeQuery(nextPredicate, limitCount, offsetCount, orderField, orderDir);
+          return makeQuery(nextPredicate, limitCount, offsetCount, orderings, startAfterValues);
         },
         count: () => ({
           get: async () => {
@@ -69,23 +83,56 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
           },
         }),
         get: async (): Promise<QuerySnapshot> => {
-          const matches: DocumentData[] = [];
+          let matches: DocumentData[] = [];
           for (const [id, doc] of colData.entries()) {
             if (!predicate || predicate(doc)) {
               matches.push({ id, ...doc });
             }
           }
-          if (orderField) {
+
+          if (orderings.length > 0) {
             matches.sort((a, b) => {
-              const valA = a[orderField];
-              const valB = b[orderField];
-              if (valA < valB) return orderDir === 'asc' ? -1 : 1;
-              if (valA > valB) return orderDir === 'asc' ? 1 : -1;
+              for (const ord of orderings) {
+                const valA = a[ord.field];
+                const valB = b[ord.field];
+                if (valA === undefined && valB === undefined) continue;
+                if (valA === undefined) return 1;
+                if (valB === undefined) return -1;
+                if (valA < valB) return ord.dir === 'asc' ? -1 : 1;
+                if (valA > valB) return ord.dir === 'asc' ? 1 : -1;
+              }
               return 0;
             });
           }
-          const offset = offsetCount || 0;
-          const sliced = matches.slice(offset, limitCount ? offset + limitCount : undefined);
+
+          let startIndex = offsetCount || 0;
+          if (startAfterValues && startAfterValues.length > 0) {
+            let cursorFieldValues: unknown[] = [];
+            const firstArg = startAfterValues[0] as any;
+            if (firstArg && typeof firstArg === 'object' && typeof firstArg.data === 'function') {
+              const docData = { id: firstArg.id, ...firstArg.data() };
+              cursorFieldValues = orderings.map((o) => docData[o.field] ?? docData.id);
+            } else {
+              cursorFieldValues = startAfterValues;
+            }
+
+            const foundIdx = matches.findIndex((m) => {
+              for (let i = 0; i < cursorFieldValues.length; i++) {
+                const ord = orderings[i];
+                const fieldName = ord ? ord.field : 'id';
+                if (m[fieldName] !== cursorFieldValues[i] && m.id !== cursorFieldValues[i]) {
+                  return false;
+                }
+              }
+              return true;
+            });
+
+            if (foundIdx !== -1) {
+              startIndex = foundIdx + 1;
+            }
+          }
+
+          const sliced = matches.slice(startIndex, limitCount ? startIndex + limitCount : undefined);
           return {
             empty: sliced.length === 0,
             size: sliced.length,
@@ -152,6 +199,7 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
 
         where: rootQuery.where,
         orderBy: rootQuery.orderBy,
+        startAfter: rootQuery.startAfter,
         limit: rootQuery.limit,
         offset: rootQuery.offset,
         count: rootQuery.count,

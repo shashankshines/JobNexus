@@ -14,7 +14,11 @@ import {
 } from './utr-reservation';
 import { getPaymentSettings } from './settings.store';
 import { invalidateAdminStoresCache } from './admin-billing.store';
-import { bumpBillingSyncVersion } from './billing-sync.store';
+import {
+  bumpBillingSyncVersion,
+  readBillingSyncVersionInTransaction,
+  writeBillingSyncVersionInTransaction,
+} from './billing-sync.store';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 // ============================================================================
@@ -230,6 +234,9 @@ export async function createPaymentSubmission(params: {
 
     const order = orderSnap.data() as PaymentOrderDocument;
 
+    // 1.5. Transactional Read: Prepare billing sync version counter
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
+
     // 2. Enforce user ownership
     if (order.userId !== userId) {
       throw new OrderOwnershipError(orderId);
@@ -281,6 +288,13 @@ export async function createPaymentSubmission(params: {
 
     // 8. Update order status to submitted
     transaction.update(orderRef, { status: 'submitted' });
+
+    // 8.5. Transactional Write: Atomically increment billing sync version in the same batch
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'new_submission',
+      targetUserId: userId,
+      targetEntityId: submissionDoc.submissionId,
+    });
 
     return submissionDoc;
   });

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
-import { NormalizedJob } from '../../domain/job.types';
+import { NormalizedJob, JobSearchParams } from '../../domain/job.types';
 import {
   canonicalizeUrl,
   isValidHttpUrl,
@@ -68,7 +68,7 @@ export class NcsAdapter implements JobProvider {
    * Fetches National Career Service jobs from the official OGD (data.gov.in) API
    * or the verified National Career Service open employment dataset.
    */
-  async fetchJobs(): Promise<NormalizedJob[]> {
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
     const apiKey = process.env.DATA_GOV_IN_API_KEY || process.env.NCS_API_KEY;
     const customEndpoint = process.env.NCS_API_ENDPOINT;
 
@@ -90,6 +90,7 @@ export class NcsAdapter implements JobProvider {
               Accept: 'application/json',
             },
             cache: 'no-store',
+            signal: params?.signal,
           },
           this.timeoutMs
         );

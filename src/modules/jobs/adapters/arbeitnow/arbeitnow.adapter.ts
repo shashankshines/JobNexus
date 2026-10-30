@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { JobProvider, fetchWithTimeout } from '../../providers/provider.types';
+import { JobSearchParams } from '../../domain/job.types';
 import { NormalizedJob } from '../../domain/job.types';
 import {
   normalizeDate,
@@ -34,8 +35,8 @@ export class ArbeitnowAdapter implements JobProvider {
   // Use www. to prevent 301 redirect penalty
   private readonly apiUrl = 'https://www.arbeitnow.com/api/job-board-api';
 
-  async fetchJobs(): Promise<NormalizedJob[]> {
-    const res = await fetchWithTimeout(this.apiUrl, { cache: 'no-store' }, this.timeoutMs);
+  async fetchJobs(params?: JobSearchParams): Promise<NormalizedJob[]> {
+    const res = await fetchWithTimeout(this.apiUrl, { cache: 'no-store', signal: params?.signal }, this.timeoutMs);
     if (!res.ok) {
       throw new Error(`Arbeitnow API returned HTTP ${res.status}`);
     }

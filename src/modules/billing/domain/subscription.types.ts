@@ -69,7 +69,7 @@ export interface UserEntitlement {
   userId: string;
   isPremium: boolean;
   tier: 'free' | 'premium';
-  status: 'free' | 'active' | 'cancelled_grace' | 'expired';
+  status: 'free' | 'active' | 'cancelled_grace' | 'expired' | 'suspended';
   subscription?: {
     id: string;
     planId: string;

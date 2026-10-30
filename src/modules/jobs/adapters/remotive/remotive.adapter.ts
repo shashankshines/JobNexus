@@ -37,7 +37,7 @@ export class RemotiveAdapter implements JobProvider {
       ? `${this.baseUrl}?search=${encodeURIComponent(query)}`
       : this.baseUrl;
 
-    const res = await fetchWithTimeout(url, {}, this.timeoutMs);
+    const res = await fetchWithTimeout(url, { signal: params?.signal }, this.timeoutMs);
     if (!res.ok) {
       throw new Error(`Remotive API returned HTTP ${res.status}`);
     }

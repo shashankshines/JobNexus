@@ -27,7 +27,54 @@ export interface BillingSyncMetadata {
   targetEntityId?: string;
 }
 
-const SYNC_DOC_ID = 'billing_sync';
+export const SYNC_DOC_ID = 'billing_sync';
+
+export interface BillingSyncTxContext {
+  syncRef: FirebaseFirestore.DocumentReference;
+  currentVersion: number;
+}
+
+/**
+ * Transactional Read Phase: Reads the current billing sync version document.
+ * MUST be executed during the transaction's read phase (before any writes).
+ */
+export async function readBillingSyncVersionInTransaction(
+  transaction: FirebaseFirestore.Transaction
+): Promise<BillingSyncTxContext> {
+  const col = getSystemMetadataCollection();
+  const syncRef = col.doc(SYNC_DOC_ID);
+  const snap = await transaction.get(syncRef);
+  const currentVersion =
+    snap.exists && typeof snap.data()?.version === 'number'
+      ? (snap.data()!.version as number)
+      : 1;
+  return { syncRef, currentVersion };
+}
+
+/**
+ * Transactional Write Phase: Stages the atomic increment of the billing sync version.
+ * MUST be executed during the transaction's write phase alongside business entity writes.
+ */
+export function writeBillingSyncVersionInTransaction(
+  transaction: FirebaseFirestore.Transaction,
+  ctx: BillingSyncTxContext,
+  meta?: {
+    mutationType?: string;
+    targetUserId?: string;
+    targetEntityId?: string;
+  }
+): number {
+  const next = ctx.currentVersion + 1;
+  const payload: BillingSyncMetadata = {
+    version: next,
+    lastMutationAt: new Date().toISOString(),
+    ...(meta?.mutationType ? { mutationType: meta.mutationType } : {}),
+    ...(meta?.targetUserId ? { targetUserId: meta.targetUserId } : {}),
+    ...(meta?.targetEntityId ? { targetEntityId: meta.targetEntityId } : {}),
+  };
+  transaction.set(ctx.syncRef, payload, { merge: true });
+  return next;
+}
 
 /**
  * Retrieves the authoritative billing sync metadata from Cloud Firestore.
