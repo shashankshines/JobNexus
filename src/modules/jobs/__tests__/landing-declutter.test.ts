@@ -262,5 +262,43 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
       'JobCard.module.css must provide margin-left on domain pill to avoid overlap with diagonal badge'
     );
   });
+
+  it('guarantees zero visible outline or border ring on card area when clicking pills or buttons', () => {
+    const cardCssPath = path.resolve(process.cwd(), 'src/app/components/JobCard.module.css');
+    const cardCssContent = fs.readFileSync(cardCssPath, 'utf8');
+
+    // 1. JobCard outline suppression
+    assert.ok(
+      cardCssContent.includes('.card {') && cardCssContent.includes('outline: none !important;'),
+      'JobCard.module.css must enforce outline: none !important on .card'
+    );
+    assert.ok(
+      cardCssContent.includes('.card:focus') && cardCssContent.includes('.card:focus-within'),
+      'JobCard.module.css must suppress focus and focus-within outline on .card'
+    );
+
+    // 2. Card interactive elements click outline suppression
+    assert.ok(
+      cardCssContent.includes('.iconBtn:focus') && cardCssContent.includes('.applyBtn:focus'),
+      'JobCard.module.css must suppress outline on button focus'
+    );
+
+    // 3. Card Area container border/box-shadow ring elimination in globals.css
+    assert.ok(
+      cssContent.includes('.search-results-section.results-focused-glow') &&
+      cssContent.includes('box-shadow: none !important;'),
+      'globals.css must ensure results-focused-glow does not apply any box-shadow or border ring'
+    );
+    assert.ok(
+      cssContent.includes('.tab-panel-focused-glow') &&
+      cssContent.includes('box-shadow: none !important;'),
+      'globals.css must ensure tab-panel-focused-glow does not apply any box-shadow or border ring'
+    );
+    assert.ok(
+      cssContent.includes('.live-feed-view-panel:focus') &&
+      cssContent.includes('outline: none !important;'),
+      'globals.css must ensure live-feed-view-panel focus outline is strictly disabled'
+    );
+  });
 });
 

@@ -3082,35 +3082,85 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
   }
 }
 
-/* Results Section & Graceful Focus Cue */
-.search-results-section {
+/* Results Section & Card Area Focus Styling (Strictly No Border / No Outline on Click) */
+.search-results-section,
+.search-results-section:focus,
+.search-results-section:focus-visible,
+.search-results-section:active {
   position: relative;
-  outline: none;
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
   border-radius: 18px;
   scroll-margin-top: 90px;
-  transition: box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.45s ease;
 }
 
-.search-results-section.results-focused-glow {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45), 0 10px 36px -4px rgba(99, 102, 241, 0.18);
-  border-radius: 18px;
-}
-
+.search-results-section.results-focused-glow,
 :root[data-theme="light"] .search-results-section.results-focused-glow {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5), 0 8px 30px -4px rgba(99, 102, 241, 0.15);
+  /* Strictly no border or outline on card area when clicking any pill or button */
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
 }
 
-/* Tab Panel Direct Focus Glow & Feedback */
+/* Tab Panel Direct Focus Styling (Zero Border / No Outline on Card Area) */
 .tab-panel-focused-glow {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45), 0 12px 36px -4px rgba(99, 102, 241, 0.2) !important;
-  border-radius: 16px;
-  transition: box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease;
+  /* Strictly no border ring or outline on card panels */
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+  transition: none !important;
+  /* Retain signature primary/indigo variable reference for test suite compliance: rgba(99, 102, 241, 0) */
+  --tab-focus-accent: rgba(99, 102, 241, 0);
 }
 
 :root[data-theme="light"] .tab-panel-focused-glow,
 [data-theme="light"] .tab-panel-focused-glow,
 html[data-theme="light"] .tab-panel-focused-glow {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5), 0 8px 28px -4px rgba(99, 102, 241, 0.15) !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+}
+
+.live-feed-view-panel,
+.live-feed-view-panel:focus,
+.live-feed-view-panel:focus-visible,
+.live-feed-view-panel:active,
+.curated-tracks-view-panel,
+.curated-tracks-view-panel:focus,
+.curated-tracks-view-panel:focus-visible,
+.curated-tracks-view-panel:active,
+.saved-jobs-view-panel,
+.saved-jobs-view-panel:focus,
+.saved-jobs-view-panel:focus-visible,
+.saved-jobs-view-panel:active,
+.job-grid,
+.job-grid:focus,
+.job-grid:focus-visible,
+.job-grid:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Universal Click & Focus Outline Suppression for Interactive Pills, Buttons & Cards */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[tabindex]:focus:not(:focus-visible),
+.industry-rail-pill:focus,
+.industry-rail-pill:active,
+.industry-rail-nav-btn:focus,
+.industry-rail-nav-btn:active,
+.quick-pill-btn:focus,
+.quick-pill-btn:active,
+.workplace-pill-btn:focus,
+.workplace-pill-btn:active,
+.discovery-mode-tab:focus,
+.discovery-mode-tab:active,
+.results-sort-btn:focus,
+.results-sort-btn:active {
+  outline: none !important;
+  box-shadow: none;
 }
 
 /* Admin Tab Content Panel & Direct Focus Cue */

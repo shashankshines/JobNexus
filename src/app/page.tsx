@@ -1058,12 +1058,6 @@ export default function Home() {
         setIsResultsFocused(false);
         setTabFocusBadge(null);
       }, 2000);
-
-      try {
-        target.focus({ preventScroll: true });
-      } catch {
-        // Fallback for environments without focus support
-      }
     };
 
     requestAnimationFrame(() => {
