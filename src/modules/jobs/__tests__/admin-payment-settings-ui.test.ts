@@ -364,7 +364,6 @@ describe('JobNexus — Admin Payment Settings UI Consistency & Configuration Cla
         name: 'Shashank Lakhotia',
       });
       const session = createSession(adminUser.id);
-
       const req = createMockRequest('/api/admin/billing/settings', {
         method: 'PUT',
         cookie: session.sessionId,

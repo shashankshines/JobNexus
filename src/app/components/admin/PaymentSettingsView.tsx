@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -60,7 +61,14 @@ export function PaymentSettingsView({ onRefreshParent }: PaymentSettingsViewProp
     setNotification(null);
 
     try {
-      const res = await fetch('/api/admin/billing/settings');
+      const res = await fetch('/api/admin/billing/settings', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -221,7 +229,11 @@ export function PaymentSettingsView({ onRefreshParent }: PaymentSettingsViewProp
     try {
       const res = await fetch('/api/admin/billing/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
         body: JSON.stringify({
           upiId: upiId.trim(),
           payeeName: payeeName.trim(),
@@ -269,22 +281,45 @@ export function PaymentSettingsView({ onRefreshParent }: PaymentSettingsViewProp
   // Auth Error View
   if (authError) {
     return (
-      <div className="admin-card" style={{ padding: '2.5rem', textAlign: 'center', maxWidth: 640, margin: '2rem auto' }}>
+      <div className="admin-card" style={{ padding: '2.5rem 1.5rem', textAlign: 'center', maxWidth: 600, margin: '2rem auto' }}>
         <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto', color: '#f87171' }}>
           <Lock size={28} />
         </div>
         <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-          {authError.statusCode === 401 ? 'Authentication Required' : 'Unauthorized Access'}
+          {authError.statusCode === 401 ? 'Sign-In Required' : 'Administrator Authorization Required'}
         </h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.25rem', lineHeight: 1.55 }}>
           {authError.message}
         </p>
-        <button
-          onClick={fetchSettings}
-          style={{ padding: '0.6rem 1.25rem', borderRadius: 8, background: 'var(--primary)', color: '#ffffff', fontWeight: 700, border: 'none', cursor: 'pointer' }}
-        >
-          Retry Authentication
-        </button>
+        <div className="admin-card-inner" style={{ padding: '0.85rem 1rem', borderRadius: 10, marginBottom: '1.5rem', fontSize: '0.8rem', textAlign: 'left' }}>
+          <strong className="admin-text-value">Designated Administrator:</strong> <code className="admin-code-pill">shashankshines@gmail.com</code>
+          <br />
+          <span className="admin-text-label" style={{ fontSize: '0.74rem', marginTop: 4, display: 'block' }}>
+            Requires active Google OAuth authentication. Access to receiving UPI configuration is strictly restricted to designated administrators.
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link
+            href="/api/auth/google"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.25rem', borderRadius: 10, background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#ffffff', fontWeight: 700, fontSize: '0.88rem', textDecoration: 'none' }}
+          >
+            Authenticate with Google
+          </Link>
+          <button
+            onClick={fetchSettings}
+            className="admin-btn-secondary"
+            style={{ padding: '0.65rem 1.15rem', borderRadius: 10, fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Retry Connection
+          </button>
+          <Link
+            href="/admin"
+            className="admin-btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.65rem 1.15rem', borderRadius: 10, fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}
+          >
+            Back to Console
+          </Link>
+        </div>
       </div>
     );
   }

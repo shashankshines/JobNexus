@@ -1263,5 +1263,56 @@ export function filterAndRankJobs(
     return timeB - timeA;
   });
 
+  // When browsing the unconstrained discovery feed (no query, no specific industry or company filters),
+  // interleave top-scoring listings across distinct canonical industries so that all types of job seekers
+  // see diverse opportunities across sectors on the landing screen.
+  const isUnconstrained =
+    !query &&
+    !company &&
+    !location &&
+    !type &&
+    !level &&
+    !remote &&
+    (!industry || industry === 'all');
+
+  if (isUnconstrained && filtered.length > 2) {
+    return interleaveIndustries(filtered);
+  }
+
   return filtered;
+}
+
+/**
+ * Interleaves jobs round-robin across distinct canonical industries while preserving
+ * quality ranking within each industry group.
+ */
+function interleaveIndustries(jobs: NormalizedJob[]): NormalizedJob[] {
+  const groups = new Map<string, NormalizedJob[]>();
+
+  for (const job of jobs) {
+    const ind = job.industry || 'other';
+    const list = groups.get(ind);
+    if (list) {
+      list.push(job);
+    } else {
+      groups.set(ind, [job]);
+    }
+  }
+
+  const result: NormalizedJob[] = [];
+  const groupArrays = Array.from(groups.values());
+  let maxLen = 0;
+  for (const arr of groupArrays) {
+    if (arr.length > maxLen) maxLen = arr.length;
+  }
+
+  for (let i = 0; i < maxLen; i++) {
+    for (const arr of groupArrays) {
+      if (i < arr.length) {
+        result.push(arr[i]);
+      }
+    }
+  }
+
+  return result;
 }

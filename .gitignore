@@ -45,3 +45,4 @@ remoteok.json
 
 # data & persistence
 .jobnexus-data/
+.jobnexus-test-data/

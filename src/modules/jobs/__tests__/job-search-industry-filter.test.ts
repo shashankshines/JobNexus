@@ -5,6 +5,8 @@ import { filterAndRankJobs, matchesIndustry } from '../domain/job.ranking';
 import { deduplicateJobs } from '../domain/job.deduplication';
 import { JobSearchService } from '../services/job-search.service';
 import { JobProvider } from '../providers/provider.types';
+import { getIndustryBadge } from '../presentation/job-contextual-styles';
+import { INDUSTRY_TAXONOMY, JobIndustry } from '../domain/job.taxonomy';
 
 describe('JobNexus — Industry Filtering, Deduplication & Caching Suite', () => {
   const sampleJobs: NormalizedJob[] = [
@@ -205,6 +207,87 @@ describe('JobNexus — Industry Filtering, Deduplication & Caching Suite', () =>
 
       const res2 = await service.searchJobs({ industry: 'healthcare' });
       assert.strictEqual(res2.jobs.length, 1);
+    });
+  });
+
+  describe('Card Industry Badging (getIndustryBadge)', () => {
+    it('returns authoritative badge info for each canonical industry', () => {
+      const canonicalIndustries: JobIndustry[] = [
+        'technology',
+        'healthcare',
+        'construction_trades',
+        'manufacturing',
+        'logistics_transport',
+        'retail_sales',
+        'hospitality_tourism',
+        'education',
+        'finance_accounting',
+        'administration_hr',
+        'agriculture',
+        'government_public',
+        'customer_service',
+        'security_facilities',
+      ];
+
+      for (const ind of canonicalIndustries) {
+        const badge = getIndustryBadge(ind);
+        assert.ok(badge.label, `Badge label must exist for ${ind}`);
+        assert.ok(badge.icon, `Badge icon must exist for ${ind}`);
+        assert.ok(badge.palette, `Badge palette must exist for ${ind}`);
+        assert.ok(badge.title?.includes('Industry:'), `Badge title must mention Industry for ${ind}`);
+      }
+    });
+
+    it('infers industry badge from job title when industry is not explicitly provided', () => {
+      const nurseBadge = getIndustryBadge(undefined, 'ICU Staff Nurse', ['Hospital']);
+      assert.strictEqual(nurseBadge.label, 'Healthcare & Medical');
+      assert.strictEqual(nurseBadge.palette, 'rose');
+
+      const teacherBadge = getIndustryBadge(undefined, 'High School Science Teacher', []);
+      assert.strictEqual(teacherBadge.label, 'Education & Teaching');
+      assert.strictEqual(teacherBadge.palette, 'purple');
+
+      const civilEngBadge = getIndustryBadge(undefined, 'Civil Construction Site Engineer', []);
+      assert.strictEqual(civilEngBadge.label, 'Construction & Trades');
+      assert.strictEqual(civilEngBadge.palette, 'amber');
+    });
+
+    it('gracefully handles empty or unclassified jobs with General & Multi-Sector badge', () => {
+      const generalBadge = getIndustryBadge('', 'General Specialist', []);
+      assert.strictEqual(generalBadge.label, 'General & Multi-Sector');
+      assert.strictEqual(generalBadge.palette, 'indigo');
+    });
+  });
+
+  describe('Multi-Industry Discovery Feed Interleaving', () => {
+    it('interleaves top positions across distinct industries for unconstrained queries', () => {
+      const pool: NormalizedJob[] = [
+        { ...sampleJobs[0], id: 't1', industry: 'technology', publishedAt: new Date(Date.now() - 1000).toISOString() },
+        { ...sampleJobs[0], id: 't2', industry: 'technology', publishedAt: new Date(Date.now() - 2000).toISOString() },
+        { ...sampleJobs[1], id: 'h1', industry: 'healthcare', publishedAt: new Date(Date.now() - 3000).toISOString() },
+        { ...sampleJobs[1], id: 'h2', industry: 'healthcare', publishedAt: new Date(Date.now() - 4000).toISOString() },
+        { ...sampleJobs[2], id: 'e1', industry: 'education', publishedAt: new Date(Date.now() - 5000).toISOString() },
+        { ...sampleJobs[3], id: 'l1', industry: 'logistics_transport', publishedAt: new Date(Date.now() - 6000).toISOString() },
+      ];
+
+      const unconstrained = filterAndRankJobs(pool, {});
+      assert.strictEqual(unconstrained.length, 6);
+
+      // Verify that the first 4 jobs contain 4 distinct industries rather than 2 tech jobs in a row
+      const first4Industries = new Set(unconstrained.slice(0, 4).map((j) => j.industry));
+      assert.strictEqual(first4Industries.size, 4, 'Top 4 unconstrained jobs must represent 4 distinct industries');
+    });
+
+    it('does NOT interleave when an explicit industry filter is requested', () => {
+      const pool: NormalizedJob[] = [
+        { ...sampleJobs[0], id: 't1', industry: 'technology' },
+        { ...sampleJobs[0], id: 't2', industry: 'technology' },
+        { ...sampleJobs[1], id: 'h1', industry: 'healthcare' },
+      ];
+
+      const techOnly = filterAndRankJobs(pool, { industry: 'technology' });
+      assert.strictEqual(techOnly.length, 2);
+      assert.ok(techOnly.every((j) => j.industry === 'technology'));
     });
   });
 });

@@ -7,6 +7,9 @@ import {
   PaymentSettingsValidationError,
 } from '@/modules/storage/firestore/settings.store';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * GET /api/admin/billing/settings
  * Retrieves active payment configuration and metadata for authorized administrators.
@@ -16,16 +19,30 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!auth.authorized) {
     return NextResponse.json(
       { success: false, error: auth.error },
-      { status: auth.statusCode }
+      {
+        status: auth.statusCode,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      }
     );
   }
 
   try {
     const settings = await getPaymentSettings();
-    return NextResponse.json({
-      success: true,
-      settings,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        settings,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      }
+    );
   } catch (err) {
     console.error('[Admin Settings GET Error]:', err);
     return NextResponse.json(
@@ -33,7 +50,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         success: false,
         error: err instanceof Error ? err.message : 'Failed to retrieve payment configuration.',
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      }
     );
   }
 }

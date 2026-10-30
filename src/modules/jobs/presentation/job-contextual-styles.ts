@@ -15,6 +15,7 @@ import {
   Clock,
   Globe,
   Building,
+  Building2,
   GitFork,
   Headphones,
   TrendingUp,
@@ -27,8 +28,19 @@ import {
   Layers,
   Hash,
   Cloud,
+  HeartPulse,
+  HardHat,
+  Factory,
+  Truck,
+  ShoppingBag,
+  UtensilsCrossed,
+  Users,
+  Sprout,
+  Landmark,
+  ShieldAlert,
   type LucideIcon,
 } from 'lucide-react';
+import { classifyJobIndustry } from '@/modules/jobs/domain/job.taxonomy';
 
 export type ContextualPalette =
   | 'rose'
@@ -77,19 +89,40 @@ export function getRoleCategory(title: string, tags: string[] = [], industry?: s
     return { category: 'education', label: 'Education & Teaching', icon: GraduationCap, palette: 'purple' };
   }
   if (industry === 'healthcare' || /\b(doctor|physician|nurse|nursing|clinical|hospital|medical|surgeon|pharmacist|therapist)\b/i.test(titleLower)) {
-    return { category: 'healthcare', label: 'Healthcare & Medical', icon: Shield, palette: 'rose' };
+    return { category: 'healthcare', label: 'Healthcare & Medical', icon: HeartPulse, palette: 'rose' };
   }
   if (industry === 'finance_accounting' || /\b(accountant|accounting|auditor|financial analyst|tax specialist|cfo|bookkeeper)\b/i.test(titleLower)) {
     return { category: 'finance', label: 'Finance & Accounts', icon: TrendingUp, palette: 'emerald' };
   }
   if (industry === 'logistics_transport' || /\b(supply chain|logistics|warehouse|forklift|freight|dispatcher|truck driver)\b/i.test(titleLower)) {
-    return { category: 'logistics', label: 'Logistics & Supply', icon: Compass, palette: 'amber' };
+    return { category: 'logistics', label: 'Logistics & Supply', icon: Truck, palette: 'sky' };
   }
   if (industry === 'construction_trades' || /\b(construction|civil engineer|site engineer|carpenter|electrician|plumber)\b/i.test(titleLower)) {
-    return { category: 'trades', label: 'Construction & Trades', icon: Target, palette: 'sky' };
+    return { category: 'trades', label: 'Construction & Trades', icon: HardHat, palette: 'amber' };
+  }
+  if (industry === 'manufacturing' || /\b(manufacturing|plant manager|production supervisor|cnc operator|machinist|industrial engineer)\b/i.test(titleLower)) {
+    return { category: 'manufacturing', label: 'Manufacturing & Industry', icon: Factory, palette: 'teal' };
+  }
+  if (industry === 'retail_sales' || /\b(retail|store manager|merchandiser|cashier|sales executive|b2b sales|b2c sales)\b/i.test(titleLower)) {
+    return { category: 'retail', label: 'Retail & Sales', icon: ShoppingBag, palette: 'amber' };
+  }
+  if (industry === 'hospitality_tourism' || /\b(chef|cook|hotel manager|front desk|bartender|barista|waiter|waitress|catering)\b/i.test(titleLower)) {
+    return { category: 'hospitality', label: 'Hospitality & Tourism', icon: UtensilsCrossed, palette: 'rose' };
+  }
+  if (industry === 'administration_hr' || /\b(human resources|hr manager|talent acquisition|recruiter|office manager|executive assistant)\b/i.test(titleLower)) {
+    return { category: 'admin_hr', label: 'Admin & People Ops', icon: Users, palette: 'cyan' };
+  }
+  if (industry === 'agriculture' || /\b(agronomist|agriculture|farming|farm manager|horticulture|livestock|forestry)\b/i.test(titleLower)) {
+    return { category: 'agriculture', label: 'Agriculture & Forestry', icon: Sprout, palette: 'lime' };
+  }
+  if (industry === 'customer_service' || /\b(customer support|customer service|call center|helpdesk|client success)\b/i.test(titleLower)) {
+    return { category: 'support', label: 'Support & Success', icon: Headphones, palette: 'lime' };
+  }
+  if (industry === 'security_facilities' || /\b(security guard|security officer|facility manager|building maintenance|safety officer)\b/i.test(titleLower)) {
+    return { category: 'security_facilities', label: 'Security & Facilities', icon: ShieldAlert, palette: 'crimson' };
   }
   if (industry === 'government_public' || /\b(civil service|public sector|humanitarian|disaster relief|municipal)\b/i.test(titleLower)) {
-    return { category: 'government', label: 'Public Sector & Aid', icon: Award, palette: 'teal' };
+    return { category: 'government', label: 'Public Sector & Aid', icon: Landmark, palette: 'teal' };
   }
 
   // 1. Direct Title-Based Role Classification (Priority)
@@ -472,6 +505,144 @@ export function getContextualTagStyle(tag: string): ContextualTagInfo {
     icon: Hash,
     palette: chosen,
   };
+}
+
+/**
+ * Returns a prominent contextual Industry badge for a job card.
+ * Deterministically maps canonical industry taxonomy IDs, titles, and tags
+ * to branded icons, human-readable labels, and semantic color palettes.
+ */
+export function getIndustryBadge(
+  industry?: string,
+  title?: string,
+  tags: string[] = []
+): ContextualBadgeInfo {
+  let indKey = (industry || '').toLowerCase().trim();
+
+  // If missing or generic 'other', classify from title & tags if available
+  if ((!indKey || indKey === 'other') && title) {
+    const classified = classifyJobIndustry(title, tags);
+    if (classified.industry && classified.industry !== 'other') {
+      indKey = classified.industry;
+    }
+  }
+
+  switch (indKey) {
+    case 'healthcare':
+      return {
+        label: 'Healthcare & Medical',
+        icon: HeartPulse,
+        palette: 'rose',
+        title: 'Industry: Healthcare & Medical — clinical practice, nursing, pharmacy, and hospital care',
+      };
+    case 'education':
+      return {
+        label: 'Education & Teaching',
+        icon: GraduationCap,
+        palette: 'purple',
+        title: 'Industry: Education & Training — schools, faculty, universities, and instructional leadership',
+      };
+    case 'finance_accounting':
+    case 'finance':
+      return {
+        label: 'Finance & Accounts',
+        icon: TrendingUp,
+        palette: 'emerald',
+        title: 'Industry: Finance & Accounting — banking, audit, taxation, investments, and corporate finance',
+      };
+    case 'construction_trades':
+    case 'construction':
+      return {
+        label: 'Construction & Trades',
+        icon: HardHat,
+        palette: 'amber',
+        title: 'Industry: Construction & Skilled Trades — civil engineering, electrical, plumbing, and site management',
+      };
+    case 'manufacturing':
+      return {
+        label: 'Manufacturing & Industrial',
+        icon: Factory,
+        palette: 'teal',
+        title: 'Industry: Manufacturing & Industrial — plant operations, production lines, mechanical, and QC',
+      };
+    case 'logistics_transport':
+    case 'logistics':
+      return {
+        label: 'Logistics & Supply',
+        icon: Truck,
+        palette: 'sky',
+        title: 'Industry: Logistics & Transportation — supply chain, warehousing, freight, and fleet operations',
+      };
+    case 'retail_sales':
+    case 'retail':
+      return {
+        label: 'Retail & Sales',
+        icon: ShoppingBag,
+        palette: 'amber',
+        title: 'Industry: Retail & Commercial Sales — merchandising, store operations, B2B/B2C sales, and growth',
+      };
+    case 'hospitality_tourism':
+    case 'hospitality':
+      return {
+        label: 'Hospitality & Tourism',
+        icon: UtensilsCrossed,
+        palette: 'rose',
+        title: 'Industry: Hospitality & Tourism — culinary arts, hotel operations, catering, and event planning',
+      };
+    case 'technology':
+    case 'tech':
+      return {
+        label: 'Technology & IT',
+        icon: Code2,
+        palette: 'indigo',
+        title: 'Industry: Technology & Engineering — software, cloud architecture, AI/ML, and IT systems',
+      };
+    case 'administration_hr':
+    case 'hr':
+      return {
+        label: 'Administration & HR',
+        icon: Users,
+        palette: 'cyan',
+        title: 'Industry: Administration & Human Resources — people operations, recruiting, and office management',
+      };
+    case 'agriculture':
+      return {
+        label: 'Agriculture & Forestry',
+        icon: Sprout,
+        palette: 'lime',
+        title: 'Industry: Agriculture & Agronomy — farming, horticulture, livestock, and forestry',
+      };
+    case 'government_public':
+    case 'government':
+      return {
+        label: 'Public Sector & Aid',
+        icon: Landmark,
+        palette: 'teal',
+        title: 'Industry: Government & Public Sector — civil services, public administration, and humanitarian aid',
+      };
+    case 'customer_service':
+      return {
+        label: 'Customer Support',
+        icon: Headphones,
+        palette: 'sky',
+        title: 'Industry: Customer Support & Service — client success, contact center, and helpdesk',
+      };
+    case 'security_facilities':
+    case 'security':
+      return {
+        label: 'Security & Facilities',
+        icon: ShieldAlert,
+        palette: 'crimson',
+        title: 'Industry: Security & Facilities — physical protection, maintenance, and safety operations',
+      };
+    default:
+      return {
+        label: 'General & Multi-Sector',
+        icon: Layers,
+        palette: 'indigo',
+        title: 'Industry: General cross-functional or emerging multi-sector role',
+      };
+  }
 }
 
 /**

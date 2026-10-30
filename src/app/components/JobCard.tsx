@@ -31,6 +31,7 @@ import {
   getSeniorityBadge,
   getEmploymentTypeBadge,
   getSourceBadge,
+  getIndustryBadge,
   type ContextualPalette,
 } from '@/modules/jobs/presentation/job-contextual-styles';
 
@@ -70,9 +71,10 @@ interface JobCardProps {
   };
   index: number;
   onSelectCompany?: (company: string) => void;
+  onSelectIndustry?: (industry: string) => void;
 }
 
-function JobCardComponent({ job, index, onSelectCompany }: JobCardProps) {
+function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: JobCardProps) {
   const { isAuthenticated, isJobSaved, toggleSaveJob, openAuthModal, showToast } = useAuth();
   const [copied, setCopied] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>(job.url || '');
@@ -113,6 +115,12 @@ function JobCardComponent({ job, index, onSelectCompany }: JobCardProps) {
     [job.title, job.tags, job.industry]
   );
   const RoleIcon = roleCategory.icon;
+
+  const industryBadge = useMemo(
+    () => getIndustryBadge(job.industry, job.title, job.tags),
+    [job.industry, job.title, job.tags]
+  );
+  const IndustryIcon = industryBadge.icon;
 
   const workplaceBadge = useMemo(
     () => getWorkplaceBadge(job.workplaceType, job.isRemote),
@@ -427,8 +435,39 @@ function JobCardComponent({ job, index, onSelectCompany }: JobCardProps) {
         )}
       </div>
 
-      {/* 3. Contextual Badges Row: Workplace, India, Seniority, Employment */}
+      {/* 3. Contextual Badges Row: Industry, Workplace, India, Seniority, Employment */}
       <div className={styles.badgesRow}>
+        {/* Type of Industry Badge */}
+        <span
+          className={`${styles.contextualBadge} ${styles.industryBadge} ${PALETTE_CLASSES[industryBadge.palette]} ${onSelectIndustry ? styles.industryBadgeClickable : ''}`}
+          title={onSelectIndustry ? `${industryBadge.title} • Click to filter jobs in ${industryBadge.label}` : industryBadge.title}
+          onClick={(e) => {
+            if (onSelectIndustry) {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelectIndustry(job.industry || industryBadge.label);
+            }
+          }}
+          role={onSelectIndustry ? 'button' : undefined}
+          tabIndex={onSelectIndustry ? 0 : undefined}
+          onKeyDown={(e) => {
+            if (onSelectIndustry && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelectIndustry(job.industry || industryBadge.label);
+            }
+          }}
+          aria-label={`Industry: ${industryBadge.label}`}
+        >
+          <span className={styles.badgeIcon}>
+            <IndustryIcon size={12} strokeWidth={2.2} />
+          </span>
+          <span className={styles.industryBadgeLabel}>
+            <span className={styles.industryPrefix}>Industry:</span>
+            <span>{industryBadge.label}</span>
+          </span>
+        </span>
+
         {/* Workplace Badge */}
         <span
           className={`${styles.contextualBadge} ${PALETTE_CLASSES[workplaceBadge.palette]}`}

@@ -33,6 +33,18 @@ import {
   ArrowDown,
   Home as HomeIcon,
   Building2,
+  HeartPulse,
+  HardHat,
+  Factory,
+  Truck,
+  ShoppingBag,
+  UtensilsCrossed,
+  Users,
+  Sprout,
+  Landmark,
+  Headphones,
+  ShieldAlert,
+  GraduationCap,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
@@ -67,56 +79,105 @@ interface DiscoveryDomain {
   query?: string;
   remote?: string;
   location?: string;
+  industry?: string;
 }
 
 const DISCOVERY_DOMAINS: DiscoveryDomain[] = [
   {
-    title: 'Fully Remote & Global',
-    count: '450+ Roles',
-    desc: 'Verified remote roles across global engineering teams with timezone flexibility.',
-    tags: ['Work Anywhere', 'USD / EUR Rates', 'Async First'],
-    icon: Globe,
-    remote: 'remote',
+    title: 'Healthcare & Clinical Care',
+    count: '400+ Roles',
+    desc: 'Physicians, registered nurses, clinical practice, pharmacy, and hospital healthcare teams.',
+    tags: ['Nursing', 'Clinical Care', 'Pharmacy', 'Hospital Care'],
+    icon: HeartPulse,
+    industry: 'healthcare',
   },
   {
-    title: 'AI & Machine Learning',
-    count: '180+ Roles',
-    desc: 'LLM agents, PyTorch inference, computer vision, data engineering, and generative AI.',
-    tags: ['LLMs', 'PyTorch', 'GenAI', 'MLOps'],
-    icon: Sparkles,
-    query: 'AI Machine Learning',
-  },
-  {
-    title: 'Frontend & Full Stack',
-    count: '320+ Roles',
-    desc: 'Modern web architectures with React, Next.js, TypeScript, Tailwind, and Node.js.',
-    tags: ['React', 'Next.js', 'TypeScript', 'Node.js'],
+    title: 'Technology & IT Engineering',
+    count: '1,200+ Roles',
+    desc: 'Full-stack development, cloud systems, AI/ML, data engineering, and tech architecture.',
+    tags: ['Full Stack', 'Cloud & DevOps', 'AI & ML', 'Cybersecurity'],
     icon: Code2,
-    query: 'Full Stack Developer',
+    industry: 'technology',
   },
   {
-    title: 'Backend & Cloud Systems',
-    count: '290+ Roles',
-    desc: 'High-scale microservices, Go, Python, distributed systems, and cloud pipelines.',
-    tags: ['Go', 'Python', 'Microservices', 'AWS / GCP'],
-    icon: Server,
-    query: 'Backend Engineer',
+    title: 'Finance, Banking & Accounts',
+    count: '350+ Roles',
+    desc: 'Chartered accounting, auditing, taxation, financial analysis, investment, and banking.',
+    tags: ['Accounting', 'Audit & Tax', 'Financial Analyst', 'Corporate Finance'],
+    icon: TrendingUp,
+    industry: 'finance_accounting',
   },
   {
-    title: 'India Tech Hubs',
-    count: '240+ Roles',
-    desc: 'Verified on-site and hybrid engineering roles across Tier 1 & Tier 2 Indian tech hubs.',
-    tags: ['Bengaluru', 'Delhi NCR', 'Hyderabad', 'Pune', 'Tier 2 Hubs'],
-    icon: MapPin,
-    location: 'India',
+    title: 'Education & Academic Training',
+    count: '280+ Roles',
+    desc: 'School teachers, university professors, instructional leadership, and academic curriculum.',
+    tags: ['Teaching', 'Higher Education', 'Curriculum', 'Pedagogy'],
+    icon: GraduationCap,
+    industry: 'education',
   },
   {
-    title: 'DevOps & Infrastructure',
+    title: 'Construction & Skilled Trades',
     count: '150+ Roles',
-    desc: 'Kubernetes orchestration, CI/CD automation, cloud infrastructure, and observability.',
-    tags: ['Kubernetes', 'Docker', 'Terraform', 'CI/CD'],
-    icon: ShieldCheck,
-    query: 'DevOps SRE',
+    desc: 'Civil engineering, site supervision, electrical, plumbing, carpentry, and infrastructure.',
+    tags: ['Civil Engineering', 'Site Engineer', 'Electrical', 'Trades'],
+    icon: HardHat,
+    industry: 'construction_trades',
+  },
+  {
+    title: 'Logistics & Supply Chain',
+    count: '220+ Roles',
+    desc: 'Global supply chain managers, warehouse operations, freight dispatchers, and fleet logistics.',
+    tags: ['Supply Chain', 'Warehousing', 'Freight', 'Fleet Operations'],
+    icon: Truck,
+    industry: 'logistics_transport',
+  },
+  {
+    title: 'Manufacturing & Industrial',
+    count: '190+ Roles',
+    desc: 'Plant operations, mechanical engineering, production supervision, and quality assurance.',
+    tags: ['Mechanical', 'Plant Operations', 'Production', 'Quality Control'],
+    icon: Factory,
+    industry: 'manufacturing',
+  },
+  {
+    title: 'Retail, Sales & Commerce',
+    count: '550+ Roles',
+    desc: 'Store management, merchandising, account executives, B2B enterprise sales, and retail leads.',
+    tags: ['B2B Sales', 'Store Operations', 'Merchandising', 'Account Executive'],
+    icon: ShoppingBag,
+    industry: 'retail_sales',
+  },
+  {
+    title: 'Hospitality & Tourism',
+    count: '120+ Roles',
+    desc: 'Executive chefs, hotel managers, front office operations, catering, and guest services.',
+    tags: ['Hotel Management', 'Culinary Arts', 'Catering', 'Guest Relations'],
+    icon: UtensilsCrossed,
+    industry: 'hospitality_tourism',
+  },
+  {
+    title: 'Administration & Human Resources',
+    count: '260+ Roles',
+    desc: 'People operations, talent acquisition, office management, and executive administration.',
+    tags: ['People Ops', 'Recruiting', 'Office Management', 'HR Partner'],
+    icon: Users,
+    industry: 'administration_hr',
+  },
+  {
+    title: 'Government & Public Sector',
+    count: '180+ Roles',
+    desc: 'Civil services, public administration, humanitarian aid, disaster relief, and municipal policy.',
+    tags: ['Civil Services', 'Public Policy', 'Humanitarian', 'Disaster Relief'],
+    icon: Landmark,
+    industry: 'government_public',
+  },
+  {
+    title: 'Customer Support & Service',
+    count: '210+ Roles',
+    desc: 'Client success managers, technical helpdesk, customer care specialists, and contact center leads.',
+    tags: ['Customer Success', 'Technical Support', 'Helpdesk', 'Client Care'],
+    icon: Headphones,
+    industry: 'customer_service',
   },
 ];
 
@@ -134,6 +195,9 @@ interface Job {
   workplaceType?: string;
   isIndiaEligible?: boolean;
   isFresh?: boolean;
+  salary?: string;
+  industry?: string;
+  category?: string;
 }
 
 interface QuickPill {
@@ -142,6 +206,7 @@ interface QuickPill {
   query?: string;
   location?: string;
   remote?: string;
+  industry?: string;
   searchCount?: number;
   avgSearches?: number;
   formattedAverage?: string;
@@ -149,16 +214,17 @@ interface QuickPill {
 }
 
 const DEFAULT_POPULAR_PILLS: QuickPill[] = [
-  { id: 'full-stack-developer', label: '⚡ Full Stack', query: 'Full Stack Developer', avgSearches: 140, formattedAverage: '140/day', trend: 'hot' },
-  { id: 'react-developer', label: '⚛️ React / Next.js', query: 'React Developer', avgSearches: 125, formattedAverage: '125/day', trend: 'hot' },
-  { id: 'ai-machine-learning', label: '🤖 AI & ML', query: 'AI Machine Learning', avgSearches: 115, formattedAverage: '115/day', trend: 'rising' },
-  { id: 'python-backend', label: '🐍 Python / Backend', query: 'Python Backend Engineer', avgSearches: 95, formattedAverage: '95/day', trend: 'steady' },
-  { id: 'devops-cloud', label: '☁️ DevOps & Cloud', query: 'DevOps Cloud', avgSearches: 85, formattedAverage: '85/day', trend: 'steady' },
-  { id: 'healthcare-nursing', label: '🏥 Healthcare', query: 'Healthcare Clinical Nurse', avgSearches: 75, formattedAverage: '75/day', trend: 'rising' },
-  { id: 'data-analytics', label: '📊 Data Analyst', query: 'Data Analyst', avgSearches: 70, formattedAverage: '70/day', trend: 'rising' },
-  { id: 'mobile-developer', label: '📱 Mobile (Flutter/RN)', query: 'Mobile Developer', avgSearches: 60, formattedAverage: '60/day', trend: 'steady' },
-  { id: 'ui-ux-design', label: '🎨 UI/UX Design', query: 'Product Designer', avgSearches: 55, formattedAverage: '55/day', trend: 'steady' },
-  { id: 'cybersecurity', label: '🔒 Cybersecurity', query: 'Cybersecurity Analyst', avgSearches: 50, formattedAverage: '50/day', trend: 'rising' },
+  { id: 'healthcare-nursing', label: '🏥 Healthcare', industry: 'healthcare', avgSearches: 135, formattedAverage: '135/day', trend: 'hot' },
+  { id: 'full-stack-developer', label: '⚡ Full Stack', query: 'Full Stack Developer', industry: 'technology', avgSearches: 130, formattedAverage: '130/day', trend: 'hot' },
+  { id: 'finance-accounting', label: '📊 Finance & Accounts', industry: 'finance_accounting', avgSearches: 110, formattedAverage: '110/day', trend: 'rising' },
+  { id: 'education-teaching', label: '🎓 Education & Teaching', industry: 'education', avgSearches: 105, formattedAverage: '105/day', trend: 'rising' },
+  { id: 'construction-trades', label: '🏗️ Construction & Trades', industry: 'construction_trades', avgSearches: 90, formattedAverage: '90/day', trend: 'steady' },
+  { id: 'logistics-supply', label: '🚚 Logistics & Supply', industry: 'logistics_transport', avgSearches: 85, formattedAverage: '85/day', trend: 'steady' },
+  { id: 'manufacturing-industrial', label: '⚙️ Manufacturing', industry: 'manufacturing', avgSearches: 80, formattedAverage: '80/day', trend: 'steady' },
+  { id: 'retail-sales', label: '🛍️ Retail & Sales', industry: 'retail_sales', avgSearches: 75, formattedAverage: '75/day', trend: 'rising' },
+  { id: 'ai-machine-learning', label: '🤖 AI & ML', query: 'AI Machine Learning', industry: 'technology', avgSearches: 70, formattedAverage: '70/day', trend: 'rising' },
+  { id: 'admin-hr', label: '📋 Admin & HR', industry: 'administration_hr', avgSearches: 65, formattedAverage: '65/day', trend: 'steady' },
+  { id: 'customer-support', label: '🎧 Customer Support', industry: 'customer_service', avgSearches: 60, formattedAverage: '60/day', trend: 'steady' },
 ];
 
 
@@ -319,6 +385,9 @@ export default function Home() {
   const levelDropdownRef = useRef<HTMLDivElement>(null);
   const intentProcessedRef = useRef(false);
   const jobGridRef = useRef<HTMLDivElement>(null);
+  const resultsSectionRef = useRef<HTMLDivElement>(null);
+  const [isResultsFocused, setIsResultsFocused] = useState(false);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const executeSearch = useCallback(
     async (
@@ -658,42 +727,95 @@ export default function Home() {
     setLocationSuggestions(getLocationSuggestions(location, 15));
   }, [location]);
 
+  useEffect(() => {
+    return () => {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const scrollToResults = useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    const performScroll = () => {
+      const target = resultsSectionRef.current || jobGridRef.current;
+      if (!target) return;
+
+      const headerOffset = 90;
+      const targetRect = target.getBoundingClientRect();
+      const targetTop = targetRect.top + window.pageYOffset - headerOffset;
+
+      window.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: 'smooth',
+      });
+
+      setIsResultsFocused(true);
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+      focusTimeoutRef.current = setTimeout(() => {
+        setIsResultsFocused(false);
+      }, 2000);
+
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        // Fallback for environments without focus support
+      }
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(performScroll);
+    });
+  }, []);
+
   const handleDomainClick = (domain: DiscoveryDomain) => {
     const nextQuery = domain.query ?? '';
     const nextLoc = domain.location ?? '';
     const nextRemote = domain.remote ?? '';
+    const nextIndustry = domain.industry ?? '';
     setQuery(nextQuery);
     setLocation(nextLoc);
     setRemote(nextRemote);
+    setIndustry(nextIndustry);
     setSelectedRole('');
-    executeSearch(nextQuery, nextLoc, type, level, '', nextRemote);
+    executeSearch(nextQuery, nextLoc, type, level, '', nextRemote, nextIndustry);
+    scrollToResults();
   };
 
   const handleBrowseAllClick = () => {
     setQuery('');
+    setCompany('');
     setLocation('');
     setType('');
     setLevel('');
     setSelectedRole('');
     setRemote('');
-    executeSearch('', '', '', '', '', '');
+    setIndustry('');
+    executeSearch('', '', '', '', '', '', '', '');
+    scrollToResults();
   };
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     executeSearch();
+    scrollToResults();
   };
 
   const handleJobSuggestionClick = (suggestion: string) => {
     setQuery(suggestion);
     setShowJobDropdown(false);
     executeSearch(suggestion, location, type, level, selectedRole, remote);
+    scrollToResults();
   };
 
   const handleLocSuggestionClick = (loc: string) => {
     setLocation(loc);
     setShowLocDropdown(false);
     executeSearch(query, loc, type, level, selectedRole, remote);
+    scrollToResults();
   };
 
   const handleRoleSelect = (roleVal: string) => {
@@ -768,8 +890,26 @@ export default function Home() {
       setCompany(selectedComp);
       setShowCompanyDropdown(false);
       executeSearch(query, location, type, level, selectedRole, remote, industry, selectedComp);
+      scrollToResults();
     },
-    [query, location, type, level, selectedRole, remote, industry, executeSearch]
+    [query, location, type, level, selectedRole, remote, industry, executeSearch, scrollToResults]
+  );
+
+  const handleSelectIndustry = useCallback(
+    (selectedInd: string) => {
+      // Find matching canonical industry option
+      const match = INDUSTRY_OPTIONS.find(
+        (opt) =>
+          opt.value === selectedInd ||
+          opt.label.toLowerCase() === selectedInd.toLowerCase() ||
+          opt.label.toLowerCase().includes(selectedInd.toLowerCase())
+      );
+      const indVal = match ? match.value : selectedInd;
+      setIndustry(indVal);
+      executeSearch(query, location, type, level, selectedRole, remote, indVal, company);
+      scrollToResults();
+    },
+    [query, location, type, level, selectedRole, remote, company, executeSearch, scrollToResults]
   );
 
   const availableCompanies = useMemo(() => {
@@ -794,15 +934,18 @@ export default function Home() {
   };
 
   const handleQuickPillClick = (pill: QuickPill) => {
-    const nextQuery = pill.query ?? query;
+    const nextQuery = pill.query ?? (pill.industry ? '' : query);
     const nextLoc = pill.location ?? location;
     const nextRemote = pill.remote ?? remote;
+    const nextIndustry = pill.industry !== undefined ? pill.industry : industry;
 
     setQuery(nextQuery);
     if (pill.location !== undefined) setLocation(nextLoc);
     if (pill.remote !== undefined) setRemote(nextRemote);
+    if (pill.industry !== undefined) setIndustry(nextIndustry);
 
-    executeSearch(nextQuery, nextLoc, type, level, selectedRole, nextRemote);
+    executeSearch(nextQuery, nextLoc, type, level, selectedRole, nextRemote, nextIndustry);
+    scrollToResults();
   };
 
   const clearAllFilters = () => {
@@ -971,7 +1114,7 @@ export default function Home() {
     setQuery(categoryQuery);
     setSelectedRole('');
     executeSearch(categoryQuery, location, type, level, '', remote);
-    window.scrollTo({ top: 380, behavior: 'smooth' });
+    scrollToResults();
   };
 
   const handleFooterLocationClick = (locQuery: string, remoteVal = '') => {
@@ -979,7 +1122,7 @@ export default function Home() {
     setLocation(locQuery);
     if (remoteVal) setRemote(remoteVal);
     executeSearch(query, locQuery, type, level, selectedRole, remoteVal || remote);
-    window.scrollTo({ top: 380, behavior: 'smooth' });
+    scrollToResults();
   };
 
   return (
@@ -1425,16 +1568,16 @@ export default function Home() {
             style={{ fontSize: 'clamp(2.4rem, 5.2vw, 3.8rem)', fontWeight: 800, marginBottom: '1.15rem', lineHeight: 1.15, letterSpacing: '-0.03em' }}
           >
             Find Your Next <br />
-            <span className="text-gradient">High-Growth Tech Role</span>
+            <span className="text-gradient">Career Opportunity Across Any Industry</span>
           </motion.h2>
 
           <motion.p
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.5 }}
-            style={{ color: 'var(--text-secondary)', fontSize: '1.08rem', maxWidth: 640, margin: '0 auto 1.6rem', lineHeight: 1.65 }}
+            style={{ color: 'var(--text-secondary)', fontSize: '1.08rem', maxWidth: 680, margin: '0 auto 1.6rem', lineHeight: 1.65 }}
           >
-            Direct applications from verified employer ATS boards and legitimate public engineering hubs. Zero spam, zero middleman fees.
+            Direct applications from verified employer ATS boards and official career portals across Tech, Healthcare, Finance, Education, Trades, and more. Zero spam, zero middleman fees.
           </motion.p>
 
           {/* Value Proposition Pills */}
@@ -1453,9 +1596,9 @@ export default function Home() {
             <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
               <ShieldCheck size={14} color="#10b981" /> 100% Direct ATS Links
             </span>
-            {/* <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
-            <Zap size={14} color="#f59e0b" /> Zero Paywalls
-          </span> */}
+            <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
+              <Building2 size={14} color="#a855f7" /> 15+ Career Sectors
+            </span>
             <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
               <Globe size={14} color="#38bdf8" /> Global &amp; India Roles
             </span>
@@ -1914,6 +2057,7 @@ export default function Home() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 type="submit"
+                onClick={scrollToResults}
                 className="btn-primary search-submit-btn"
                 style={{
                   height: 48,
@@ -3387,6 +3531,123 @@ export default function Home() {
             )}
           </motion.form>
 
+          {/* Multi-Industry Quick Selection Bar */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.28 }}
+            className="industry-showcase-container"
+            style={{
+              margin: '1.25rem auto 0.75rem',
+              maxWidth: 1000,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+                padding: '0 0.25rem',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.82rem',
+                  color: 'var(--text-muted)',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  letterSpacing: '0.01em',
+                }}
+              >
+                <Building2 size={13} style={{ color: 'var(--primary-start)' }} />
+                <span>Explore by Industry:</span>
+              </span>
+
+              {industry && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIndustry('');
+                    executeSearch(query, location, type, level, selectedRole, remote, '', company);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--primary-start)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  <X size={12} />
+                  <span>Show All Industries</span>
+                </button>
+              )}
+            </div>
+
+            <div
+              className="industry-showcase-pills"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.45rem',
+                justifyContent: 'center',
+                width: '100%',
+              }}
+            >
+              {INDUSTRY_OPTIONS.map((opt) => {
+                const isSelected = industry === opt.value;
+                return (
+                  <button
+                    key={opt.value || 'all'}
+                    type="button"
+                    onClick={() => {
+                      const nextInd = isSelected ? '' : opt.value;
+                      setIndustry(nextInd);
+                      executeSearch(query, location, type, level, selectedRole, remote, nextInd, company);
+                    }}
+                    title={opt.value ? `Filter opportunities in ${opt.label}` : 'Show all industries'}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      background: isSelected
+                        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(139, 92, 246, 0.22))'
+                        : 'var(--surface-card, rgba(255, 255, 255, 0.04))',
+                      color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      border: `1px solid ${isSelected ? 'rgba(99, 102, 241, 0.55)' : 'var(--border)'}`,
+                      boxShadow: isSelected ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none',
+                      padding: '0.35rem 0.72rem',
+                      borderRadius: 16,
+                      fontSize: '0.8rem',
+                      fontWeight: isSelected ? 700 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                      whiteSpace: 'nowrap',
+                      outline: 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.9rem' }}>{opt.icon}</span>
+                    <span>{opt.label}</span>
+                    {isSelected && <Check size={12} color="var(--primary-start)" style={{ strokeWidth: 2.5 }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+
           {/* Dynamic Popular Search Pills (Ranked by Average Daily Searches) */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -3430,21 +3691,46 @@ export default function Home() {
           </motion.div>
         </section>
 
-        {/* Results Header Toolbar */}
-        {!loading && (activeView === 'saved' ? savedJobs.length > 0 : searched && displayedJobs.length > 0) && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="results-header-toolbar"
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {activeView === 'saved'
-                  ? `${savedJobs.length} Saved Positions`
-                  : displayedJobs.length > JOBS_BATCH_SIZE
-                    ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
-                    : `${displayedJobs.length.toLocaleString()} Verified Positions`}
-              </span>
+        {/* Results Header & Grid Section Anchor */}
+        <section
+          ref={resultsSectionRef}
+          id="search-results-section"
+          tabIndex={-1}
+          className={`search-results-section ${isResultsFocused ? 'results-focused-glow' : ''}`}
+          style={{
+            scrollMarginTop: '90px',
+            outline: 'none',
+            position: 'relative',
+          }}
+          aria-label="Search results and opportunities feed"
+        >
+          {/* Results Header Toolbar */}
+          {!loading && (activeView === 'saved' ? savedJobs.length > 0 : searched && displayedJobs.length > 0) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="results-header-toolbar"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {activeView === 'saved'
+                    ? `${savedJobs.length} Saved Positions`
+                    : displayedJobs.length > JOBS_BATCH_SIZE
+                      ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
+                      : `${displayedJobs.length.toLocaleString()} Verified Positions`}
+                </span>
+                {isResultsFocused && (
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.88, y: -2 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.88 }}
+                    className="results-focus-clue-badge"
+                    title="Results section in focus"
+                  >
+                    <ArrowDown size={11} strokeWidth={2.5} />
+                    <span>Results in Focus</span>
+                  </motion.span>
+                )}
               {activeView !== 'saved' && (
                 <motion.div
                   key={`toolbar-matched-${displayedJobs.length}`}
@@ -3655,6 +3941,7 @@ export default function Home() {
                       job={job}
                       index={index}
                       onSelectCompany={handleSelectCompany}
+                      onSelectIndustry={handleSelectIndustry}
                     />
                   ))}
                 </div>
@@ -3802,6 +4089,7 @@ export default function Home() {
                     job={job}
                     index={index}
                     onSelectCompany={handleSelectCompany}
+                    onSelectIndustry={handleSelectIndustry}
                   />
                 ))}
               </div>
@@ -3953,10 +4241,10 @@ export default function Home() {
                   <span>Curated Discovery Tracks</span>
                 </div>
                 <h3 style={{ fontSize: '2.1rem', fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text-primary)', marginBottom: '0.6rem' }}>
-                  Explore High-Demand Engineering Tracks
+                  Explore Opportunities Across Every Industry
                 </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', maxWidth: 600, margin: '0 auto', lineHeight: 1.6 }}>
-                  Select a high-demand domain to explore live verified opportunities, or query specific keywords with the search console above.
+                <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', maxWidth: 640, margin: '0 auto', lineHeight: 1.6 }}>
+                  Select a career sector to explore live verified positions from direct employer ATS and official job boards, or search specific keywords above.
                 </p>
               </div>
 
@@ -4077,6 +4365,7 @@ export default function Home() {
             </div>
           )}
         </div>
+        </section>
 
         {/* Floating Back to Top Button */}
         <AnimatePresence>

@@ -7,9 +7,12 @@ import {
 
 const searchService = new JobSearchService();
 
-export async function GET(request: Request = new Request('http://localhost:3000/api/jobs/stats')) {
+export async function GET(request: Request): Promise<NextResponse>;
+export async function GET(): Promise<NextResponse>;
+export async function GET(request?: Request): Promise<NextResponse> {
+  const req = request || new Request('http://localhost:3000/api/jobs/stats');
   try {
-    const sessionId = extractSessionId(request);
+    const sessionId = extractSessionId(req);
     const auth = validateSession(sessionId);
     const isAuthenticated = Boolean(auth.valid && auth.user);
 

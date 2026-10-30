@@ -1136,14 +1136,14 @@ export default function AdminConsolePage() {
                 <div className="admin-ledger-table-wrap">
                   <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
                     <colgroup>
-                      <col style={{ width: '9%' }} />
-                      <col style={{ width: '14%' }} />
-                      <col style={{ width: '21%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '19%' }} />
                       <col style={{ width: '11%' }} />
                       <col style={{ width: '8%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '12%' }} />
                     </colgroup>
                     <thead>
                       <tr className="admin-table-head">
@@ -1154,7 +1154,7 @@ export default function AdminConsolePage() {
                         <th style={{ padding: '0.65rem 0.6rem' }}>Amount</th>
                         <th style={{ padding: '0.65rem 0.6rem' }}>Dates</th>
                         <th style={{ padding: '0.65rem 0.6rem' }}>Decision / Reviewer</th>
-                        <th style={{ padding: '0.65rem 0.6rem', textAlign: 'right' }}>Actions</th>
+                        <th style={{ padding: '0.65rem 0.6rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1262,12 +1262,12 @@ export default function AdminConsolePage() {
                                 <span style={{ color: 'var(--text-secondary, #64748b)' }}>Pending Review</span>
                               )}
                             </td>
-                            <td style={{ padding: '0.65rem 0.6rem', textAlign: 'right' }}>
+                            <td style={{ padding: '0.65rem 0.6rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                               <button
                                 type="button"
                                 onClick={() => openUser360(item.userEmail || item.userId)}
                                 className="admin-action-btn-secondary"
-                                style={{ padding: '0.35rem 0.55rem', fontSize: '0.74rem' }}
+                                style={{ padding: '0.35rem 0.55rem', fontSize: '0.74rem', whiteSpace: 'nowrap' }}
                               >
                                 <Eye size={12} />
                                 View 360°
