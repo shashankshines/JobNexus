@@ -45,7 +45,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const rawSortDir = searchParams.get('sortDir');
   const sortDir = (rawSortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
-  const limitParam = parseInt(searchParams.get('limit') || '50', 10);
+  const limitParam = parseInt(searchParams.get('limit') || '5', 10);
   const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       expiringSoon,
       sortBy,
       sortDir,
-      limit: isNaN(limitParam) ? 50 : limitParam,
+      limit: isNaN(limitParam) ? 5 : limitParam,
       offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
 
@@ -75,10 +75,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       };
     });
 
+    const totalCount = typeof (rawSubs as { total?: number }).total === 'number' ? (rawSubs as { total?: number }).total! : enrichedSubs.length;
+
     return NextResponse.json({
       success: true,
       subscriptions: enrichedSubs,
-      total: enrichedSubs.length,
+      total: totalCount,
+      limit: isNaN(limitParam) ? 5 : limitParam,
+      offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
   } catch (err) {
     console.error('[Admin Subscriptions GET Error]:', err);

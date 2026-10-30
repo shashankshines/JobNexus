@@ -27,7 +27,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const query = searchParams.get('query') || undefined;
   const dateFrom = searchParams.get('dateFrom') || undefined;
   const dateTo = searchParams.get('dateTo') || undefined;
-  const limitParam = parseInt(searchParams.get('limit') || '50', 10);
+  const limitParam = parseInt(searchParams.get('limit') || '5', 10);
   const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
 
   const filter: PaymentLedgerFilter = {
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     query,
     dateFrom,
     dateTo,
-    limit: isNaN(limitParam) ? 50 : limitParam,
+    limit: isNaN(limitParam) ? 5 : limitParam,
     offset: isNaN(offsetParam) ? 0 : offsetParam,
   };
 
@@ -46,6 +46,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       records: result.records,
       summary: result.summary,
       total: result.total,
+      limit: isNaN(limitParam) ? 5 : limitParam,
+      offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
   } catch (err) {
     console.error('[Admin Billing Ledger GET Error]:', err);

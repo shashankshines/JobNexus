@@ -29,7 +29,8 @@ export default function AdminPaymentSettingsPage() {
       <header className="admin-header">
         <div
           style={{
-            maxWidth: 1280,
+            width: '85%',
+            maxWidth: '85vw',
             margin: '0 auto',
             padding: '0 1.5rem',
             height: 72,
@@ -71,7 +72,7 @@ export default function AdminPaymentSettingsPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                color: '#ffffff',
+                color: '#fff',
                 flexShrink: 0,
               }}
             >

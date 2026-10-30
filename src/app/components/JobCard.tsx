@@ -50,6 +50,21 @@ const PALETTE_CLASSES: Record<ContextualPalette, string> = {
   india: styles.paletteIndia,
 };
 
+const CARD_THEME_CLASSES: Record<ContextualPalette, string> = {
+  indigo: styles.cardThemeIndigo,
+  cyan: styles.cardThemeCyan,
+  purple: styles.cardThemePurple,
+  rose: styles.cardThemeRose,
+  emerald: styles.cardThemeEmerald,
+  amber: styles.cardThemeAmber,
+  sky: styles.cardThemeSky,
+  teal: styles.cardThemeTeal,
+  crimson: styles.cardThemeCrimson,
+  gold: styles.cardThemeGold,
+  lime: styles.cardThemeLime,
+  india: styles.cardThemeIndia,
+};
+
 interface JobCardProps {
   job: {
     id: string;
@@ -145,6 +160,32 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
     [job.source]
   );
   const SourceIcon = sourceBadge.icon;
+
+  const filteredTags = useMemo(() => {
+    if (!job.tags || !Array.isArray(job.tags)) return [];
+    const industryLower = (job.industry || industryBadge.label || '').toLowerCase();
+    const typeLower = (job.type || '').toLowerCase();
+
+    return job.tags
+      .filter((tag) => {
+        if (!tag || typeof tag !== 'string') return false;
+        const tagLower = tag.trim().toLowerCase();
+        // Skip workplace duplicates (e.g. "Remote", "Hybrid", "On-site")
+        if (tagLower === 'remote' || tagLower === 'hybrid' || tagLower === 'on-site' || tagLower === 'onsite') {
+          return false;
+        }
+        // Skip duplicate of industry
+        if (tagLower === industryLower || industryLower.includes(tagLower)) {
+          return false;
+        }
+        // Skip duplicate of employment type (e.g. "full time", "full-time", "contract")
+        if (tagLower === typeLower || tagLower === 'full time' || tagLower === 'full-time' || tagLower === 'part time' || tagLower === 'part-time') {
+          return false;
+        }
+        return true;
+      })
+      .slice(0, 4);
+  }, [job.tags, job.industry, industryBadge.label, job.type]);
 
   const formattedDate = useMemo(() => {
     try {
@@ -330,7 +371,7 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ duration: 0.25, delay: isInitialBatch ? Math.min((index % 18) * 0.03, 0.3) : 0, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -5, scale: 1.01 }}
-      className={styles.card}
+      className={`${styles.card} ${CARD_THEME_CLASSES[roleCategory.palette] || styles.cardThemeIndigo}`}
       data-job-card-index={index + 1}
       onMouseMove={handleMouseMove}
     >
@@ -384,7 +425,7 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
 
       {/* 2. Header: Title & Company */}
       <div className={styles.header}>
-        <h3 className={styles.title}>{job.title}</h3>
+        <h3 className={styles.title} title={job.title}>{job.title}</h3>
         {isAuthenticated ? (
           <div
             className={`${styles.company} ${onSelectCompany && displayedCompany && !isCompanyMasked(displayedCompany) ? styles.companyClickable : ''}`}
@@ -407,7 +448,7 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
             <span className={styles.companyIconWrapper}>
               <Building2 size={13} strokeWidth={2.2} />
             </span>
-            <span>{displayedCompany}</span>
+            <span className={styles.companyName}>{displayedCompany}</span>
           </div>
         ) : (
           <div
@@ -547,9 +588,9 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
       </div>
 
       {/* 5. Contextual Tags with Tailored Icons and Distinct Contextual Colors */}
-      <div className={styles.tags}>
-        {job.tags &&
-          job.tags.slice(0, 4).map((tag, i) => {
+      {filteredTags.length > 0 && (
+        <div className={styles.tags}>
+          {filteredTags.map((tag, i) => {
             const tagStyle = getContextualTagStyle(tag);
             const TagIcon = tagStyle.icon;
             return (
@@ -563,7 +604,8 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
               </span>
             );
           })}
-      </div>
+        </div>
+      )}
 
       {/* 6. Footer Actions: Branded Source Badge & Apply Actions */}
       <div className={styles.actions}>
@@ -572,8 +614,8 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
             className={`${styles.sourceBadge} ${PALETTE_CLASSES[sourceBadge.palette]}`}
             title={sourceBadge.title}
           >
-            <SourceIcon size={13} strokeWidth={2.2} />
-            <span>{sourceBadge.label}</span>
+            <SourceIcon size={13} strokeWidth={2.2} className={styles.sourceIcon} />
+            <span className={styles.sourceText}>{sourceBadge.label}</span>
           </div>
         ) : (
           <div
@@ -590,12 +632,12 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
             title="Sign in to reveal job source"
             aria-label={`${ANONYMOUS_SOURCE_LABEL}. Sign in to reveal source.`}
           >
-            <Lock size={11} strokeWidth={2.2} />
-            <span>{ANONYMOUS_SOURCE_LABEL}</span>
+            <Lock size={11} strokeWidth={2.2} className={styles.sourceIcon} />
+            <span className={styles.sourceText}>{ANONYMOUS_SOURCE_LABEL}</span>
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className={styles.actionsBtnGroup}>
           {/* Share / Copy Link Button */}
           <button
             type="button"
@@ -634,19 +676,9 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
               href={effectiveUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-primary"
+              className={styles.applyBtn}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              style={{
-                fontSize: '0.85rem',
-                padding: '0.5rem 1rem',
-                borderRadius: 8,
-                textDecoration: 'none',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
               title="Apply directly on employer ATS portal"
               aria-label={`Apply directly for ${job.title}`}
             >
@@ -658,22 +690,9 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
               type="button"
               onClick={handleApplyClick}
               disabled={isResolving}
-              className="btn-primary"
+              className={styles.applyBtn}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              style={{
-                fontSize: '0.85rem',
-                padding: '0.5rem 1rem',
-                borderRadius: 8,
-                textDecoration: 'none',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                cursor: isResolving ? 'wait' : 'pointer',
-                border: 'none',
-                opacity: isResolving ? 0.75 : 1,
-              }}
               title={isAuthenticated ? 'Open official application' : 'Sign in to apply on employer ATS portal'}
               aria-label={`Apply for ${job.title}`}
             >

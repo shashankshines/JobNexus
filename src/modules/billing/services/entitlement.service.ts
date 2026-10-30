@@ -174,18 +174,55 @@ export function evaluateSubscriptionEntitlement(
   };
 }
 
+// In-memory request-scoped TTL cache for authoritative entitlements
+interface CachedEntitlementEntry {
+  entitlement: UserEntitlement;
+  timestamp: number;
+}
+
+const ENTITLEMENT_CACHE_TTL_MS = 15 * 1000; // 15 seconds request/component deduplication window
+const entitlementCache = new Map<string, CachedEntitlementEntry>();
+
+/**
+ * Instantly invalidates the in-memory entitlement cache for a specific user,
+ * or clears all cached entitlements if no userId is provided.
+ * MUST be invoked on any administrative mutation or subscription status transition.
+ */
+export function invalidateUserEntitlementCache(userId?: string): void {
+  if (userId) {
+    entitlementCache.delete(userId);
+  } else {
+    entitlementCache.clear();
+  }
+}
+
 /**
  * Authoritative Async Entitlement Accessor.
  * Queries Cloud Firestore as the single production source of truth.
+ * Caches results in-memory for 15s to eliminate redundant reads on concurrent component mounts.
  * Throws explicit error on Firestore operational failures (fail closed).
  */
-export async function getAuthoritativeUserEntitlement(userId: string): Promise<UserEntitlement> {
+export async function getAuthoritativeUserEntitlement(
+  userId: string,
+  options?: { bypassCache?: boolean; forceCache?: boolean }
+): Promise<UserEntitlement> {
   if (!userId) {
     return evaluateSubscriptionEntitlement('', null);
   }
 
+  const now = Date.now();
+  const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  if (!isTestEnv && !options?.bypassCache) {
+    const cached = entitlementCache.get(userId);
+    if (cached && now - cached.timestamp < ENTITLEMENT_CACHE_TTL_MS) {
+      return cached.entitlement;
+    }
+  }
+
   const sub = await getFirestoreSubscriptionByUserId(userId);
-  return evaluateSubscriptionEntitlement(userId, sub);
+  const entitlement = evaluateSubscriptionEntitlement(userId, sub);
+  entitlementCache.set(userId, { entitlement, timestamp: now });
+  return entitlement;
 }
 
 /**

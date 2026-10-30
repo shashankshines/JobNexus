@@ -10,6 +10,13 @@ import {
 } from './collections';
 import { getUserById } from '@/modules/auth/server/session.store';
 
+let cachedAuditLogs: { logs: AdminAuditLogDocument[]; timestamp: number } | null = null;
+const AUDIT_CACHE_TTL_MS = 20 * 1000; // 20-second snapshot cache
+
+export function invalidateAuditLogsCache(): void {
+  cachedAuditLogs = null;
+}
+
 /**
  * Records an immutable administrative audit log entry.
  */
@@ -43,24 +50,37 @@ export async function recordAdminAuditLog(params: {
   };
 
   await auditLogsCol.doc(auditId).set(auditEntry);
+  invalidateAuditLogsCache();
   return auditEntry;
 }
 
 /**
  * Retrieves audit logs with optional filtering by action, actor, target, and dates.
  */
-export async function getAdminAuditLogs(params?: {
-  limit?: number;
-  offset?: number;
-  action?: string;
-  adminEmail?: string;
-  targetUserId?: string;
-  dateFrom?: string;
-  dateTo?: string;
-}): Promise<AdminAuditLogDocument[]> {
-  const auditLogsCol = getAuditLogsCollection();
-  const snap = await auditLogsCol.get();
-  let logs: AdminAuditLogDocument[] = snap.docs.map((d) => d.data());
+export async function getAdminAuditLogs(
+  params?: {
+    limit?: number;
+    offset?: number;
+    action?: string;
+    adminEmail?: string;
+    targetUserId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  },
+  options?: { bypassCache?: boolean; forceCache?: boolean }
+): Promise<AdminAuditLogDocument[]> {
+  const now = Date.now();
+  const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  let logs: AdminAuditLogDocument[];
+
+  if (!isTestEnv && !options?.bypassCache && cachedAuditLogs && now - cachedAuditLogs.timestamp < AUDIT_CACHE_TTL_MS) {
+    logs = [...cachedAuditLogs.logs];
+  } else {
+    const auditLogsCol = getAuditLogsCollection();
+    const snap = await auditLogsCol.get();
+    logs = snap.docs.map((d) => d.data());
+    cachedAuditLogs = { logs, timestamp: now };
+  }
 
   if (params?.action && params.action !== 'all') {
     logs = logs.filter((l) => l.action === params.action);
@@ -98,8 +118,10 @@ export async function getAdminAuditLogs(params?: {
   });
 
   enriched.sort((a, b) => (a.timestamp > b.timestamp ? -1 : 1));
+  const total = enriched.length;
   const offset = params?.offset || 0;
-  const limit = Math.min(Math.max(params?.limit || 50, 1), 200);
-  return enriched.slice(offset, offset + limit);
+  const limit = Math.min(Math.max(params?.limit || 5, 1), 200);
+  const paged = enriched.slice(offset, offset + limit);
+  return Object.assign(paged, { total });
 }
 

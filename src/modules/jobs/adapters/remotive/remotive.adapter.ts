@@ -31,9 +31,10 @@ export class RemotiveAdapter implements JobProvider {
 
   private readonly baseUrl = 'https://remotive.com/api/remote-jobs';
 
-  async fetchJobs(params: JobSearchParams): Promise<NormalizedJob[]> {
-    const url = params.query
-      ? `${this.baseUrl}?search=${encodeURIComponent(params.query.trim())}`
+  async fetchJobs(params: JobSearchParams = {}): Promise<NormalizedJob[]> {
+    const query = params?.query?.trim();
+    const url = query
+      ? `${this.baseUrl}?search=${encodeURIComponent(query)}`
       : this.baseUrl;
 
     const res = await fetchWithTimeout(url, {}, this.timeoutMs);
@@ -46,7 +47,7 @@ export class RemotiveAdapter implements JobProvider {
       return [];
     }
 
-    const limit = params.query ? 200 : 50;
+    const limit = query ? 200 : 50;
     const candidates = json.jobs.slice(0, limit);
     const jobs: NormalizedJob[] = [];
 

@@ -221,10 +221,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (data.authenticated && data.user) {
             setUser(data.user);
             setStatus('authenticated');
-            // Fetch user's saved jobs
-            fetchSavedJobs();
-            // Fetch user's billing entitlement
-            const userEntitlement = await refreshEntitlement();
+            // Concurrently restore saved jobs and authoritative billing entitlement
+            const [, userEntitlement] = await Promise.all([
+              fetchSavedJobs(),
+              refreshEntitlement(),
+            ]);
 
             if (typeof window !== 'undefined') {
               const urlParams = new URLSearchParams(window.location.search);

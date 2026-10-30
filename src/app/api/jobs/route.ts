@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
     const responseHeaders: Record<string, string> = {
       'Vary': 'Cookie, Authorization',
-      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      'Cache-Control': 'private, max-age=15, stale-while-revalidate=60',
     };
 
     // Support single job query by id

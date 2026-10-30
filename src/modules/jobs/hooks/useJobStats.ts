@@ -41,10 +41,13 @@ export function useJobStats(fallbackCount = 1350) {
 
   useEffect(() => {
     fetchStats();
-    // Poll every 30 seconds for live dynamic updates across ATS feeds
+    // Poll every 120 seconds for live dynamic updates when the page is active
     const intervalId = setInterval(() => {
-      fetchStats(true);
-    }, 30000);
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return; // Skip background polling when tab is inactive
+      }
+      fetchStats(false);
+    }, 120000);
     return () => clearInterval(intervalId);
   }, [fetchStats]);
 

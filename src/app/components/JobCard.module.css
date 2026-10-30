@@ -1,8 +1,8 @@
 .card {
-  padding: 1.5rem;
+  padding: 1.35rem 1.45rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
   border: 1px solid var(--border-card);
   background: var(--surface-card);
   backdrop-filter: blur(16px);
@@ -10,7 +10,7 @@
   transform: translateZ(0);
   position: relative;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: var(--shadow-card);
   transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: default;
@@ -22,17 +22,16 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.4), transparent);
-  opacity: 0.3;
+  height: 2.5px;
+  background: linear-gradient(90deg, transparent, var(--card-accent, rgba(99, 102, 241, 0.6)), transparent);
+  opacity: 0.6;
   transition: opacity 0.3s ease;
 }
 
 .card:hover {
-  border-color: var(--border-card-hover);
-  background: var(--surface-card-hover);
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-card-hover);
+  border-color: var(--card-accent, var(--border-card-hover));
+  transform: translateY(-5px);
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.45), 0 0 24px -6px var(--card-accent-glow);
 }
 
 .card:hover::after {
@@ -46,7 +45,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(99, 102, 241, 0.09), transparent 45%);
+  background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--card-accent-glow, rgba(99, 102, 241, 0.1)), transparent 45%);
   opacity: 0;
   transition: opacity 0.35s ease;
   pointer-events: none;
@@ -54,6 +53,143 @@
 
 .card:hover::before {
   opacity: 1;
+}
+
+/* ==========================================================================
+   Contextual Role & Industry Card Themes (Unique Backgrounds & Light Beams)
+   ========================================================================== */
+.cardThemeIndigo {
+  --card-accent: #818cf8;
+  --card-accent-glow: rgba(99, 102, 241, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 27, 75, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(99, 102, 241, 0.18);
+}
+
+.cardThemeCyan {
+  --card-accent: #38bdf8;
+  --card-accent-glow: rgba(56, 189, 248, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(8, 47, 73, 0.38) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(56, 189, 248, 0.18);
+}
+
+.cardThemePurple {
+  --card-accent: #c084fc;
+  --card-accent-glow: rgba(168, 85, 247, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(59, 7, 100, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(168, 85, 247, 0.18);
+}
+
+.cardThemeRose {
+  --card-accent: #fb7185;
+  --card-accent-glow: rgba(244, 63, 94, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(76, 5, 25, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(244, 63, 94, 0.18);
+}
+
+.cardThemeEmerald {
+  --card-accent: #34d399;
+  --card-accent-glow: rgba(16, 185, 129, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(6, 78, 59, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(16, 185, 129, 0.18);
+}
+
+.cardThemeAmber {
+  --card-accent: #fbbf24;
+  --card-accent-glow: rgba(245, 158, 11, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(69, 26, 3, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+.cardThemeSky {
+  --card-accent: #38bdf8;
+  --card-accent-glow: rgba(14, 165, 233, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(12, 74, 110, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(14, 165, 233, 0.18);
+}
+
+.cardThemeTeal {
+  --card-accent: #2dd4bf;
+  --card-accent-glow: rgba(20, 184, 166, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(19, 78, 74, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(20, 184, 166, 0.18);
+}
+
+.cardThemeCrimson {
+  --card-accent: #f87171;
+  --card-accent-glow: rgba(239, 68, 68, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(69, 10, 10, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.cardThemeGold {
+  --card-accent: #eab308;
+  --card-accent-glow: rgba(234, 179, 8, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(66, 32, 6, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(234, 179, 8, 0.18);
+}
+
+.cardThemeLime {
+  --card-accent: #a3e635;
+  --card-accent-glow: rgba(163, 230, 53, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(20, 83, 45, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(163, 230, 53, 0.18);
+}
+
+.cardThemeIndia {
+  --card-accent: #f97316;
+  --card-accent-glow: rgba(249, 115, 22, 0.28);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(67, 20, 7, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
+  border-color: rgba(249, 115, 22, 0.18);
+}
+
+/* Light Theme Contextual Tint */
+:root[data-theme="light"] .cardThemeIndigo {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(238, 242, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+:root[data-theme="light"] .cardThemeCyan {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+:root[data-theme="light"] .cardThemePurple {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 245, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(168, 85, 247, 0.25);
+}
+:root[data-theme="light"] .cardThemeRose {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 241, 242, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(244, 63, 94, 0.25);
+}
+:root[data-theme="light"] .cardThemeEmerald {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(236, 253, 245, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+:root[data-theme="light"] .cardThemeAmber {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 243, 199, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+:root[data-theme="light"] .cardThemeSky {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(14, 165, 233, 0.25);
+}
+:root[data-theme="light"] .cardThemeTeal {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(204, 251, 241, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(20, 184, 166, 0.25);
+}
+:root[data-theme="light"] .cardThemeCrimson {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 242, 242, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+:root[data-theme="light"] .cardThemeGold {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 252, 232, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(234, 179, 8, 0.25);
+}
+:root[data-theme="light"] .cardThemeLime {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(247, 254, 231, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(163, 230, 53, 0.25);
+}
+:root[data-theme="light"] .cardThemeIndia {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 237, 213, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(249, 115, 22, 0.25);
 }
 
 /* Top bar: Domain Pill on left, Fresh badge + Bookmark on right */
@@ -103,27 +239,40 @@
   gap: 0.35rem;
 }
 
+/* Main Role Title - Reduced & Refined Font Size */
 .title {
-  font-size: 1.18rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-primary);
-  line-height: 1.35;
-  letter-spacing: -0.015em;
-  transition: color 0.2s ease;
+  line-height: 1.36;
+  letter-spacing: -0.012em;
+  transition: color 0.18s ease;
   overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
 }
 
 .card:hover .title {
-  color: var(--card-title-hover, var(--primary));
+  color: var(--card-accent, var(--primary));
 }
 
 .company {
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  max-width: 100%;
+}
+
+.companyName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .companyClickable {
@@ -146,8 +295,8 @@
 }
 
 .companyIconWrapper {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
@@ -199,7 +348,7 @@
 .companyHiddenLabel {
   font-weight: 600;
   color: var(--text-secondary);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   line-height: 1.25;
   transition: color 0.2s ease;
 }
@@ -216,7 +365,7 @@
 .badgesRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.4rem;
   align-items: center;
 }
 
@@ -224,10 +373,10 @@
 .contextualBadge {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.22rem 0.6rem;
+  gap: 0.32rem;
+  padding: 0.22rem 0.58rem;
   border-radius: 9999px;
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   font-weight: 600;
   line-height: 1.25;
   border: 1px solid transparent;
@@ -436,22 +585,23 @@
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.83rem;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 0.79rem;
   color: var(--text-secondary);
-  padding-top: 0.15rem;
+  padding: 0.1rem 0;
 }
 
 .metaItem {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .metaIconWrapper {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   display: inline-flex;
@@ -469,21 +619,21 @@
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.38rem;
   margin-top: auto;
-  padding-top: 0.2rem;
+  padding-top: 0.15rem;
 }
 
 .contextualTag {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.74rem;
-  padding: 0.24rem 0.65rem;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  padding: 0.22rem 0.58rem;
   border-radius: 9999px;
-  font-weight: 600;
+  font-weight: 550;
   border: 1px solid transparent;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
   cursor: default;
 }
@@ -494,15 +644,18 @@
   box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.25);
 }
 
-/* Bottom Action Strip */
+/* ==========================================================================
+   Bottom Action Strip - Rigid Pixel-Perfect Horizontal Alignment
+   ========================================================================== */
 .actions {
-  margin-top: 0.75rem;
+  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.85rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border);
-  gap: 0.75rem;
+  gap: 0.55rem;
+  min-height: 44px;
 }
 
 .sourceBadge {
@@ -510,14 +663,30 @@
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  padding: 0.24rem 0.6rem;
+  padding: 0.28rem 0.65rem;
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.38rem;
   transition: all 0.2s ease;
   border: 1px solid transparent;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 145px;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.sourceText {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.sourceIcon {
+  flex-shrink: 0;
 }
 
 .sourceBadge:hover {
@@ -544,13 +713,21 @@
   outline-offset: 2px;
 }
 
+.actionsBtnGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .iconBtn {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -558,6 +735,7 @@
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .iconBtn:hover {
@@ -570,6 +748,45 @@
 
 .iconBtn:active {
   transform: translateY(0) scale(0.95);
+}
+
+.applyBtn {
+  height: 38px;
+  min-width: 96px;
+  padding: 0 1.05rem;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-decoration: none;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff !important;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.applyBtn:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
+  color: #ffffff !important;
+}
+
+.applyBtn:active {
+  transform: translateY(0);
+}
+
+.applyBtn:disabled {
+  opacity: 0.75;
+  cursor: wait;
 }
 
 .tooltip {
@@ -597,22 +814,34 @@
 
   .card {
     padding: 1.15rem;
-    gap: 0.85rem;
+    gap: 0.75rem;
     border-radius: 14px;
   }
 
   .title {
-    font-size: 1.08rem;
-    line-height: 1.3;
+    font-size: 0.98rem;
+    line-height: 1.32;
   }
 
   .meta {
-    gap: 0.75rem;
-    font-size: 0.78rem;
+    gap: 0.65rem;
+    font-size: 0.75rem;
   }
 
   .iconBtn {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .applyBtn {
+    height: 36px;
+    min-width: 86px;
+    padding: 0 0.85rem;
+    font-size: 0.8rem;
+  }
+
+  .sourceBadge {
+    height: 36px;
+    max-width: 125px;
   }
 }

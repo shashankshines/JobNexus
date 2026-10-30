@@ -13,6 +13,7 @@ import {
   reserveUtrInTransaction,
 } from './utr-reservation';
 import { getPaymentSettings } from './settings.store';
+import { invalidateAdminStoresCache } from './admin-billing.store';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 // ============================================================================
@@ -217,7 +218,7 @@ export async function createPaymentSubmission(params: {
 
   const db = getFirestoreDb();
 
-  return await db.runTransaction(async (transaction) => {
+  const submissionDoc = await db.runTransaction(async (transaction) => {
     // 1. Fetch and validate order
     const orderRef = getOrdersCollection().doc(orderId);
     const orderSnap = await transaction.get(orderRef);
@@ -282,6 +283,14 @@ export async function createPaymentSubmission(params: {
 
     return submissionDoc;
   });
+
+  try {
+    invalidateAdminStoresCache();
+  } catch {
+    // ignore
+  }
+
+  return submissionDoc;
 }
 
 /**

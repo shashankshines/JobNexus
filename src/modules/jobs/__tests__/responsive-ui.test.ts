@@ -280,5 +280,69 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
       assert.ok(cssContent.includes('box-shadow: none !important;'), 'globals.css must enforce zero box-shadow on logos');
     });
   });
+
+  describe('Smooth Hero Text Animation Invariants', () => {
+    it('structures hero headline into two balanced, shift-free tiers', () => {
+      assert.ok(pageContent.includes('hero-headline-tier-primary'), 'page.tsx must define primary headline tier');
+      assert.ok(pageContent.includes('hero-headline-tier-secondary'), 'page.tsx must define secondary headline tier');
+      assert.ok(cssContent.includes('.hero-headline-tier'), 'globals.css must style .hero-headline-tier');
+    });
+
+    it('uses mode="popLayout" for gapless, continuous vertical reel animation', () => {
+      assert.ok(pageContent.includes('mode="popLayout"'), 'Rotating words must use mode="popLayout" to eliminate empty gaps');
+      assert.ok(!pageContent.includes('rotateX: -35'), 'Must eliminate 3D rotateX to prevent GPU raster stutters on gradient text');
+      assert.ok(!pageContent.includes('filter: \'blur(6px)\''), 'Must eliminate filter: blur to preserve 60/120fps hardware acceleration');
+    });
+
+    it('implements hardware-accelerated transforms and containment on rotating word wrapper', () => {
+      assert.ok(cssContent.includes('contain: layout;'), 'globals.css must isolate layout shifts with contain: layout');
+      assert.ok(cssContent.includes('will-change: transform, opacity;'), 'globals.css must declare will-change for GPU compositor layer');
+      assert.ok(cssContent.includes('transform: translateZ(0);'), 'globals.css must force GPU layer promotion');
+    });
+
+    it('synchronizes the sector ticker badge seamlessly with the rotating word', () => {
+      assert.ok(pageContent.includes('hero-sector-ticker-wrap'), 'page.tsx must wrap ticker in hero-sector-ticker-wrap');
+      assert.ok(cssContent.includes('.hero-sector-ticker-wrap'), 'globals.css must define .hero-sector-ticker-wrap');
+    });
+
+    it('respects prefers-reduced-motion for accessibility', () => {
+      assert.ok(cssContent.includes('@media (prefers-reduced-motion: reduce)'), 'globals.css must include reduced-motion media query');
+    });
+  });
+
+  describe('85% Viewport Layout Width Architecture & Responsive Resilience', () => {
+    const adminPagePath = path.resolve(__dirname, '../../../app/admin/page.tsx');
+    const adminPageContent = fs.readFileSync(adminPagePath, 'utf-8');
+
+    const adminSettingsPath = path.resolve(__dirname, '../../../app/admin/billing/settings/page.tsx');
+    const adminSettingsContent = fs.readFileSync(adminSettingsPath, 'utf-8');
+
+    it('configures .container to 85% viewport width on desktop displays', () => {
+      assert.ok(cssContent.includes('.container {\n  width: 85%;\n  max-width: 85vw;'), 'globals.css must define .container with 85% width and 85vw max-width');
+      assert.ok(cssContent.includes('margin: 0 auto;'), '.container must be horizontally centered');
+      assert.ok(cssContent.includes('box-sizing: border-box;'), '.container must use border-box');
+    });
+
+    it('configures .site-header-wrapper to 85% viewport width with matching horizontal alignment', () => {
+      assert.ok(cssContent.includes('.site-header-wrapper {\n  position: fixed;\n  top: 12px;\n  left: 0;\n  right: 0;\n  z-index: 1000;\n  width: 85%;\n  max-width: 85vw;'), 'globals.css must define .site-header-wrapper with 85% width and 85vw max-width');
+      assert.ok(cssContent.includes('margin: 0 auto;'), '.site-header-wrapper must center with margin: 0 auto');
+    });
+
+    it('ensures mobile and Android viewports (<= 768px) expand containers to full 100% width with 16px padding', () => {
+      assert.ok(cssContent.includes('@media (max-width: 768px)'), 'globals.css must define <= 768px media query');
+      assert.ok(cssContent.includes('width: 100% !important;\n    max-width: 100% !important;\n    padding: 0 16px !important;'), 'Must expand .container and .site-header-wrapper to 100% on <= 768px screens');
+    });
+
+    it('configures .admin-main-container and admin headers to 85% width on desktop', () => {
+      assert.ok(cssContent.includes('.admin-main-container {\n  width: 85%;\n  max-width: 85vw;'), '.admin-main-container must use 85% width and 85vw max-width');
+      assert.ok(adminPageContent.includes("width: '85%', maxWidth: '85vw'"), 'admin/page.tsx header must use 85% width');
+      assert.ok(adminSettingsContent.includes("width: '85%',\n            maxWidth: '85vw'"), 'admin/billing/settings/page.tsx header must use 85% width');
+    });
+
+    it('allows industry showcase and quick search pills to span the expanded 85% container without 1000px cap', () => {
+      assert.ok(cssContent.includes('.industry-showcase-container {\n  width: 100%;\n  max-width: 100%;'), '.industry-showcase-container must use 100% max-width');
+      assert.ok(cssContent.includes('.quick-pills-container {\n  display: flex;\n  gap: 0.5rem;\n  align-items: center;\n  justify-content: center;\n  flex-wrap: wrap;\n  width: 100%;\n  max-width: 100%;'), '.quick-pills-container must use 100% max-width');
+    });
+  });
 });
 

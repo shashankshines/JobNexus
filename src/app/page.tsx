@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   Search,
   MapPin,
@@ -18,9 +19,11 @@ import {
   TrendingUp,
   Globe,
   Code2,
-  Server,
   ArrowRight,
+  ArrowLeft,
+  RotateCcw,
   ChevronRight,
+  ChevronLeft,
   Compass,
   Bookmark,
   User as UserIcon,
@@ -40,20 +43,24 @@ import {
   ShoppingBag,
   UtensilsCrossed,
   Users,
-  Sprout,
   Landmark,
   Headphones,
-  ShieldAlert,
   GraduationCap,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
 import FuturisticToast from './components/FuturisticToast';
 import JobNexusLogo from './components/JobNexusLogo';
-import { PremiumOfferModal } from './components/PremiumOfferModal';
 import { useAuth } from './context/AuthContext';
 import { useJobStats } from '@/modules/jobs/hooks/useJobStats';
 import { useElapsedJobCounter } from '@/modules/jobs/hooks/useElapsedJobCounter';
+
+const PremiumOfferModal = dynamic(
+  () => import('./components/PremiumOfferModal').then((mod) => mod.PremiumOfferModal),
+  { ssr: false }
+);
+
+const CLIENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes client cache
 import {
   isValidApplicationUrl,
   getFallbackApplicationUrl,
@@ -235,6 +242,91 @@ const WORKPLACE_OPTIONS = [
   { value: 'onsite', label: 'On-site', icon: '🏢' },
 ];
 
+/**
+ * High-performance client-side in-memory filter engine.
+ * Instantly renders matching jobs in 0ms when pills or searches are clicked,
+ * completely eliminating loading lag and skeleton card flickering.
+ */
+function filterJobsClientSide(
+  jobs: Job[],
+  filters: {
+    query?: string;
+    company?: string;
+    location?: string;
+    type?: string;
+    level?: string;
+    remote?: string;
+    industry?: string;
+  }
+): Job[] {
+  if (!jobs || jobs.length === 0) return [];
+  const q = filters.query?.toLowerCase().trim();
+  const comp = filters.company?.toLowerCase().trim();
+  const loc = filters.location?.toLowerCase().trim();
+  const typ = filters.type?.toLowerCase().trim();
+  const lvl = filters.level?.toLowerCase().trim();
+  const rem = filters.remote?.toLowerCase().trim();
+  const ind = filters.industry?.toLowerCase().trim();
+
+  return jobs.filter((job) => {
+    // Workplace filter: Remote, Hybrid, On-site
+    if (rem && rem !== 'all') {
+      if (rem === 'remote' && !job.isRemote && job.workplaceType !== 'remote') return false;
+      if (rem === 'hybrid' && job.workplaceType !== 'hybrid') return false;
+      if (rem === 'onsite' && (job.isRemote || job.workplaceType === 'remote' || job.workplaceType === 'hybrid')) return false;
+    }
+
+    // Canonical industry filter
+    if (ind && ind !== 'all') {
+      const jobInd = (job.industry || '').toLowerCase();
+      const jobCat = (job.category || '').toLowerCase();
+      const matchInd =
+        jobInd.includes(ind) ||
+        ind.includes(jobInd) ||
+        jobCat.includes(ind) ||
+        ind.includes(jobCat);
+      if (!matchInd) return false;
+    }
+
+    // Company filter
+    if (comp) {
+      if (!job.company || !job.company.toLowerCase().includes(comp)) return false;
+    }
+
+    // Employment type filter
+    if (typ && typ !== 'all') {
+      const jobType = (job.type || '').toLowerCase();
+      if (!jobType.includes(typ)) return false;
+    }
+
+    // Experience / Seniority level filter
+    if (lvl && lvl !== 'all') {
+      const title = (job.title || '').toLowerCase();
+      const tags = (job.tags || []).map((t) => t.toLowerCase()).join(' ');
+      if (lvl === 'entry' && !title.includes('junior') && !title.includes('entry') && !title.includes('intern') && !title.includes('graduate') && !tags.includes('entry')) return false;
+      if (lvl === 'senior' && !title.includes('senior') && !title.includes('lead') && !title.includes('principal') && !title.includes('staff')) return false;
+      if (lvl === 'lead' && !title.includes('lead') && !title.includes('manager') && !title.includes('director') && !title.includes('head')) return false;
+    }
+
+    // Location filter
+    if (loc) {
+      const jobLoc = (job.location || '').toLowerCase();
+      if (!jobLoc.includes(loc)) return false;
+    }
+
+    // Query text match (title, tags, category)
+    if (q) {
+      const title = (job.title || '').toLowerCase();
+      const tags = (job.tags || []).map((t) => t.toLowerCase()).join(' ');
+      const category = (job.category || '').toLowerCase();
+      const match = title.includes(q) || tags.includes(q) || category.includes(q);
+      if (!match) return false;
+    }
+
+    return true;
+  });
+}
+
 const TYPE_OPTIONS = [
   { value: '', label: 'Any Type' },
   { value: 'full time', label: 'Full Time' },
@@ -269,6 +361,63 @@ const INDUSTRY_OPTIONS = [
   { value: 'customer_service', label: 'Customer Service & Support', icon: '🎧' },
   { value: 'security_facilities', label: 'Security & Facilities', icon: '🛡️' },
   { value: 'other', label: 'General / Other', icon: '📁' },
+];
+
+const HERO_ROTATING_WORDS = [
+  {
+    text: 'Career Opportunity',
+    words: ['Career', 'Opportunity'],
+    sector: '15+ Sectors',
+    icon: '✨',
+    color: '#818cf8',
+    gradient: 'linear-gradient(135deg, #818cf8 0%, #c084fc 45%, #f472b6 100%)',
+    glow: 'rgba(99, 102, 241, 0.45)',
+  },
+  {
+    text: 'Tech & AI Role',
+    words: ['Tech & AI', 'Role'],
+    sector: 'Technology',
+    icon: '💻',
+    color: '#38bdf8',
+    gradient: 'linear-gradient(135deg, #38bdf8 0%, #818cf8 45%, #c084fc 100%)',
+    glow: 'rgba(56, 189, 248, 0.45)',
+  },
+  {
+    text: 'Healthcare Position',
+    words: ['Healthcare', 'Position'],
+    sector: 'Healthcare',
+    icon: '🏥',
+    color: '#34d399',
+    gradient: 'linear-gradient(135deg, #34d399 0%, #2dd4bf 45%, #38bdf8 100%)',
+    glow: 'rgba(52, 211, 153, 0.45)',
+  },
+  {
+    text: 'Finance & Banking Job',
+    words: ['Finance & Banking', 'Job'],
+    sector: 'Finance',
+    icon: '📈',
+    color: '#fbbf24',
+    gradient: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 45%, #ec4899 100%)',
+    glow: 'rgba(251, 191, 36, 0.45)',
+  },
+  {
+    text: 'Global Remote Role',
+    words: ['Global Remote', 'Role'],
+    sector: 'Worldwide',
+    icon: '🌍',
+    color: '#a855f7',
+    gradient: 'linear-gradient(135deg, #c084fc 0%, #f472b6 45%, #818cf8 100%)',
+    glow: 'rgba(168, 85, 247, 0.45)',
+  },
+  {
+    text: 'Leadership Role',
+    words: ['Leadership', 'Role'],
+    sector: 'Executive',
+    icon: '🚀',
+    color: '#f43f5e',
+    gradient: 'linear-gradient(135deg, #fb7185 0%, #e11d48 45%, #818cf8 100%)',
+    glow: 'rgba(244, 63, 94, 0.45)',
+  },
 ];
 
 export default function Home() {
@@ -373,10 +522,26 @@ export default function Home() {
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
 
+  // Advanced Refinements Drawer state
+  const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
+  const industryRailRef = useRef<HTMLDivElement>(null);
+
+  const scrollIndustryRail = useCallback((direction: 'left' | 'right') => {
+    if (industryRailRef.current) {
+      const scrollAmount = direction === 'left' ? -320 : 320;
+      industryRailRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  }, []);
+
+  const activeRefinementsCount = useMemo(() => {
+    return (selectedRole ? 1 : 0) + (company ? 1 : 0) + (industry ? 1 : 0) + (type ? 1 : 0) + (level ? 1 : 0);
+  }, [selectedRole, company, industry, type, level]);
+
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const locBoxRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const headerWrapperRef = useRef<HTMLDivElement>(null);
+  const headerBackdropRef = useRef<HTMLDivElement>(null);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
   const companyDropdownRef = useRef<HTMLDivElement>(null);
   const industryDropdownRef = useRef<HTMLDivElement>(null);
@@ -386,8 +551,30 @@ export default function Home() {
   const intentProcessedRef = useRef(false);
   const jobGridRef = useRef<HTMLDivElement>(null);
   const resultsSectionRef = useRef<HTMLDivElement>(null);
+  const tracksContentRef = useRef<HTMLDivElement>(null);
+  const feedContentRef = useRef<HTMLDivElement>(null);
+  const savedContentRef = useRef<HTMLDivElement>(null);
   const [isResultsFocused, setIsResultsFocused] = useState(false);
+  const [tabFocusBadge, setTabFocusBadge] = useState<string | null>(null);
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [activeDiscoveryTab, setActiveDiscoveryTab] = useState<'feed' | 'tracks'>('feed');
+  const [heroWordIndex, setHeroWordIndex] = useState(0);
+  const [isHeroPaused, setIsHeroPaused] = useState(false);
+
+  // High-performance client-side multi-key search & pill cache
+  const clientSearchCacheRef = useRef<Map<string, { jobs: Job[]; timestamp: number }>>(new Map());
+  const allRawJobsCacheRef = useRef<Job[]>([]);
+  const activeSearchAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (isHeroPaused) return;
+    const interval = setInterval(() => {
+      setHeroWordIndex((prev) => (prev + 1) % HERO_ROTATING_WORDS.length);
+    }, 3600);
+    return () => clearInterval(interval);
+  }, [isHeroPaused]);
+
+  const currentHeroWord = HERO_ROTATING_WORDS[heroWordIndex];
 
   const executeSearch = useCallback(
     async (
@@ -400,7 +587,6 @@ export default function Home() {
       searchIndustry = industry,
       searchCompany = company
     ) => {
-      setLoading(true);
       setSearched(true);
       setShowJobDropdown(false);
       setShowLocDropdown(false);
@@ -411,28 +597,98 @@ export default function Home() {
       setShowTypeDropdown(false);
       setShowLevelDropdown(false);
 
-      try {
-        const params = new URLSearchParams();
-        const effectiveQuery = [searchQuery, roleCategory].filter(Boolean).join(' ').trim();
-        if (effectiveQuery) params.append('query', effectiveQuery);
-        if (searchCompany) params.append('company', searchCompany);
-        if (searchLoc) params.append('location', searchLoc);
-        if (searchType) params.append('type', searchType);
-        if (searchLevel) params.append('level', searchLevel);
-        if (searchRemote) params.append('remote', searchRemote);
-        if (searchIndustry && searchIndustry !== 'all') params.append('industry', searchIndustry);
+      const params = new URLSearchParams();
+      const effectiveQuery = [searchQuery, roleCategory].filter(Boolean).join(' ').trim();
+      if (effectiveQuery) params.append('query', effectiveQuery);
+      if (searchCompany) params.append('company', searchCompany);
+      if (searchLoc) params.append('location', searchLoc);
+      if (searchType) params.append('type', searchType);
+      if (searchLevel) params.append('level', searchLevel);
+      if (searchRemote) params.append('remote', searchRemote);
+      if (searchIndustry && searchIndustry !== 'all') params.append('industry', searchIndustry);
 
-        const res = await fetch(`/api/jobs?${params.toString()}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' },
+      const cacheKey = params.toString();
+      const isUnconstrained =
+        !effectiveQuery &&
+        !searchLoc &&
+        !searchType &&
+        !searchLevel &&
+        !searchRemote &&
+        (!searchIndustry || searchIndustry === 'all') &&
+        !searchCompany;
+
+      // 1. Instant Cache Hit Check: If this query/pill was already visited, return in 0ms!
+      const cached = clientSearchCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL_MS) {
+        setJobs(cached.jobs);
+        setLoading(false);
+        if (isUnconstrained) {
+          syncFromJobsCount(cached.jobs.length);
+        }
+        return;
+      }
+
+      // 2. Optimistic Instant In-Memory Filter:
+      // If we already have the raw job catalog in memory, instantly render matching jobs in 0ms!
+      if (allRawJobsCacheRef.current.length > 0) {
+        const optimisticJobs = filterJobsClientSide(allRawJobsCacheRef.current, {
+          query: effectiveQuery,
+          company: searchCompany,
+          location: searchLoc,
+          type: searchType,
+          level: searchLevel,
+          remote: searchRemote,
+          industry: searchIndustry,
         });
+        if (optimisticJobs.length > 0) {
+          setJobs(optimisticJobs);
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
+      } else {
+        setLoading(true);
+      }
+
+      // Abort any prior in-flight request so rapid pill clicks don't collide
+      if (activeSearchAbortRef.current) {
+        activeSearchAbortRef.current.abort();
+      }
+      const abortController = new AbortController();
+      activeSearchAbortRef.current = abortController;
+
+      try {
+        const res = await fetch(`/api/jobs?${cacheKey}`, {
+          signal: abortController.signal,
+          headers: { Accept: 'application/json' },
+        });
+
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+
         const data = await res.json();
 
         if (data.jobs && Array.isArray(data.jobs)) {
           setJobs(data.jobs);
-          // When full unconstrained feed is retrieved, sync live count
-          if (!effectiveQuery && !searchLoc && !searchType && !searchLevel && !searchRemote && !searchIndustry) {
+          clientSearchCacheRef.current.set(cacheKey, {
+            jobs: data.jobs,
+            timestamp: Date.now(),
+          });
+
+          if (isUnconstrained) {
+            allRawJobsCacheRef.current = data.jobs;
             syncFromJobsCount(data.jobs.length);
+          } else if (allRawJobsCacheRef.current.length === 0) {
+            allRawJobsCacheRef.current = data.jobs;
+          }
+
+          if (typeof window !== 'undefined' && data.jobs.length > 0) {
+            try {
+              sessionStorage.setItem('jobnexus_initial_catalog', JSON.stringify(data.jobs.slice(0, 100)));
+            } catch {
+              // Ignore quota
+            }
           }
         } else {
           setJobs([]);
@@ -491,11 +747,19 @@ export default function Home() {
             body: JSON.stringify({ query: q, location: searchLoc }),
           }).catch(() => {});
         }
-      } catch (error) {
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
         console.error('[Search Error]:', error);
-        setJobs([]);
+        if (allRawJobsCacheRef.current.length === 0) {
+          setJobs([]);
+        }
       } finally {
-        setLoading(false);
+        if (activeSearchAbortRef.current === abortController) {
+          setLoading(false);
+          activeSearchAbortRef.current = null;
+        }
       }
     },
     [query, company, location, type, level, selectedRole, remote, industry, syncFromJobsCount]
@@ -525,6 +789,7 @@ export default function Home() {
     setJobs([]);
     setSearched(false);
     setVisibleCount(JOBS_BATCH_SIZE);
+    setActiveDiscoveryTab('feed');
     if (typeof window !== 'undefined') {
       const cleanUrl = window.location.pathname.split('?')[0] || '/';
       window.history.replaceState({}, document.title, cleanUrl);
@@ -682,6 +947,28 @@ export default function Home() {
       });
   }, []);
 
+  // Pre-load raw catalog on mount from sessionStorage and background fetch for instant 0ms pill clicking
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('jobnexus_initial_catalog');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            allRawJobsCacheRef.current = parsed;
+          }
+        }
+      } catch {
+        // Fall back gracefully
+      }
+    }
+
+    // Warm up the raw jobs catalog in background so all future searches/pill clicks resolve in 0ms!
+    if (allRawJobsCacheRef.current.length === 0) {
+      executeSearch('', '', '', '', '', '', '', '');
+    }
+  }, [executeSearch]);
+
   // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -718,13 +1005,19 @@ export default function Home() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Update suggestions on input changes
+  // Debounce suggestions on input changes to minimize main-thread rendering friction while typing
   useEffect(() => {
-    setJobSuggestions(getSuggestions(query));
+    const timer = setTimeout(() => {
+      setJobSuggestions(getSuggestions(query));
+    }, 150);
+    return () => clearTimeout(timer);
   }, [query]);
 
   useEffect(() => {
-    setLocationSuggestions(getLocationSuggestions(location, 15));
+    const timer = setTimeout(() => {
+      setLocationSuggestions(getLocationSuggestions(location, 15));
+    }, 150);
+    return () => clearTimeout(timer);
   }, [location]);
 
   useEffect(() => {
@@ -735,11 +1028,11 @@ export default function Home() {
     };
   }, []);
 
-  const scrollToResults = useCallback(() => {
+  const scrollToResults = useCallback((customBadge?: string | React.SyntheticEvent) => {
     if (typeof window === 'undefined') return;
 
     const performScroll = () => {
-      const target = resultsSectionRef.current || jobGridRef.current;
+      const target = feedContentRef.current || resultsSectionRef.current || jobGridRef.current;
       if (!target) return;
 
       const headerOffset = 90;
@@ -751,12 +1044,14 @@ export default function Home() {
         behavior: 'smooth',
       });
 
+      setTabFocusBadge(typeof customBadge === 'string' ? customBadge : 'Results in Focus');
       setIsResultsFocused(true);
       if (focusTimeoutRef.current) {
         clearTimeout(focusTimeoutRef.current);
       }
       focusTimeoutRef.current = setTimeout(() => {
         setIsResultsFocused(false);
+        setTabFocusBadge(null);
       }, 2000);
 
       try {
@@ -771,6 +1066,106 @@ export default function Home() {
     });
   }, []);
 
+  const handleDiscoveryTabSelect = useCallback((targetTab: 'feed' | 'tracks') => {
+    setActiveDiscoveryTab(targetTab);
+
+    // If switching to live roles feed but jobs haven't been fetched yet, trigger browse all
+    if (targetTab === 'feed' && !searched && jobs.length === 0) {
+      executeSearch('', '', '', '', '', '', '', '');
+    }
+
+    setTabFocusBadge(targetTab === 'tracks' ? 'Curated Tracks (12) in Focus' : 'Live Roles Feed in Focus');
+    setIsResultsFocused(true);
+
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+    }
+    focusTimeoutRef.current = setTimeout(() => {
+      setIsResultsFocused(false);
+      setTabFocusBadge(null);
+    }, 2200);
+
+    // Gracefully transfer focus and smooth-scroll to content below
+    setTimeout(() => {
+      const targetEl = targetTab === 'tracks'
+        ? tracksContentRef.current
+        : (feedContentRef.current || jobGridRef.current || resultsSectionRef.current);
+
+      if (targetEl) {
+        const headerOffset = 100;
+        const rect = targetEl.getBoundingClientRect();
+        const targetTop = rect.top + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+          top: Math.max(0, targetTop),
+          behavior: 'smooth',
+        });
+
+        try {
+          targetEl.focus({ preventScroll: true });
+        } catch {
+          // Fallback
+        }
+      }
+    }, 45);
+  }, [searched, jobs.length, executeSearch]);
+
+  const handleSortSelect = useCallback((newSort: 'relevance' | 'date') => {
+    setSortBy(newSort);
+    setTabFocusBadge(newSort === 'relevance' ? 'Sorted by Best Match' : 'Sorted by Freshest First');
+    setIsResultsFocused(true);
+
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+    }
+    focusTimeoutRef.current = setTimeout(() => {
+      setIsResultsFocused(false);
+      setTabFocusBadge(null);
+    }, 2000);
+
+    setTimeout(() => {
+      const targetEl = feedContentRef.current || jobGridRef.current;
+      if (targetEl) {
+        try {
+          targetEl.focus({ preventScroll: true });
+        } catch {}
+      }
+    }, 45);
+  }, []);
+
+  const handleViewSelect = useCallback((targetView: 'all' | 'saved') => {
+    setActiveView(targetView);
+    setTabFocusBadge(targetView === 'saved' ? 'Saved Roles in Focus' : 'All Roles Feed in Focus');
+    setIsResultsFocused(true);
+
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+    }
+    focusTimeoutRef.current = setTimeout(() => {
+      setIsResultsFocused(false);
+      setTabFocusBadge(null);
+    }, 2000);
+
+    setTimeout(() => {
+      const targetEl = targetView === 'saved'
+        ? savedContentRef.current
+        : (feedContentRef.current || resultsSectionRef.current);
+
+      if (targetEl) {
+        const headerOffset = 100;
+        const rect = targetEl.getBoundingClientRect();
+        const targetTop = rect.top + window.pageYOffset - headerOffset;
+        window.scrollTo({
+          top: Math.max(0, targetTop),
+          behavior: 'smooth',
+        });
+        try {
+          targetEl.focus({ preventScroll: true });
+        } catch {}
+      }
+    }, 45);
+  }, []);
+
   const handleDomainClick = (domain: DiscoveryDomain) => {
     const nextQuery = domain.query ?? '';
     const nextLoc = domain.location ?? '';
@@ -781,6 +1176,7 @@ export default function Home() {
     setRemote(nextRemote);
     setIndustry(nextIndustry);
     setSelectedRole('');
+    setActiveDiscoveryTab('feed');
     executeSearch(nextQuery, nextLoc, type, level, '', nextRemote, nextIndustry);
     scrollToResults();
   };
@@ -794,6 +1190,7 @@ export default function Home() {
     setSelectedRole('');
     setRemote('');
     setIndustry('');
+    setActiveDiscoveryTab('feed');
     executeSearch('', '', '', '', '', '', '', '');
     scrollToResults();
   };
@@ -807,14 +1204,18 @@ export default function Home() {
   const handleJobSuggestionClick = (suggestion: string) => {
     setQuery(suggestion);
     setShowJobDropdown(false);
-    executeSearch(suggestion, location, type, level, selectedRole, remote);
+    // Clearing stale industry and selectedRole ensures searching for specific job titles
+    // explores across all verified sectors and doesn't get constrained by earlier navigation
+    setIndustry('');
+    setSelectedRole('');
+    executeSearch(suggestion, location, type, level, '', remote, '', company);
     scrollToResults();
   };
 
   const handleLocSuggestionClick = (loc: string) => {
     setLocation(loc);
     setShowLocDropdown(false);
-    executeSearch(query, loc, type, level, selectedRole, remote);
+    executeSearch(query, loc, type, level, selectedRole, remote, industry, company);
     scrollToResults();
   };
 
@@ -822,12 +1223,15 @@ export default function Home() {
     setSelectedRole(roleVal);
     setShowRoleDropdown(false);
     setRoleSearchQuery('');
+    // Selecting a role category clears lingering industry filters so cross-industry positions are discovered
+    setIndustry('');
     let nextRemote = remote;
     if (isRemoteRole(roleVal) && !remote) {
       nextRemote = 'remote';
       setRemote('remote');
     }
-    executeSearch(query, location, type, level, roleVal, nextRemote);
+    executeSearch(query, location, type, level, roleVal, nextRemote, '', company);
+    scrollToResults();
   };
 
   const handleClearRole = (e?: React.SyntheticEvent) => {
@@ -835,7 +1239,7 @@ export default function Home() {
     setSelectedRole('');
     setShowRoleDropdown(false);
     setRoleSearchQuery('');
-    executeSearch(query, location, type, level, '', remote);
+    executeSearch(query, location, type, level, '', remote, industry, company);
   };
 
   const selectedRoleLabel = useMemo(() => {
@@ -934,17 +1338,18 @@ export default function Home() {
   };
 
   const handleQuickPillClick = (pill: QuickPill) => {
+    // When clicking a role query pill without explicit industry, clear stale industry filter
+    const nextIndustry = pill.industry || '';
     const nextQuery = pill.query ?? (pill.industry ? '' : query);
     const nextLoc = pill.location ?? location;
     const nextRemote = pill.remote ?? remote;
-    const nextIndustry = pill.industry !== undefined ? pill.industry : industry;
 
     setQuery(nextQuery);
+    setIndustry(nextIndustry);
     if (pill.location !== undefined) setLocation(nextLoc);
     if (pill.remote !== undefined) setRemote(nextRemote);
-    if (pill.industry !== undefined) setIndustry(nextIndustry);
 
-    executeSearch(nextQuery, nextLoc, type, level, selectedRole, nextRemote, nextIndustry);
+    executeSearch(nextQuery, nextLoc, type, level, selectedRole, nextRemote, nextIndustry, company);
     scrollToResults();
   };
 
@@ -1070,6 +1475,7 @@ export default function Home() {
     const handleScroll = () => {
       const isScrolled = window.scrollY > 8;
       headerWrapperRef.current?.classList.toggle('is-stuck', isScrolled);
+      headerBackdropRef.current?.classList.toggle('is-stuck', isScrolled);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -1127,6 +1533,8 @@ export default function Home() {
 
   return (
     <div className="site-layout-wrapper">
+      {/* Translucent Frosted Glass Section Behind Fixed Header */}
+      <div ref={headerBackdropRef} className="site-header-backdrop" aria-hidden="true" />
       <main className="container" style={{ flex: '1 0 auto', paddingBottom: '3.5rem' }}>
         {/* Authenticated Dashboard Floating Island Header */}
         <div ref={headerWrapperRef} className="site-header-wrapper">
@@ -1544,7 +1952,7 @@ export default function Home() {
         <div className="site-header-spacer" aria-hidden="true" />
 
         {/* Hero Section */}
-        <section style={{ margin: '1.5rem 0 2rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
+        <section style={{ margin: '0.85rem 0 1.25rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <motion.div
             key={searched ? `hero-searched-${displayedJobs.length}` : `hero-total-${formattedCount}`}
             initial={{ opacity: 0, y: -8 }}
@@ -1561,157 +1969,247 @@ export default function Home() {
             </span>
           </motion.div>
 
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            style={{ fontSize: 'clamp(2.4rem, 5.2vw, 3.8rem)', fontWeight: 800, marginBottom: '1.15rem', lineHeight: 1.15, letterSpacing: '-0.03em' }}
-          >
-            Find Your Next <br />
-            <span className="text-gradient">Career Opportunity Across Any Industry</span>
-          </motion.h2>
+          {/* Luminous Animated Hero Headline Container */}
+          <div className="hero-headline-container">
+            <div
+              className="hero-aurora-glow"
+              aria-hidden="true"
+              style={{
+                background: `radial-gradient(circle, ${currentHeroWord.glow} 0%, rgba(168, 85, 247, 0.06) 45%, transparent 70%)`,
+              }}
+            />
+            <motion.h2
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="hero-headline"
+            >
+              <div className="hero-headline-tier hero-headline-tier-primary">
+                <span className="hero-headline-lead">Find Your Next</span>{' '}
+                <motion.span
+                  layout
+                  transition={{ layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }}
+                  className="hero-rotating-wrapper"
+                  onMouseEnter={() => setIsHeroPaused(true)}
+                  onMouseLeave={() => setIsHeroPaused(false)}
+                  onClick={() => setHeroWordIndex((prev) => (prev + 1) % HERO_ROTATING_WORDS.length)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setHeroWordIndex((prev) => (prev + 1) % HERO_ROTATING_WORDS.length);
+                    }
+                  }}
+                  title="Click to advance opportunity (hover to pause)"
+                >
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={`phrase-${heroWordIndex}`}
+                      className="hero-rotating-word-group"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      {currentHeroWord.words.map((part, pIdx) => (
+                        <motion.span
+                          key={`${heroWordIndex}-${pIdx}`}
+                          initial={{ y: '110%', opacity: 0, scale: 0.92 }}
+                          animate={{ y: '0%', opacity: 1, scale: 1 }}
+                          exit={{ y: '-110%', opacity: 0, scale: 0.92 }}
+                          transition={{
+                            duration: 0.64,
+                            ease: [0.16, 1, 0.3, 1],
+                            delay: pIdx * 0.07,
+                          }}
+                          className="hero-rotating-word"
+                          style={{
+                            backgroundImage: currentHeroWord.gradient,
+                            textShadow: `0 0 28px ${currentHeroWord.glow}`,
+                          }}
+                        >
+                          {part}
+                        </motion.span>
+                      ))}
+                    </motion.span>
+                  </AnimatePresence>
+                </motion.span>
+              </div>
+
+              <div className="hero-headline-tier hero-headline-tier-secondary">
+                <span className="hero-headline-tail">
+                  <span>Across</span>{' '}
+                  <span className="hero-industry-highlight">
+                    Any Industry
+                    <span className="hero-industry-underline-beam" aria-hidden="true" />
+                  </span>
+                </span>
+                <span className="hero-sector-ticker-wrap">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={`sector-${heroWordIndex}`}
+                      initial={{ y: '95%', opacity: 0, scale: 0.9 }}
+                      animate={{ y: '0%', opacity: 1, scale: 1 }}
+                      exit={{ y: '-95%', opacity: 0, scale: 0.9 }}
+                      transition={{
+                        duration: 0.6,
+                        ease: [0.16, 1, 0.3, 1],
+                        delay: 0.08,
+                      }}
+                      className="hero-sector-ticker"
+                      style={{
+                        borderColor: `${currentHeroWord.color}44`,
+                        color: currentHeroWord.color,
+                        background: `${currentHeroWord.color}14`,
+                        boxShadow: `0 2px 10px ${currentHeroWord.glow}`,
+                      }}
+                    >
+                      <span style={{ marginRight: '0.22rem' }}>{currentHeroWord.icon}</span>
+                      <span>{currentHeroWord.sector}</span>
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+              </div>
+            </motion.h2>
+          </div>
 
           <motion.p
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.5 }}
-            style={{ color: 'var(--text-secondary)', fontSize: '1.08rem', maxWidth: 680, margin: '0 auto 1.6rem', lineHeight: 1.65 }}
+            transition={{ delay: 0.08, duration: 0.45 }}
+            style={{ color: 'var(--text-secondary)', fontSize: '0.96rem', maxWidth: 660, margin: '0 auto 0.75rem', lineHeight: 1.55 }}
           >
-            Direct applications from verified employer ATS boards and official career portals across Tech, Healthcare, Finance, Education, Trades, and more. Zero spam, zero middleman fees.
+            Direct applications from verified employer ATS pipelines and official portals across Tech, Healthcare, Finance, Education, Trades, and more.
           </motion.p>
 
-          {/* Value Proposition Pills */}
+          {/* Streamlined Trust Seal Strip */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '0.75rem',
-              flexWrap: 'wrap',
-              marginBottom: '2rem',
-            }}
+            transition={{ delay: 0.12 }}
+            className="hero-trust-seal-strip"
           >
-            <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
-              <ShieldCheck size={14} color="#10b981" /> 100% Direct ATS Links
+            <span className="hero-trust-item">
+              <ShieldCheck size={14} color="#10b981" />
+              <span>100% Direct ATS Links</span>
             </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
-              <Building2 size={14} color="#a855f7" /> 15+ Career Sectors
+            <span className="hero-trust-divider" aria-hidden="true">•</span>
+            <span className="hero-trust-item">
+              <Building2 size={14} color="#a855f7" />
+              <span>15+ Career Sectors</span>
             </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--tag-text)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--tag-bg)', padding: '0.32rem 0.8rem', borderRadius: 9999, border: '1px solid var(--tag-border)' }}>
-              <Globe size={14} color="#38bdf8" /> Global &amp; India Roles
+            <span className="hero-trust-divider" aria-hidden="true">•</span>
+            <span className="hero-trust-item">
+              <Globe size={14} color="#38bdf8" />
+              <span>Global &amp; India Roles</span>
             </span>
           </motion.div>
 
-          {/* Dedicated Workplace Category Selector */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            style={{
-              maxWidth: 620,
-              margin: '0 auto 1.5rem',
-              display: 'flex',
-              justifyContent: 'center',
-            }}
-          >
-            <div
-              className="workplace-pills-bar"
-              style={{
-                display: 'inline-flex',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 14,
-                padding: '4px',
-                gap: '4px',
-                boxShadow: 'var(--shadow-sm)',
-                width: '100%',
-                maxWidth: 580,
-                position: 'relative',
-              }}
-            >
-              {WORKPLACE_CATEGORIES.map((cat) => {
-                const isActive = remote === cat.remoteParam;
-
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => handleWorkplaceCategoryClick(cat.remoteParam)}
-                    className="workplace-pill-btn"
-                    style={{
-                      position: 'relative',
-                      flex: 1,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.45rem',
-                      padding: '0.62rem 0.85rem',
-                      borderRadius: 10,
-                      fontSize: '0.86rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      border: '1px solid transparent',
-                      background: 'transparent',
-                      color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      transition: 'color 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                      whiteSpace: 'nowrap',
-                      outline: 'none',
-                      WebkitTapHighlightColor: 'transparent',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="activeWorkplaceSlidePill"
-                        className="workplace-active-slide-indicator"
-                        transition={{
-                          type: 'spring',
-                          stiffness: 480,
-                          damping: 36,
-                        }}
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          borderRadius: 10,
-                          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(139, 92, 246, 0.28))',
-                          border: '1px solid rgba(99, 102, 241, 0.5)',
-                          zIndex: 1,
-                        }}
-                      />
-                    )}
-                    <span style={{ position: 'relative', zIndex: 2, display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <span style={{ fontSize: '0.95rem' }}>{cat.icon}</span>
-                      <span>{cat.label}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-
-          {/* Unified 2-Tier Search Console */}
+          {/* Unified Search Command Console with Integrated Workplace Mode Header */}
           <motion.form
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.25, duration: 0.4 }}
+            transition={{ delay: 0.18, duration: 0.4 }}
             onSubmit={handleSearchSubmit}
             className="glass-panel search-console-form"
             style={{
               width: '100%',
               maxWidth: '100%',
               margin: '0 auto',
-              padding: '1.25rem',
+              padding: '1.15rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '1rem',
+              gap: '0.9rem',
               background: 'var(--surface-card)',
               border: '1px solid var(--border-card)',
               borderRadius: 18,
               boxShadow: 'var(--shadow-card)',
             }}
           >
+            {/* Dedicated Workplace Category Selector (Integrated directly as Top Header of Search Console) */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                marginBottom: '0.15rem',
+              }}
+            >
+              <div
+                className="workplace-pills-bar"
+                style={{
+                  display: 'inline-flex',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  padding: '3px',
+                  gap: '4px',
+                  boxShadow: 'var(--shadow-sm)',
+                  width: '100%',
+                  maxWidth: 580,
+                  position: 'relative',
+                }}
+              >
+                {WORKPLACE_CATEGORIES.map((cat) => {
+                  const isActive = remote === cat.remoteParam;
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => handleWorkplaceCategoryClick(cat.remoteParam)}
+                      className="workplace-pill-btn"
+                      style={{
+                        position: 'relative',
+                        flex: 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.45rem',
+                        padding: '0.52rem 0.8rem',
+                        borderRadius: 10,
+                        fontSize: '0.84rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        border: '1px solid transparent',
+                        background: 'transparent',
+                        color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        transition: 'color 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                        whiteSpace: 'nowrap',
+                        outline: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                        userSelect: 'none',
+                      }}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeWorkplaceSlidePill"
+                          className="workplace-active-slide-indicator"
+                          transition={{
+                            type: 'spring',
+                            stiffness: 480,
+                            damping: 36,
+                          }}
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(139, 92, 246, 0.28))',
+                            border: '1px solid rgba(99, 102, 241, 0.5)',
+                            zIndex: 1,
+                          }}
+                        />
+                      )}
+                      <span style={{ position: 'relative', zIndex: 2, display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <span style={{ fontSize: '0.92rem' }}>{cat.icon}</span>
+                        <span>{cat.label}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {/* Top Tier: Primary Inputs + Search CTA */}
             <div className="search-inputs-row" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
               {/* Query Input */}
@@ -2052,6 +2550,24 @@ export default function Home() {
                 </AnimatePresence>
               </div>
 
+              {/* Refinement Filters Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setShowFiltersDrawer((prev) => !prev)}
+                className={`search-filters-toggle-btn ${showFiltersDrawer || activeRefinementsCount > 0 ? 'is-active' : ''}`}
+                aria-expanded={showFiltersDrawer}
+                aria-label="Toggle advanced job filters"
+                title="Toggle advanced filters"
+              >
+                <SlidersHorizontal size={16} />
+                <span>Filters</span>
+                {activeRefinementsCount > 0 && (
+                  <span className="search-filters-badge" aria-label={`${activeRefinementsCount} active filters`}>
+                    {activeRefinementsCount}
+                  </span>
+                )}
+              </button>
+
               {/* Primary Search CTA */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -2082,12 +2598,21 @@ export default function Home() {
               </motion.button>
             </div>
 
-            {/* Bottom Tier: Refinement Filter Bar */}
-            <div
-              className="search-refinements-bar"
-              style={{
-                display: 'flex',
-                gap: '0.65rem',
+            {/* Advanced Refinements Collapsible Drawer */}
+            <AnimatePresence>
+              {(showFiltersDrawer || activeRefinementsCount > 0) && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  className="search-refinements-drawer"
+                >
+                  <div
+                    className="search-refinements-bar"
+                    style={{
+                      display: 'flex',
+                      gap: '0.65rem',
                 flexWrap: 'wrap',
                 alignItems: 'center',
                 paddingTop: '0.85rem',
@@ -2190,7 +2715,7 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -6, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="glass-panel"
+                      className="glass-panel dropdown-popover-left"
                       style={{
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
@@ -2680,7 +3205,7 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -6, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="glass-panel dropdown-popover-right"
+                      className="glass-panel dropdown-popover-left"
                       style={{
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
@@ -2841,7 +3366,7 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -6, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="glass-panel"
+                      className="glass-panel dropdown-popover-right"
                       style={{
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
@@ -2996,7 +3521,7 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -6, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="glass-panel dropdown-popover-right"
+                      className="glass-panel dropdown-popover-left"
                       style={{
                         position: 'absolute',
                         top: 'calc(100% + 6px)',
@@ -3230,6 +3755,9 @@ export default function Home() {
                 </button>
               )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
             {/* Active Filter Chips Bar */}
             {(query || company || location || remote || selectedRole || type || level || industry) && (
@@ -3331,7 +3859,7 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setLocation('');
-                        executeSearch(query, '', type, level, selectedRole, remote);
+                        executeSearch(query, '', type, level, selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove location filter"
@@ -3390,7 +3918,7 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setRemote('');
-                        executeSearch(query, location, type, level, selectedRole, '');
+                        executeSearch(query, location, type, level, selectedRole, '', industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove workplace filter"
@@ -3420,7 +3948,7 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setType('');
-                        executeSearch(query, location, '', level, selectedRole, remote);
+                        executeSearch(query, location, '', level, selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove employment type filter"
@@ -3450,7 +3978,7 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setLevel('');
-                        executeSearch(query, location, type, '', selectedRole, remote, industry);
+                        executeSearch(query, location, type, '', selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove seniority filter"
@@ -3481,7 +4009,7 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setIndustry('');
-                        executeSearch(query, location, type, level, selectedRole, remote, '');
+                        executeSearch(query, location, type, level, selectedRole, remote, '', company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove industry filter"
@@ -3507,44 +4035,16 @@ export default function Home() {
                 >
                   Reset all
                 </button>
-
-                {/* Dynamic Roles Matched pill in Search Console */}
-                {searched && (
-                  <motion.div
-                    key={`console-matched-${displayedJobs.length}`}
-                    initial={{ opacity: 0, scale: 0.94 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="roles-matched-pill"
-                    style={{ marginLeft: 'auto' }}
-                  >
-                    <span className="pulse-dot" />
-                    <span className="desktop-only">
-                      <span className="count-main">{displayedJobs.length.toLocaleString()} Roles Matched</span>
-                      <span className="count-secondary"> • {formattedCount} Total Verified</span>
-                    </span>
-                    <span className="mobile-only">
-                      {displayedJobs.length.toLocaleString()} Roles Matched
-                    </span>
-                  </motion.div>
-                )}
               </motion.div>
             )}
           </motion.form>
 
           {/* Multi-Industry Quick Selection Bar */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.28 }}
+            transition={{ delay: 0.22 }}
             className="industry-showcase-container"
-            style={{
-              margin: '1.25rem auto 0.75rem',
-              maxWidth: 1000,
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem',
-            }}
           >
             <div
               style={{
@@ -3558,12 +4058,12 @@ export default function Home() {
             >
               <span
                 style={{
-                  fontSize: '0.82rem',
+                  fontSize: '0.8rem',
                   color: 'var(--text-muted)',
                   fontWeight: 600,
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.4rem',
+                  gap: '0.35rem',
                   letterSpacing: '0.01em',
                 }}
               >
@@ -3577,6 +4077,7 @@ export default function Home() {
                   onClick={() => {
                     setIndustry('');
                     executeSearch(query, location, type, level, selectedRole, remote, '', company);
+                    scrollToResults();
                   }}
                   style={{
                     background: 'transparent',
@@ -3597,62 +4098,58 @@ export default function Home() {
               )}
             </div>
 
-            <div
-              className="industry-showcase-pills"
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '0.45rem',
-                justifyContent: 'center',
-                width: '100%',
-              }}
-            >
-              {INDUSTRY_OPTIONS.map((opt) => {
-                const isSelected = industry === opt.value;
-                return (
-                  <button
-                    key={opt.value || 'all'}
-                    type="button"
-                    onClick={() => {
-                      const nextInd = isSelected ? '' : opt.value;
-                      setIndustry(nextInd);
-                      executeSearch(query, location, type, level, selectedRole, remote, nextInd, company);
-                    }}
-                    title={opt.value ? `Filter opportunities in ${opt.label}` : 'Show all industries'}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                      background: isSelected
-                        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(139, 92, 246, 0.22))'
-                        : 'var(--surface-card, rgba(255, 255, 255, 0.04))',
-                      color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      border: `1px solid ${isSelected ? 'rgba(99, 102, 241, 0.55)' : 'var(--border)'}`,
-                      boxShadow: isSelected ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none',
-                      padding: '0.35rem 0.72rem',
-                      borderRadius: 16,
-                      fontSize: '0.8rem',
-                      fontWeight: isSelected ? 700 : 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-                      whiteSpace: 'nowrap',
-                      outline: 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.9rem' }}>{opt.icon}</span>
-                    <span>{opt.label}</span>
-                    {isSelected && <Check size={12} color="var(--primary-start)" style={{ strokeWidth: 2.5 }} />}
-                  </button>
-                );
-              })}
+            <div className="industry-showcase-wrapper">
+              <button
+                type="button"
+                onClick={() => scrollIndustryRail('left')}
+                className="industry-rail-nav-btn industry-rail-nav-btn-left"
+                aria-label="Scroll industries left"
+                title="Scroll left"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <div ref={industryRailRef} className="industry-showcase-pills">
+                {INDUSTRY_OPTIONS.map((opt) => {
+                  const isSelected = industry === opt.value;
+                  return (
+                    <button
+                      key={opt.value || 'all'}
+                      type="button"
+                      onClick={() => {
+                        const nextInd = isSelected ? '' : opt.value;
+                        setIndustry(nextInd);
+                        executeSearch(query, location, type, level, selectedRole, remote, nextInd, company);
+                        scrollToResults();
+                      }}
+                      title={opt.value ? `Filter opportunities in ${opt.label}` : 'Show all industries'}
+                      className={`industry-rail-pill ${isSelected ? 'is-active' : ''}`}
+                    >
+                      <span className="industry-rail-pill-icon">{opt.icon}</span>
+                      <span>{opt.label}</span>
+                      {isSelected && <Check size={12} color="var(--primary-start)" style={{ strokeWidth: 2.5 }} />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => scrollIndustryRail('right')}
+                className="industry-rail-nav-btn industry-rail-nav-btn-right"
+                aria-label="Scroll industries right"
+                title="Scroll right"
+              >
+                <ChevronRight size={16} />
+              </button>
             </div>
           </motion.div>
 
           {/* Dynamic Popular Search Pills (Ranked by Average Daily Searches) */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.25 }}
             className="quick-pills-container"
           >
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, marginRight: '0.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -3667,22 +4164,7 @@ export default function Home() {
                   type="button"
                   onClick={() => handleQuickPillClick(pill)}
                   title={`${pill.avgSearches || 0} avg daily searches • ${pill.trend === 'hot' ? 'High Demand' : pill.trend === 'rising' ? 'Trending' : 'Popular'}`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    background: isSelected ? 'rgba(99, 102, 241, 0.2)' : 'var(--tag-bg)',
-                    color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
-                    border: `1px solid ${isSelected ? 'rgba(99, 102, 241, 0.45)' : 'var(--tag-border)'}`,
-                    boxShadow: isSelected ? '0 2px 8px rgba(99, 102, 241, 0.2)' : 'none',
-                    padding: '0.35rem 0.75rem',
-                    borderRadius: 20,
-                    fontSize: '0.82rem',
-                    fontWeight: isSelected ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    whiteSpace: 'nowrap',
-                  }}
+                  className={`quick-pill-btn ${isSelected ? 'is-selected' : ''}`}
                 >
                   <span>{pill.label}</span>
                 </button>
@@ -3704,159 +4186,201 @@ export default function Home() {
           }}
           aria-label="Search results and opportunities feed"
         >
-          {/* Results Header Toolbar */}
-          {!loading && (activeView === 'saved' ? savedJobs.length > 0 : searched && displayedJobs.length > 0) && (
+          {/* Results Header Toolbar (World-class Responsive Command Bar) */}
+          {!loading && (activeView === 'saved' ? savedJobs.length > 0 : (searched && displayedJobs.length > 0)) && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="results-header-toolbar"
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  {activeView === 'saved'
-                    ? `${savedJobs.length} Saved Positions`
-                    : displayedJobs.length > JOBS_BATCH_SIZE
-                      ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
-                      : `${displayedJobs.length.toLocaleString()} Verified Positions`}
-                </span>
-                {isResultsFocused && (
-                  <motion.span
-                    initial={{ opacity: 0, scale: 0.88, y: -2 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.88 }}
-                    className="results-focus-clue-badge"
-                    title="Results section in focus"
-                  >
-                    <ArrowDown size={11} strokeWidth={2.5} />
-                    <span>Results in Focus</span>
-                  </motion.span>
-                )}
-              {activeView !== 'saved' && (
-                <motion.div
-                  key={`toolbar-matched-${displayedJobs.length}`}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="roles-matched-pill"
-                >
-                  <span className="pulse-dot" />
-                  <span className="desktop-only">
-                    {isScrollingCards ? (
-                      <>
-                        <span className="count-main">{animatedElapsedCount} of {displayedJobs.length.toLocaleString()} Roles Matched</span>
-                        <span className="count-secondary"> • {formattedCount} Total Verified</span>
-                      </>
+              {/* Primary Top Bar: Feed Headline, Live Telemetry Pill & Mode Switcher */}
+              <div className="results-bar-header">
+                <div className="results-bar-title-group">
+                  <h3 className="results-heading">
+                    {activeView === 'saved' ? (
+                      `${savedJobs.length} Saved Positions`
                     ) : (
-                      <>
-                        <span className="count-main">{displayedJobs.length.toLocaleString()} Roles Matched</span>
-                        <span className="count-secondary"> • {formattedCount} Total Verified</span>
-                      </>
+                      displayedJobs.length > JOBS_BATCH_SIZE
+                        ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
+                        : `${displayedJobs.length.toLocaleString()} Verified Positions`
                     )}
-                  </span>
-                  <span className="mobile-only">
-                    {isScrollingCards
-                      ? `${animatedElapsedCount}/${displayedJobs.length.toLocaleString()} Roles`
-                      : `${displayedJobs.length.toLocaleString()} Roles`}
-                  </span>
-                </motion.div>
-              )}
-              {displayedJobs.length > JOBS_BATCH_SIZE && (
-                <span className="autoload-scroll-pill">
-                  <Zap size={11} />
-                  <span>Auto-loading on scroll</span>
-                </span>
-              )}
-              {activeView === 'saved' ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveView('all')}
-                  className="btn-secondary"
-                  style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <Compass size={13} />
-                  <span>Back to All Roles</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={resetToDiscovery}
-                  className="btn-secondary"
-                  style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <Compass size={13} />
-                  <span>Back to Discovery</span>
-                </button>
-              )}
-              {(query || location || remote || selectedRole || type || level) && (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-secondary)',
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    padding: '0.2rem 0.4rem',
-                  }}
-                >
-                  Clear all filters
-                </button>
-              )}
-            </div>
+                  </h3>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <SlidersHorizontal size={14} color="var(--text-secondary)" />
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                Sort:
-              </span>
-              <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 10, padding: 3, border: '1px solid var(--border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setSortBy('relevance')}
-                  style={{
-                    background: sortBy === 'relevance' ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(139, 92, 246, 0.25))' : 'transparent',
-                    color: sortBy === 'relevance' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: sortBy === 'relevance' ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid transparent',
-                    padding: '0.35rem 0.75rem',
-                    borderRadius: 8,
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <TrendingUp size={12} />
-                  Best Match
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSortBy('date')}
-                  style={{
-                    background: sortBy === 'date' ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(139, 92, 246, 0.25))' : 'transparent',
-                    color: sortBy === 'date' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: sortBy === 'date' ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid transparent',
-                    padding: '0.35rem 0.75rem',
-                    borderRadius: 8,
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <Clock size={12} />
-                  Freshest First
-                </button>
+                  {isResultsFocused && (
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.88, y: -2 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.88 }}
+                      className="results-focus-clue-badge"
+                      title="Content section in focus"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <ArrowDown size={11} strokeWidth={2.5} />
+                      <span>{tabFocusBadge || 'Content in Focus'}</span>
+                    </motion.span>
+                  )}
+
+                  {activeView !== 'saved' && (
+                    <motion.div
+                      key={`toolbar-matched-${displayedJobs.length}`}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="roles-matched-pill"
+                    >
+                      <span className="pulse-dot" />
+                      <span className="desktop-only">
+                        {isScrollingCards ? (
+                          <>
+                            <span className="count-main">{animatedElapsedCount} of {displayedJobs.length.toLocaleString()} Roles Matched</span>
+                            <span className="count-secondary"> • {formattedCount} Total Verified</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="count-main">{displayedJobs.length.toLocaleString()} Roles Matched</span>
+                            <span className="count-secondary"> • {formattedCount} Total Verified</span>
+                          </>
+                        )}
+                      </span>
+                      <span className="mobile-only">
+                        {isScrollingCards
+                          ? `${animatedElapsedCount}/${displayedJobs.length.toLocaleString()} Roles`
+                          : `${displayedJobs.length.toLocaleString()} Roles`}
+                      </span>
+                    </motion.div>
+                  )}
+
+                  {/* Autoload status indicator is rendered in the utility row below for clean horizontal balance */}
+                </div>
+
+                {/* Primary Mode Switcher: Live Roles vs Curated Tracks */}
+                {activeView !== 'saved' && (
+                  <div className="results-mode-switcher" role="tablist" aria-label="Feed display mode">
+                    <button
+                      type="button"
+                      role="tab"
+                      id="tab-mode-feed"
+                      aria-selected={activeDiscoveryTab === 'feed'}
+                      aria-controls="panel-mode-feed"
+                      tabIndex={activeDiscoveryTab === 'feed' ? 0 : -1}
+                      onClick={() => handleDiscoveryTabSelect('feed')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                          e.preventDefault();
+                          handleDiscoveryTabSelect('tracks');
+                        }
+                      }}
+                      className={`results-mode-btn ${activeDiscoveryTab === 'feed' ? 'is-active' : ''}`}
+                    >
+                      <Zap size={13} />
+                      <span>Live Roles</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      id="tab-mode-tracks"
+                      aria-selected={activeDiscoveryTab === 'tracks'}
+                      aria-controls="panel-mode-tracks"
+                      tabIndex={activeDiscoveryTab === 'tracks' ? 0 : -1}
+                      onClick={() => handleDiscoveryTabSelect('tracks')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                          e.preventDefault();
+                          handleDiscoveryTabSelect('feed');
+                        }
+                      }}
+                      className={`results-mode-btn ${activeDiscoveryTab === 'tracks' ? 'is-active' : ''}`}
+                    >
+                      <Compass size={13} />
+                      <span>Curated Tracks (12)</span>
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
-          </motion.div>
-        )}
+
+              {/* Utility Sub-Bar: Filter Actions, Auto-load Pill & Sort Controls */}
+              <div className="results-bar-controls">
+                <div className="results-bar-actions-left">
+                  {activeView === 'saved' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleViewSelect('all')}
+                      className="btn-secondary results-action-btn"
+                    >
+                      <ArrowLeft size={13} />
+                      <span>Back to All Roles</span>
+                    </button>
+                  ) : (
+                    <>
+                      {(query || location || remote || selectedRole || type || level || industry || company) ? (
+                        <div className="results-active-filters-wrap">
+                          <button
+                            type="button"
+                            onClick={resetToDiscovery}
+                            className="btn-secondary results-action-btn"
+                            title="Reset search query and active filters"
+                          >
+                            <RotateCcw size={12} />
+                            <span>Reset Feed</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={clearAllFilters}
+                            className="results-clear-link"
+                          >
+                            Clear all filters
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="results-stream-hint">
+                          <span className="results-stream-dot" />
+                          <span className="desktop-only">Direct ATS sync • Updated hourly • No middleman fees</span>
+                          <span className="mobile-only">Direct ATS sync • Hourly updates</span>
+                        </span>
+                      )}
+
+                      {displayedJobs.length > JOBS_BATCH_SIZE && (
+                        <span className="autoload-scroll-pill" title="Scroll down to auto-load more verified openings">
+                          <Zap size={11} />
+                          <span>Auto-load active</span>
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Right: Sort Control Segmented Pill */}
+                <div className="results-bar-sort-group">
+                  <div className="results-sort-label">
+                    <SlidersHorizontal size={13} />
+                    <span>Sort:</span>
+                  </div>
+                  <div className="results-sort-segmented" role="radiogroup" aria-label="Sort listings">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={sortBy === 'relevance'}
+                      onClick={() => handleSortSelect('relevance')}
+                      className={`results-sort-btn ${sortBy === 'relevance' ? 'is-active' : ''}`}
+                    >
+                      <TrendingUp size={12} />
+                      <span>Best Match</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={sortBy === 'date'}
+                      onClick={() => handleSortSelect('date')}
+                      className={`results-sort-btn ${sortBy === 'date' ? 'is-active' : ''}`}
+                    >
+                      <Clock size={12} />
+                      <span>Freshest First</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
         {/* Results or Discovery Section */}
         <div style={{ minHeight: 400 }}>
@@ -3897,131 +4421,294 @@ export default function Home() {
               ))}
             </div>
           ) : activeView === 'saved' ? (
-            savedJobs.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
-                <div
-                  style={{
-                    background: 'rgba(99, 102, 241, 0.12)',
-                    display: 'inline-flex',
-                    padding: '1.25rem',
-                    borderRadius: '50%',
-                    marginBottom: '1.25rem',
-                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                  }}
-                >
-                  <Bookmark size={36} color="var(--primary-start)" />
-                </div>
-                <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>No Saved Jobs Yet</h3>
-                <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto 1.5rem', lineHeight: 1.6 }}>
-                  Bookmark tech opportunities by clicking the bookmark icon on any job card. They will stay saved securely across your sessions.
-                </p>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setActiveView('all')}
-                  className="btn-primary"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
-                >
-                  <Compass size={15} />
-                  <span>Browse Verified Roles</span>
-                </motion.button>
-              </div>
-            ) : (
-              <>
-                <div
-                  ref={jobGridRef}
-                  className="job-grid"
-                  style={{
-                    overflowAnchor: 'auto',
-                  }}
-                >
-                  {visibleJobs.map((job, index) => (
-                    <JobCard
-                      key={job.id || `saved-${index}`}
-                      job={job}
-                      index={index}
-                      onSelectCompany={handleSelectCompany}
-                      onSelectIndustry={handleSelectIndustry}
-                    />
-                  ))}
-                </div>
-
-                {hasMore && (
+            <div
+              ref={savedContentRef}
+              id="panel-mode-saved"
+              role="tabpanel"
+              aria-label="Saved roles"
+              tabIndex={-1}
+              className={`saved-jobs-view-panel ${isResultsFocused && activeView === 'saved' ? 'tab-panel-focused-glow' : ''}`}
+              style={{ outline: 'none', scrollMarginTop: '100px' }}
+            >
+              {savedJobs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
                   <div
-                    ref={sentinelRef}
-                    className="lazy-load-sentinel"
                     style={{
-                      marginTop: '2.5rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '0.85rem',
-                      padding: '1.75rem 1rem',
-                      borderRadius: 16,
-                      background: 'rgba(255, 255, 255, 0.02)',
-                      border: '1px dashed rgba(255, 255, 255, 0.12)',
-                      overflowAnchor: 'none',
-                      contain: 'layout style',
-                      minHeight: 80,
+                      background: 'rgba(99, 102, 241, 0.12)',
+                      display: 'inline-flex',
+                      padding: '1.25rem',
+                      borderRadius: '50%',
+                      marginBottom: '1.25rem',
+                      border: '1px solid rgba(99, 102, 241, 0.25)',
                     }}
                   >
-                    {isLoadingMore ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-primary)', fontSize: '0.92rem', fontWeight: 600 }}>
-                          <Loader2 size={18} className="animate-spin" color="var(--accent-indigo)" />
-                          <span>Loading more saved roles...</span>
-                        </div>
-                        <div
-                          style={{
-                            width: 200,
-                            height: 4,
-                            borderRadius: 9999,
-                            background: 'rgba(99, 102, 241, 0.2)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            className="skeleton-shimmer"
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              background: 'linear-gradient(90deg, transparent, #818cf8, transparent)',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                          <Loader2 size={16} className="animate-spin" color="var(--accent-indigo)" />
-                          <span>Scroll to load more or click below</span>
-                        </div>
-                        <motion.button
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.97 }}
-                          type="button"
-                          onClick={loadMore}
-                          className="btn-secondary"
-                          style={{
-                            fontSize: '0.84rem',
-                            padding: '0.6rem 1.4rem',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                          }}
-                        >
-                          <ArrowDown size={14} />
-                          <span>
-                            Load Next {Math.min(JOBS_BATCH_SIZE, displayedJobs.length - visibleJobs.length)} Roles
-                          </span>
-                        </motion.button>
-                      </>
-                    )}
+                    <Bookmark size={36} color="var(--primary-start)" />
                   </div>
-                )}
-              </>
-            )
-          ) : searched && displayedJobs.length === 0 ? (
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>No Saved Jobs Yet</h3>
+                  <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto 1.5rem', lineHeight: 1.6 }}>
+                    Bookmark tech opportunities by clicking the bookmark icon on any job card. They will stay saved securely across your sessions.
+                  </p>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleViewSelect('all')}
+                    className="btn-primary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
+                  >
+                    <Compass size={15} />
+                    <span>Browse Verified Roles</span>
+                  </motion.button>
+                </div>
+              ) : (
+                <>
+                  <div
+                    ref={jobGridRef}
+                    className="job-grid"
+                    style={{
+                      overflowAnchor: 'auto',
+                    }}
+                  >
+                    {visibleJobs.map((job, index) => (
+                      <JobCard
+                        key={job.id || `saved-${index}`}
+                        job={job}
+                        index={index}
+                        onSelectCompany={handleSelectCompany}
+                        onSelectIndustry={handleSelectIndustry}
+                      />
+                    ))}
+                  </div>
+
+                  {hasMore && (
+                    <div
+                      ref={sentinelRef}
+                      className="lazy-load-sentinel"
+                      style={{
+                        marginTop: '2.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '0.85rem',
+                        padding: '1.75rem 1rem',
+                        borderRadius: 16,
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        border: '1px dashed rgba(255, 255, 255, 0.12)',
+                        overflowAnchor: 'none',
+                        contain: 'layout style',
+                        minHeight: 80,
+                      }}
+                    >
+                      {isLoadingMore ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-primary)', fontSize: '0.92rem', fontWeight: 600 }}>
+                            <Loader2 size={18} className="animate-spin" color="var(--accent-indigo)" />
+                            <span>Loading more saved roles...</span>
+                          </div>
+                          <div
+                            style={{
+                              width: 200,
+                              height: 4,
+                              borderRadius: 9999,
+                              background: 'rgba(99, 102, 241, 0.2)',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              className="skeleton-shimmer"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                background: 'linear-gradient(90deg, transparent, #818cf8, transparent)',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            <Loader2 size={16} className="animate-spin" color="var(--accent-indigo)" />
+                            <span>Scroll to load more or click below</span>
+                          </div>
+                          <motion.button
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            type="button"
+                            onClick={loadMore}
+                            className="btn-secondary"
+                            style={{
+                              fontSize: '0.84rem',
+                              padding: '0.6rem 1.4rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                            }}
+                          >
+                            <ArrowDown size={14} />
+                            <span>
+                              Load Next {Math.min(JOBS_BATCH_SIZE, displayedJobs.length - visibleJobs.length)} Roles
+                            </span>
+                          </motion.button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : !searched || activeDiscoveryTab === 'tracks' ? (
+            /* Curated Discovery Tracks View */
+            <div
+              ref={tracksContentRef}
+              id="panel-mode-tracks"
+              role="tabpanel"
+              aria-labelledby="tab-mode-tracks"
+              tabIndex={-1}
+              className={`curated-tracks-view-panel ${isResultsFocused && activeDiscoveryTab === 'tracks' ? 'tab-panel-focused-glow' : ''}`}
+              style={{ outline: 'none', marginTop: '0.5rem', paddingBottom: '3rem', scrollMarginTop: '100px' }}
+            >
+              <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.35rem 0.9rem',
+                    borderRadius: 9999,
+                    background: 'rgba(99, 102, 241, 0.2)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                    color: '#687ff0ff',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    marginBottom: '0.75rem',
+                  }}
+                >
+                  <Compass size={14} />
+                  <span>Curated Discovery Tracks</span>
+                </div>
+                <h3 style={{ fontSize: '1.9rem', fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                  Explore Opportunities Across Every Industry
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: 640, margin: '0 auto', lineHeight: 1.55 }}>
+                  Select a career sector to explore live verified positions from direct employer ATS and official job boards, or search specific keywords above.
+                </p>
+              </div>
+
+              {/* 12-Card Domain Explorer Grid */}
+              <div className="discovery-domain-grid">
+                {DISCOVERY_DOMAINS.map((domain, idx) => {
+                  const Icon = domain.icon;
+                  return (
+                    <motion.div
+                      key={idx}
+                      whileHover={{ y: -5, scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleDomainClick(domain)}
+                      className="domain-card"
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="domain-card-icon">
+                          <Icon size={22} />
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            padding: '0.25rem 0.65rem',
+                            borderRadius: 9999,
+                            background: 'rgba(16, 185, 129, 0.12)',
+                            color: '#34d399',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                          }}
+                        >
+                          {domain.count}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="domain-card-title">
+                          <span>{domain.title}</span>
+                          <ChevronRight size={16} color="var(--primary-start)" />
+                        </div>
+                        <p className="domain-card-desc">{domain.desc}</p>
+                      </div>
+
+                      <div className="domain-card-tags">
+                        {domain.tags.map((tag, tIdx) => (
+                          <span key={tIdx} className="domain-card-tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Browse All Banner */}
+              <motion.div
+                whileHover={{ scale: 1.01 }}
+                className="glass-panel"
+                style={{
+                  marginTop: '2.5rem',
+                  padding: '2.2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '1.5rem',
+                  background: 'linear-gradient(135deg, var(--surface-card) 0%, rgba(99, 102, 241, 0.12) 100%)',
+                  border: '1px solid var(--border-card)',
+                  boxShadow: 'var(--shadow-card)',
+                  borderRadius: 16,
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                <div>
+                  <h4 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.35rem', color: 'var(--text-primary)' }}>
+                    Prefer to explore without filters?
+                  </h4>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem' }}>
+                    Access our full aggregated feed of {formattedCount} verified opportunities directly from public boards.
+                  </p>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleBrowseAllClick}
+                  className="btn-primary"
+                  style={{ padding: '0.85rem 1.8rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.55rem' }}
+                >
+                  <span>Browse All {formattedCount} Positions</span>
+                  <ArrowRight size={17} />
+                </motion.button>
+              </motion.div>
+
+              {/* Candidate Trust & Quality Assurance Standards Strip */}
+              <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1.2rem' }}>
+                  JOBNEXUS VERIFIED CAREER DISCOVERY STANDARDS
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
+                  {[
+                    { label: 'Direct Employer ATS Pipelines', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
+                    { label: '100% Verified Tech Opportunities', icon: <Zap size={13} color="#38bdf8" /> },
+                    { label: 'Zero Recruiter Spam', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
+                    { label: 'Tier 1 & Tier 2 India Tech Hubs', icon: <span style={{ fontSize: '0.85rem' }}>🇮🇳</span> },
+                    { label: 'Worldwide Distributed & Remote Roles', icon: <Globe size={13} color="#6366f1" /> },
+                    { label: 'Real-Time Hourly Synchronization', icon: <Clock size={13} color="#f59e0b" /> },
+                    { label: 'Authentic Direct Application Access', icon: <Sparkles size={13} color="#a855f7" /> },
+                  ].map((item, idx) => (
+                    <span key={idx} className="trust-badge">
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : displayedJobs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
               <div
                 style={{
@@ -4074,8 +4761,16 @@ export default function Home() {
                 </motion.button>
               </div>
             </div>
-          ) : searched && displayedJobs.length > 0 ? (
-            <>
+          ) : (
+            <div
+              ref={feedContentRef}
+              id="panel-mode-feed"
+              role="tabpanel"
+              aria-labelledby="tab-mode-feed"
+              tabIndex={-1}
+              className={`live-feed-view-panel ${isResultsFocused && activeDiscoveryTab === 'feed' ? 'tab-panel-focused-glow' : ''}`}
+              style={{ outline: 'none', scrollMarginTop: '100px' }}
+            >
               <div
                 ref={jobGridRef}
                 className="job-grid"
@@ -4217,151 +4912,6 @@ export default function Home() {
                   </button>
                 </motion.div>
               ) : null}
-            </>
-          ) : (
-            /* Standard Discovery Section when not searched yet */
-            <div style={{ marginTop: '0.5rem', paddingBottom: '3rem' }}>
-              <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.35rem 0.9rem',
-                    borderRadius: 9999,
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                    color: '#687ff0ff',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    marginBottom: '1rem',
-                  }}
-                >
-                  <Compass size={14} />
-                  <span>Curated Discovery Tracks</span>
-                </div>
-                <h3 style={{ fontSize: '2.1rem', fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text-primary)', marginBottom: '0.6rem' }}>
-                  Explore Opportunities Across Every Industry
-                </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', maxWidth: 640, margin: '0 auto', lineHeight: 1.6 }}>
-                  Select a career sector to explore live verified positions from direct employer ATS and official job boards, or search specific keywords above.
-                </p>
-              </div>
-
-              {/* 6-Card Domain Explorer Grid */}
-              <div className="discovery-domain-grid">
-                {DISCOVERY_DOMAINS.map((domain, idx) => {
-                  const Icon = domain.icon;
-                  return (
-                    <motion.div
-                      key={idx}
-                      whileHover={{ y: -5, scale: 1.01 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleDomainClick(domain)}
-                      className="domain-card"
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="domain-card-icon">
-                          <Icon size={22} />
-                        </div>
-                        <span
-                          style={{
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            padding: '0.25rem 0.65rem',
-                            borderRadius: 9999,
-                            background: 'rgba(16, 185, 129, 0.12)',
-                            color: '#34d399',
-                            border: '1px solid rgba(16, 185, 129, 0.3)',
-                          }}
-                        >
-                          {domain.count}
-                        </span>
-                      </div>
-
-                      <div>
-                        <div className="domain-card-title">
-                          <span>{domain.title}</span>
-                          <ChevronRight size={16} color="var(--primary-start)" />
-                        </div>
-                        <p className="domain-card-desc">{domain.desc}</p>
-                      </div>
-
-                      <div className="domain-card-tags">
-                        {domain.tags.map((tag, tIdx) => (
-                          <span key={tIdx} className="domain-card-tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* Browse All Banner */}
-              <motion.div
-                whileHover={{ scale: 1.01 }}
-                className="glass-panel"
-                style={{
-                  marginTop: '2.5rem',
-                  padding: '2.2rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '1.5rem',
-                  background: 'linear-gradient(135deg, var(--surface-card) 0%, rgba(99, 102, 241, 0.12) 100%)',
-                  border: '1px solid var(--border-card)',
-                  boxShadow: 'var(--shadow-card)',
-                  borderRadius: 16,
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                <div>
-                  <h4 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.35rem', color: 'var(--text-primary)' }}>
-                    Prefer to explore without filters?
-                  </h4>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem' }}>
-                    Access our full aggregated feed of {formattedCount} verified opportunities directly from public boards.
-                  </p>
-                </div>
-
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleBrowseAllClick}
-                  className="btn-primary"
-                  style={{ padding: '0.85rem 1.8rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.55rem' }}
-                >
-                  <span>Browse All {formattedCount} Positions</span>
-                  <ArrowRight size={17} />
-                </motion.button>
-              </motion.div>
-
-              {/* Candidate Trust & Quality Assurance Standards Strip */}
-              <div style={{ marginTop: '3rem', textAlign: 'center' }}>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1.2rem' }}>
-                  JOBNEXUS VERIFIED CAREER DISCOVERY STANDARDS
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
-                  {[
-                    { label: 'Direct Employer ATS Pipelines', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
-                    { label: '100% Verified Tech Opportunities', icon: <Zap size={13} color="#38bdf8" /> },
-                    { label: 'Zero Recruiter Spam', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
-                    { label: 'Tier 1 & Tier 2 India Tech Hubs', icon: <span style={{ fontSize: '0.85rem' }}>🇮🇳</span> },
-                    { label: 'Worldwide Distributed & Remote Roles', icon: <Globe size={13} color="#6366f1" /> },
-                    { label: 'Real-Time Hourly Synchronization', icon: <Clock size={13} color="#f59e0b" /> },
-                    { label: 'Authentic Direct Application Access', icon: <Sparkles size={13} color="#a855f7" /> },
-                  ].map((item, idx) => (
-                    <span key={idx} className="trust-badge">
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
         </div>

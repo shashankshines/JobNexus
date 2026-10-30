@@ -14,11 +14,15 @@ import {
 } from './collections';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 import { getUserById, getAllUsers } from '@/modules/auth/server/session.store';
-import { evaluateSubscriptionEntitlement } from '@/modules/billing/services/entitlement.service';
+import {
+  evaluateSubscriptionEntitlement,
+  invalidateUserEntitlementCache,
+} from '@/modules/billing/services/entitlement.service';
 import {
   sendPaymentApprovalNotification,
   sendPaymentRejectionNotification,
 } from '@/modules/email/email.service';
+import { invalidateAuditLogsCache } from './audit.store';
 
 // ============================================================================
 // Types & Domain Errors
@@ -166,10 +170,36 @@ export class MandatoryReasonMissingError extends Error {
 }
 
 // ============================================================================
+// In-Memory Performance Cache (Phase 2B.5)
+// ============================================================================
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+let cachedAdminOverview: CacheEntry<AdminOverviewMetrics> | null = null;
+let cachedLedgerSnapshot: { items: PaymentLedgerItem[]; summary: PaymentLedgerSummary; timestamp: number } | null = null;
+let cachedSubscriptionsSnapshot: { docs: SubscriptionDocument[]; timestamp: number } | null = null;
+const ADMIN_CACHE_TTL_MS = 20 * 1000; // 20-second snapshot cache
+
+export function invalidateAdminStoresCache(): void {
+  cachedAdminOverview = null;
+  cachedLedgerSnapshot = null;
+  cachedSubscriptionsSnapshot = null;
+}
+
+// ============================================================================
 // Overview & Metric Queries
 // ============================================================================
 
-export async function getAdminOverview(): Promise<AdminOverviewMetrics> {
+export async function getAdminOverview(options?: { bypassCache?: boolean; forceCache?: boolean }): Promise<AdminOverviewMetrics> {
+  const now = Date.now();
+  const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  if (!isTestEnv && !options?.bypassCache && cachedAdminOverview && now - cachedAdminOverview.timestamp < ADMIN_CACHE_TTL_MS) {
+    return cachedAdminOverview.data;
+  }
+
   const submissionsCol = getSubmissionsCollection();
   const subscriptionsCol = getSubscriptionsCollection();
   const auditLogsCol = getAuditLogsCollection();
@@ -180,7 +210,6 @@ export async function getAdminOverview(): Promise<AdminOverviewMetrics> {
     auditLogsCol.get(),
   ]);
 
-  const now = Date.now();
   let pendingCount = 0;
   let slaBreachCount = 0;
   let totalApprovedCount = 0;
@@ -234,7 +263,7 @@ export async function getAdminOverview(): Promise<AdminOverviewMetrics> {
   // Authoritative verified revenue: approved payment count * ₹499
   const verifiedRevenueInr = totalApprovedCount * 499;
 
-  return {
+  const metrics: AdminOverviewMetrics = {
     pendingCount,
     slaBreachCount,
     activeSubscribersCount,
@@ -247,6 +276,9 @@ export async function getAdminOverview(): Promise<AdminOverviewMetrics> {
     manualGrantSubscribersCount,
     expiringSoonCount,
   };
+
+  cachedAdminOverview = { data: metrics, timestamp: now };
+  return metrics;
 }
 
 // ============================================================================
@@ -257,6 +289,7 @@ export async function getAdminSubmissions(filter?: {
   status?: 'all' | 'pending_verification' | 'approved' | 'rejected';
   limit?: number;
   offset?: number;
+  query?: string;
 }): Promise<{ submissions: SubmissionWithOrder[]; total: number }> {
   const submissionsCol = getSubmissionsCollection();
   const ordersCol = getOrdersCollection();
@@ -266,13 +299,26 @@ export async function getAdminSubmissions(filter?: {
     : submissionsCol;
 
   const snap = await query.get();
-  const allSubmissions: PaymentSubmissionDocument[] = snap.docs
+  let allSubmissions: PaymentSubmissionDocument[] = snap.docs
     .map((d) => d.data())
     .sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
 
+  if (filter?.query) {
+    const q = filter.query.trim().toLowerCase();
+    allSubmissions = allSubmissions.filter((sub) => {
+      const localUser = getUserById(sub.userId);
+      const email = sub.userEmail || localUser?.email || '';
+      return (
+        sub.utrNumber.toLowerCase().includes(q) ||
+        sub.userId.toLowerCase().includes(q) ||
+        email.toLowerCase().includes(q)
+      );
+    });
+  }
+
   const total = allSubmissions.length;
   const offset = filter?.offset || 0;
-  const limit = Math.min(Math.max(filter?.limit || 25, 1), 100);
+  const limit = Math.min(Math.max(filter?.limit || 5, 1), 100);
   const pagedSubmissions = allSubmissions.slice(offset, offset + limit);
 
   // Attach associated orders and resolve subscriber email
@@ -552,6 +598,9 @@ export async function approvePaymentSubmissionInTransaction(params: {
 
   // Trigger Event B: Transactional Payment Approval Email
   if (!result.idempotent) {
+    invalidateAdminStoresCache();
+    invalidateAuditLogsCache();
+    invalidateUserEntitlementCache(result.submission.userId);
     try {
       await sendPaymentApprovalNotification({
         userId: result.submission.userId,
@@ -709,6 +758,9 @@ export async function rejectPaymentSubmissionInTransaction(params: {
 
   // Trigger Event C: Transactional Payment Rejection Email
   if (!result.idempotent) {
+    invalidateAdminStoresCache();
+    invalidateAuditLogsCache();
+    invalidateUserEntitlementCache(result.submission.userId);
     try {
       await sendPaymentRejectionNotification({
         userId: result.submission.userId,
@@ -753,7 +805,7 @@ export async function adminManualGrantSubscriptionInTransaction(params: {
   const subscriptionsCol = getSubscriptionsCollection();
   const auditLogsCol = getAuditLogsCollection();
 
-  return await db.runTransaction(async (transaction) => {
+  const res = await db.runTransaction(async (transaction) => {
     const subRef = subscriptionsCol.doc(targetUserId);
     const subSnap = await transaction.get(subRef);
     const existingSub = subSnap.exists ? (subSnap.data() as SubscriptionDocument) : null;
@@ -809,6 +861,11 @@ export async function adminManualGrantSubscriptionInTransaction(params: {
 
     return newSub;
   });
+
+  invalidateAdminStoresCache();
+  invalidateAuditLogsCache();
+  invalidateUserEntitlementCache(targetUserId);
+  return res;
 }
 
 /**
@@ -832,7 +889,7 @@ export async function adminExtendSubscriptionInTransaction(params: {
   const subscriptionsCol = getSubscriptionsCollection();
   const auditLogsCol = getAuditLogsCollection();
 
-  return await db.runTransaction(async (transaction) => {
+  const res = await db.runTransaction(async (transaction) => {
     const subRef = subscriptionsCol.doc(targetUserId);
     const subSnap = await transaction.get(subRef);
     if (!subSnap.exists) {
@@ -884,6 +941,11 @@ export async function adminExtendSubscriptionInTransaction(params: {
 
     return updatedSub;
   });
+
+  invalidateAdminStoresCache();
+  invalidateAuditLogsCache();
+  invalidateUserEntitlementCache(targetUserId);
+  return res;
 }
 
 /**
@@ -907,7 +969,7 @@ export async function adminSuspendSubscriptionInTransaction(params: {
   const subscriptionsCol = getSubscriptionsCollection();
   const auditLogsCol = getAuditLogsCollection();
 
-  return await db.runTransaction(async (transaction) => {
+  const res = await db.runTransaction(async (transaction) => {
     const subRef = subscriptionsCol.doc(targetUserId);
     const subSnap = await transaction.get(subRef);
     if (!subSnap.exists) {
@@ -967,6 +1029,11 @@ export async function adminSuspendSubscriptionInTransaction(params: {
 
     return updatedSub;
   });
+
+  invalidateAdminStoresCache();
+  invalidateAuditLogsCache();
+  invalidateUserEntitlementCache(targetUserId);
+  return res;
 }
 
 /**
@@ -992,7 +1059,7 @@ export async function adminReinstateSubscriptionInTransaction(params: {
   const subscriptionsCol = getSubscriptionsCollection();
   const auditLogsCol = getAuditLogsCollection();
 
-  return await db.runTransaction(async (transaction) => {
+  const res = await db.runTransaction(async (transaction) => {
     const subRef = subscriptionsCol.doc(targetUserId);
     const subSnap = await transaction.get(subRef);
     if (!subSnap.exists) {
@@ -1073,6 +1140,11 @@ export async function adminReinstateSubscriptionInTransaction(params: {
 
     return updatedSub;
   });
+
+  invalidateAdminStoresCache();
+  invalidateAuditLogsCache();
+  invalidateUserEntitlementCache(targetUserId);
+  return res;
 }
 
 /**
@@ -1095,7 +1167,7 @@ export async function adminRevokeSubscriptionInTransaction(params: {
   const subscriptionsCol = getSubscriptionsCollection();
   const auditLogsCol = getAuditLogsCollection();
 
-  return await db.runTransaction(async (transaction) => {
+  const res = await db.runTransaction(async (transaction) => {
     const subRef = subscriptionsCol.doc(targetUserId);
     const subSnap = await transaction.get(subRef);
     if (!subSnap.exists) {
@@ -1152,6 +1224,11 @@ export async function adminRevokeSubscriptionInTransaction(params: {
 
     return updatedSub;
   });
+
+  invalidateAdminStoresCache();
+  invalidateAuditLogsCache();
+  invalidateUserEntitlementCache(targetUserId);
+  return res;
 }
 
 // ============================================================================
@@ -1178,16 +1255,22 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
   const resolvedUserId = user?.id || userIdOrEmail;
   const resolvedEmail = user?.email || (userIdOrEmail.includes('@') ? userIdOrEmail : null);
 
-  // 2. Fetch subscription
+  // 2. Concurrently fetch subscription, orders, submissions, and audit logs for this user (Phase 2B.5 Parallelism)
   const subscriptionsCol = getSubscriptionsCollection();
+  const ordersCol = getOrdersCollection();
+  const submissionsCol = getSubmissionsCollection();
+  const auditLogsCol = getAuditLogsCollection();
+
+  const [subSnap, ordersSnap, submissionsSnap, auditSnap] = await Promise.all([
+    subscriptionsCol.doc(resolvedUserId).get().catch(() => null),
+    ordersCol.where('userId', '==', resolvedUserId).get(),
+    submissionsCol.where('userId', '==', resolvedUserId).get(),
+    auditLogsCol.where('targetUserId', '==', resolvedUserId).get(),
+  ]);
+
   let subscriptionDoc: SubscriptionDocument | null = null;
-  try {
-    const subSnap = await subscriptionsCol.doc(resolvedUserId).get();
-    if (subSnap.exists) {
-      subscriptionDoc = subSnap.data() || null;
-    }
-  } catch {
-    subscriptionDoc = null;
+  if (subSnap && subSnap.exists) {
+    subscriptionDoc = subSnap.data() || null;
   }
 
   // Evaluate authoritative entitlement
@@ -1244,17 +1327,12 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
       }
     : null;
 
-  // 3. Fetch Orders for this user
-  const ordersCol = getOrdersCollection();
-  const ordersSnap = await ordersCol.where('userId', '==', resolvedUserId).get();
+  // Process Orders
   const orders: PaymentOrderDocument[] = ordersSnap.docs.map((d) => d.data());
   orders.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
 
-  // 4. Fetch Submissions for this user
-  const submissionsCol = getSubmissionsCollection();
-  const submissionsSnap = await submissionsCol.where('userId', '==', resolvedUserId).get();
+  // Process Submissions
   const rawSubmissions: PaymentSubmissionDocument[] = submissionsSnap.docs.map((d) => d.data());
-
   const submissionsWithOrders: SubmissionWithOrder[] = rawSubmissions.map((sub) => {
     const matchingOrder = orders.find((o) => o.orderId === sub.orderId) || null;
     return {
@@ -1265,9 +1343,7 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
   });
   submissionsWithOrders.sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
 
-  // 5. Fetch Audit Logs targeting this user
-  const auditLogsCol = getAuditLogsCollection();
-  const auditSnap = await auditLogsCol.where('targetUserId', '==', resolvedUserId).get();
+  // Process Audit Logs
   const auditLogs: AdminAuditLogDocument[] = auditSnap.docs.map((d) => d.data());
   auditLogs.sort((a, b) => (a.timestamp > b.timestamp ? -1 : 1));
 
@@ -1395,32 +1471,43 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
 // Consolidated Payment Ledger Query
 // ============================================================================
 
-export async function getConsolidatedPaymentLedger(params?: PaymentLedgerFilter): Promise<{
+export async function getConsolidatedPaymentLedger(
+  params?: PaymentLedgerFilter,
+  options?: { bypassCache?: boolean; forceCache?: boolean }
+): Promise<{
   records: PaymentLedgerItem[];
   summary: PaymentLedgerSummary;
   total: number;
 }> {
-  const ordersCol = getOrdersCollection();
-  const submissionsCol = getSubmissionsCollection();
-  const subscriptionsCol = getSubscriptionsCollection();
-
-  const [ordersSnap, submissionsSnap, subscriptionsSnap] = await Promise.all([
-    ordersCol.get(),
-    submissionsCol.get(),
-    subscriptionsCol.get(),
-  ]);
-
-  const allOrders: PaymentOrderDocument[] = ordersSnap.docs.map((d) => d.data());
-  const allSubmissions: PaymentSubmissionDocument[] = submissionsSnap.docs.map((d) => d.data());
-  const allSubscriptions: SubscriptionDocument[] = subscriptionsSnap.docs.map((d) => d.data());
-
   const now = Date.now();
-  const items: PaymentLedgerItem[] = [];
+  const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  let items: PaymentLedgerItem[] = [];
+  let summary!: PaymentLedgerSummary;
 
-  const orderMap = new Map<string, PaymentOrderDocument>();
-  for (const ord of allOrders) {
-    orderMap.set(ord.orderId, ord);
-  }
+  if (!isTestEnv && !options?.bypassCache && cachedLedgerSnapshot && now - cachedLedgerSnapshot.timestamp < ADMIN_CACHE_TTL_MS) {
+    items = [...cachedLedgerSnapshot.items];
+    summary = cachedLedgerSnapshot.summary;
+  } else {
+    const ordersCol = getOrdersCollection();
+    const submissionsCol = getSubmissionsCollection();
+    const subscriptionsCol = getSubscriptionsCollection();
+
+    const [ordersSnap, submissionsSnap, subscriptionsSnap] = await Promise.all([
+      ordersCol.get(),
+      submissionsCol.get(),
+      subscriptionsCol.get(),
+    ]);
+
+    const allOrders: PaymentOrderDocument[] = ordersSnap.docs.map((d) => d.data());
+    const allSubmissions: PaymentSubmissionDocument[] = submissionsSnap.docs.map((d) => d.data());
+    const allSubscriptions: SubscriptionDocument[] = subscriptionsSnap.docs.map((d) => d.data());
+
+    items = [];
+
+    const orderMap = new Map<string, PaymentOrderDocument>();
+    for (const ord of allOrders) {
+      orderMap.set(ord.orderId, ord);
+    }
 
   // Pre-calculate UTR frequency to surface collision / duplicate claims
   const utrOccurrences = new Map<string, number>();
@@ -1546,7 +1633,7 @@ export async function getConsolidatedPaymentLedger(params?: PaymentLedgerFilter)
     }
   }
 
-  const summary: PaymentLedgerSummary = {
+  summary = {
     verifiedPaymentAmountInr,
     verifiedRevenueInr: verifiedPaymentAmountInr,
     pendingClaimedAmountInr,
@@ -1563,6 +1650,9 @@ export async function getConsolidatedPaymentLedger(params?: PaymentLedgerFilter)
     refundPolicyNote:
       'Refunds and payment reversals are not automated through this interface and must be audited manually against bank statements.',
   };
+
+    cachedLedgerSnapshot = { items: [...items], summary, timestamp: now };
+  }
 
   // Filter items
   let filtered = items;
@@ -1605,7 +1695,7 @@ export async function getConsolidatedPaymentLedger(params?: PaymentLedgerFilter)
 
   const total = filtered.length;
   const offset = params?.offset || 0;
-  const limit = Math.min(Math.max(params?.limit || 50, 1), 200);
+  const limit = Math.min(Math.max(params?.limit || 5, 1), 200);
   const pagedRecords = filtered.slice(offset, offset + limit);
 
   return {
@@ -1619,33 +1709,44 @@ export async function getConsolidatedPaymentLedger(params?: PaymentLedgerFilter)
 // Subscriptions & Audit Queries
 // ============================================================================
 
-export async function getAdminSubscriptions(params?: {
-  limit?: number;
-  offset?: number;
-  userId?: string;
-  query?: string;
-  entitlementStatus?: 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled';
-  source?: 'all' | 'payment_backed' | 'manual_grant';
-  expiringSoon?: boolean;
-  sortBy?: 'currentPeriodEnd' | 'userId' | 'status' | 'updatedAt';
-  sortDir?: 'asc' | 'desc';
-}): Promise<SubscriptionDocument[]> {
-  const subscriptionsCol = getSubscriptionsCollection();
-
-  const snap = await subscriptionsCol.get();
-  const rawDocs: SubscriptionDocument[] = snap.docs.map((d) => d.data());
+export async function getAdminSubscriptions(
+  params?: {
+    limit?: number;
+    offset?: number;
+    userId?: string;
+    query?: string;
+    entitlementStatus?: 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled';
+    source?: 'all' | 'payment_backed' | 'manual_grant';
+    expiringSoon?: boolean;
+    sortBy?: 'currentPeriodEnd' | 'userId' | 'status' | 'updatedAt';
+    sortDir?: 'asc' | 'desc';
+  },
+  options?: { bypassCache?: boolean; forceCache?: boolean }
+): Promise<SubscriptionDocument[]> {
   const now = Date.now();
+  const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  let enriched: SubscriptionDocument[];
+
+  if (!isTestEnv && !options?.bypassCache && cachedSubscriptionsSnapshot && now - cachedSubscriptionsSnapshot.timestamp < ADMIN_CACHE_TTL_MS) {
+    enriched = [...cachedSubscriptionsSnapshot.docs];
+  } else {
+    const subscriptionsCol = getSubscriptionsCollection();
+    const snap = await subscriptionsCol.get();
+    const rawDocs: SubscriptionDocument[] = snap.docs.map((d) => d.data());
+
+    enriched = rawDocs.map((sub) => {
+      const localUser = getUserById(sub.userId);
+      const userEmail = sub.userEmail || localUser?.email || undefined;
+      return {
+        ...sub,
+        userEmail,
+      };
+    });
+
+    cachedSubscriptionsSnapshot = { docs: [...enriched], timestamp: now };
+  }
+
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-
-  const enriched = rawDocs.map((sub) => {
-    const localUser = getUserById(sub.userId);
-    const userEmail = sub.userEmail || localUser?.email || undefined;
-    return {
-      ...sub,
-      userEmail,
-    };
-  });
-
   let subs = enriched;
 
   const filterTerm = (params?.query || params?.userId || '').trim().toLowerCase();
@@ -1709,9 +1810,11 @@ export async function getAdminSubscriptions(params?: {
     return (timeA - timeB) * sortDir;
   });
 
+  const total = subs.length;
   const offset = params?.offset || 0;
-  const limit = Math.min(Math.max(params?.limit || 50, 1), 200);
-  return subs.slice(offset, offset + limit);
+  const limit = Math.min(Math.max(params?.limit || 5, 1), 200);
+  const paged = subs.slice(offset, offset + limit);
+  return Object.assign(paged, { total });
 }
 
 export { recordAdminAuditLog, getAdminAuditLogs } from './audit.store';

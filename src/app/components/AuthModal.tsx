@@ -147,6 +147,10 @@ export default function AuthModal() {
     setAuthMode(newTab);
     setError(null);
     setSuccessMessage(null);
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>(newTab === 'signin' ? '#signin-email' : '#signup-name');
+      input?.focus();
+    }, 50);
   };
 
   // Google Sign-In click handler

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -14,6 +14,7 @@ import {
   History,
   Lock,
   ArrowRight,
+  ArrowDown,
   Sparkles,
   Users,
   AlertOctagon,
@@ -38,11 +39,54 @@ import {
 } from '@/modules/storage/firestore/admin-billing.store';
 import { SubscriptionDocument, AdminAuditLogDocument } from '@/modules/storage/firestore/collections';
 import { PaymentSettingsView } from '@/app/components/admin/PaymentSettingsView';
+import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
+
+const ADMIN_PAGE_SIZE = 5;
 
 type AdminTab = 'overview' | 'verifications' | 'ledger' | 'subscriptions' | 'settings_preview' | 'audit_logs';
 
 export default function AdminConsolePage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const tabContentRef = useRef<HTMLDivElement>(null);
+  const [isTabFocused, setIsTabFocused] = useState<boolean>(false);
+  const tabFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTabSelect = useCallback((tabId: AdminTab) => {
+    setActiveTab(tabId);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tabId);
+      window.history.replaceState(null, '', url.toString());
+    }
+
+    setTimeout(() => {
+      const panel = tabContentRef.current;
+      if (panel) {
+        const headerOffset = 85;
+        const rect = panel.getBoundingClientRect();
+        const targetTop = rect.top + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+          top: Math.max(0, targetTop),
+          behavior: 'smooth',
+        });
+
+        try {
+          panel.focus({ preventScroll: true });
+        } catch {
+          // Fallback
+        }
+
+        setIsTabFocused(true);
+        if (tabFocusTimeoutRef.current) {
+          clearTimeout(tabFocusTimeoutRef.current);
+        }
+        tabFocusTimeoutRef.current = setTimeout(() => {
+          setIsTabFocused(false);
+        }, 1800);
+      }
+    }, 40);
+  }, []);
   const [loading, setLoading] = useState<boolean>(true);
   const [authError, setAuthError] = useState<{ statusCode: number; message: string } | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -54,6 +98,8 @@ export default function AdminConsolePage() {
   const [submissions, setSubmissions] = useState<SubmissionWithOrder[]>([]);
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending_verification' | 'approved' | 'rejected'>('pending_verification');
   const [verificationSearchQuery, setVerificationSearchQuery] = useState<string>('');
+  const [submissionPage, setSubmissionPage] = useState<number>(1);
+  const [submissionTotal, setSubmissionTotal] = useState<number>(0);
   const [submissionsLoading, setSubmissionsLoading] = useState<boolean>(false);
 
   // Action Modals state (Approve / Reject)
@@ -76,6 +122,7 @@ export default function AdminConsolePage() {
   const [ledgerRecords, setLedgerRecords] = useState<PaymentLedgerItem[]>([]);
   const [ledgerSummary, setLedgerSummary] = useState<PaymentLedgerSummary | null>(null);
   const [ledgerTotal, setLedgerTotal] = useState<number>(0);
+  const [ledgerPage, setLedgerPage] = useState<number>(1);
   const [ledgerLoading, setLedgerLoading] = useState<boolean>(false);
   const [ledgerStatusFilter, setLedgerStatusFilter] = useState<'all' | 'verified' | 'pending' | 'rejected' | 'unsubmitted' | 'expired'>('all');
   const [ledgerQuery, setLedgerQuery] = useState<string>('');
@@ -90,6 +137,8 @@ export default function AdminConsolePage() {
   const [subExpiringSoon, setSubExpiringSoon] = useState<boolean>(false);
   const [subSortBy, setSubSortBy] = useState<'currentPeriodEnd' | 'userId' | 'status' | 'updatedAt'>('currentPeriodEnd');
   const [subSortDir] = useState<'asc' | 'desc'>('desc');
+  const [subPage, setSubPage] = useState<number>(1);
+  const [subTotal, setSubTotal] = useState<number>(0);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState<boolean>(false);
 
   // Subscription Control Modal state
@@ -105,6 +154,8 @@ export default function AdminConsolePage() {
   const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
   const [auditEmailFilter, setAuditEmailFilter] = useState<string>('');
   const [auditUserFilter, setAuditUserFilter] = useState<string>('');
+  const [auditPage, setAuditPage] = useState<number>(1);
+  const [auditTotal, setAuditTotal] = useState<number>(0);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [auditLoading, setAuditLoading] = useState<boolean>(false);
 
@@ -138,20 +189,38 @@ export default function AdminConsolePage() {
   };
 
   // Load Submissions
-  const fetchSubmissions = useCallback(async (status = submissionFilter) => {
+  const fetchSubmissions = useCallback(async (options?: {
+    status?: typeof submissionFilter;
+    page?: number;
+    query?: string;
+  }) => {
     setSubmissionsLoading(true);
     try {
-      const res = await fetch(`/api/admin/billing/submissions?status=${status}&limit=50`);
+      const qStatus = options?.status !== undefined ? options.status : submissionFilter;
+      const qPage = options?.page !== undefined ? options.page : submissionPage;
+      const qText = options?.query !== undefined ? options.query : verificationSearchQuery;
+      const offset = (qPage - 1) * ADMIN_PAGE_SIZE;
+
+      const params = new URLSearchParams();
+      params.set('status', qStatus);
+      params.set('limit', String(ADMIN_PAGE_SIZE));
+      params.set('offset', String(offset));
+      if (qText.trim()) {
+        params.set('query', qText.trim());
+      }
+
+      const res = await fetch(`/api/admin/billing/submissions?${params.toString()}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.submissions)) {
         setSubmissions(data.submissions);
+        setSubmissionTotal(typeof data.total === 'number' ? data.total : data.submissions.length);
       }
     } catch (err) {
       console.warn('[AdminConsole] Failed to fetch submissions:', err);
     } finally {
       setSubmissionsLoading(false);
     }
-  }, [submissionFilter]);
+  }, [submissionFilter, submissionPage, verificationSearchQuery]);
 
   // Open User 360° Profile Dossier
   const openUser360 = async (userIdOrEmail: string) => {
@@ -183,17 +252,22 @@ export default function AdminConsolePage() {
     query?: string;
     dateFrom?: string;
     dateTo?: string;
+    page?: number;
   }) => {
     setLedgerLoading(true);
     try {
       const qStatus = filterParams?.status || ledgerStatusFilter;
       const qText = filterParams?.query !== undefined ? filterParams.query : ledgerQuery;
+      const qPage = filterParams?.page !== undefined ? filterParams.page : ledgerPage;
+      const offset = (qPage - 1) * ADMIN_PAGE_SIZE;
+
       const params = new URLSearchParams();
       if (qStatus && qStatus !== 'all') params.set('status', qStatus);
       if (qText) params.set('query', qText);
       if (ledgerDateFrom) params.set('dateFrom', ledgerDateFrom);
       if (ledgerDateTo) params.set('dateTo', ledgerDateTo);
-      params.set('limit', '50');
+      params.set('limit', String(ADMIN_PAGE_SIZE));
+      params.set('offset', String(offset));
 
       const res = await fetch(`/api/admin/billing/ledger?${params.toString()}`);
       const data = await res.json();
@@ -207,7 +281,7 @@ export default function AdminConsolePage() {
     } finally {
       setLedgerLoading(false);
     }
-  }, [ledgerStatusFilter, ledgerQuery, ledgerDateFrom, ledgerDateTo]);
+  }, [ledgerStatusFilter, ledgerQuery, ledgerDateFrom, ledgerDateTo, ledgerPage]);
 
   // Load Subscriptions with full filtering, sorting, and pagination
   const fetchSubscriptions = useCallback(async (filters?: {
@@ -217,6 +291,7 @@ export default function AdminConsolePage() {
     expiringSoon?: boolean;
     sortBy?: string;
     sortDir?: string;
+    page?: number;
   }) => {
     setSubscriptionsLoading(true);
     try {
@@ -227,6 +302,8 @@ export default function AdminConsolePage() {
       const exp = filters?.expiringSoon !== undefined ? filters.expiringSoon : subExpiringSoon;
       const sBy = filters?.sortBy || subSortBy;
       const sDir = filters?.sortDir || subSortDir;
+      const qPage = filters?.page !== undefined ? filters.page : subPage;
+      const offset = (qPage - 1) * ADMIN_PAGE_SIZE;
 
       if (q) params.set('query', q);
       if (st && st !== 'all') params.set('status', st);
@@ -234,25 +311,28 @@ export default function AdminConsolePage() {
       if (exp) params.set('expiringSoon', 'true');
       if (sBy) params.set('sortBy', sBy);
       if (sDir) params.set('sortDir', sDir);
-      params.set('limit', '50');
+      params.set('limit', String(ADMIN_PAGE_SIZE));
+      params.set('offset', String(offset));
 
       const res = await fetch(`/api/admin/subscriptions?${params.toString()}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.subscriptions)) {
         setSubscriptions(data.subscriptions);
+        setSubTotal(typeof data.total === 'number' ? data.total : data.subscriptions.length);
       }
     } catch (err) {
       console.warn('[AdminConsole] Failed to fetch subscriptions:', err);
     } finally {
       setSubscriptionsLoading(false);
     }
-  }, [subSearchQuery, subStatusFilter, subSourceFilter, subExpiringSoon, subSortBy, subSortDir]);
+  }, [subSearchQuery, subStatusFilter, subSourceFilter, subExpiringSoon, subSortBy, subSortDir, subPage]);
 
   // Load Audit Logs with action & user filters
   const fetchAuditLogs = useCallback(async (filters?: {
     action?: string;
     adminEmail?: string;
     targetUserId?: string;
+    page?: number;
   }) => {
     setAuditLoading(true);
     setAuditError(null);
@@ -261,16 +341,20 @@ export default function AdminConsolePage() {
       const act = filters?.action || auditActionFilter;
       const adm = filters?.adminEmail || auditEmailFilter;
       const usr = filters?.targetUserId || auditUserFilter;
+      const qPage = filters?.page !== undefined ? filters.page : auditPage;
+      const offset = (qPage - 1) * ADMIN_PAGE_SIZE;
 
       if (act && act !== 'all') params.set('action', act);
       if (adm) params.set('adminEmail', adm);
       if (usr) params.set('targetUserId', usr);
-      params.set('limit', '50');
+      params.set('limit', String(ADMIN_PAGE_SIZE));
+      params.set('offset', String(offset));
 
       const res = await fetch(`/api/admin/audit-logs?${params.toString()}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.logs)) {
         setAuditLogs(data.logs);
+        setAuditTotal(typeof data.total === 'number' ? data.total : data.logs.length);
       } else {
         setAuditError(data.error || 'Failed to fetch audit logs.');
       }
@@ -279,7 +363,7 @@ export default function AdminConsolePage() {
     } finally {
       setAuditLoading(false);
     }
-  }, [auditActionFilter, auditEmailFilter, auditUserFilter]);
+  }, [auditActionFilter, auditEmailFilter, auditUserFilter, auditPage]);
 
   useEffect(() => {
     fetchOverview();
@@ -288,21 +372,26 @@ export default function AdminConsolePage() {
       const tabParam = params.get('tab');
       if (tabParam && ['overview', 'verifications', 'ledger', 'subscriptions', 'settings_preview', 'audit_logs'].includes(tabParam)) {
         setActiveTab(tabParam as AdminTab);
+        setTimeout(() => {
+          if (tabContentRef.current) {
+            tabContentRef.current.focus({ preventScroll: true });
+          }
+        }, 150);
       }
     }
   }, []);
 
   useEffect(() => {
     if (activeTab === 'verifications') {
-      fetchSubmissions(submissionFilter);
+      fetchSubmissions({ status: submissionFilter, page: submissionPage, query: verificationSearchQuery });
     } else if (activeTab === 'ledger') {
-      fetchLedger();
+      fetchLedger({ page: ledgerPage });
     } else if (activeTab === 'subscriptions') {
-      fetchSubscriptions();
+      fetchSubscriptions({ page: subPage });
     } else if (activeTab === 'audit_logs') {
-      fetchAuditLogs();
+      fetchAuditLogs({ page: auditPage });
     }
-  }, [activeTab, submissionFilter, fetchSubmissions, fetchLedger, fetchSubscriptions, fetchAuditLogs]);
+  }, [activeTab]);
 
   // Execute Approval
   const handleApprove = async () => {
@@ -334,7 +423,7 @@ export default function AdminConsolePage() {
         setSelectedSubmission(null);
         setApprovalChecked(false);
         setVerificationNotes('');
-        fetchSubmissions(submissionFilter);
+        fetchSubmissions({ status: submissionFilter, page: submissionPage });
         fetchOverview();
       } else {
         alert(data.error || 'Failed to approve submission.');
@@ -374,7 +463,7 @@ export default function AdminConsolePage() {
         setRejectionModalOpen(false);
         setSelectedSubmission(null);
         setRejectionReason('');
-        fetchSubmissions(submissionFilter);
+        fetchSubmissions({ status: submissionFilter, page: submissionPage });
         fetchOverview();
       } else {
         alert(data.error || 'Failed to reject submission.');
@@ -471,7 +560,7 @@ export default function AdminConsolePage() {
     <div className="admin-shell">
       {/* Top Header (Fixed, non-scrolling) */}
       <header className="admin-header">
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ width: '85%', maxWidth: '85vw', margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', boxShadow: '0 0 16px rgba(99, 102, 241, 0.4)' }}>
               <ShieldCheck size={22} />
@@ -499,10 +588,10 @@ export default function AdminConsolePage() {
             <button
               onClick={() => {
                 fetchOverview();
-                if (activeTab === 'verifications') fetchSubmissions();
-                if (activeTab === 'ledger') fetchLedger();
-                if (activeTab === 'subscriptions') fetchSubscriptions();
-                if (activeTab === 'audit_logs') fetchAuditLogs();
+                if (activeTab === 'verifications') fetchSubmissions({ status: submissionFilter, page: submissionPage, query: verificationSearchQuery });
+                if (activeTab === 'ledger') fetchLedger({ page: ledgerPage });
+                if (activeTab === 'subscriptions') fetchSubscriptions({ page: subPage });
+                if (activeTab === 'audit_logs') fetchAuditLogs({ page: auditPage });
               }}
               aria-label="Refresh console data"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.5rem 0.85rem', borderRadius: 10, background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)', color: 'var(--primary-start, #c7d2fe)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
@@ -531,7 +620,7 @@ export default function AdminConsolePage() {
 
         {/* Unified Tab Navigation Rail (Non-wrapping Segmented Rail) */}
         <div className="admin-tab-nav-wrapper">
-          <nav className="admin-tab-nav" aria-label="Admin Navigation Tabs">
+          <nav className="admin-tab-nav" role="tablist" aria-label="Admin Navigation Tabs">
             {[
               { id: 'overview', label: 'Overview', fullTitle: 'Overview & Metrics', icon: ShieldCheck, badge: metrics?.pendingCount },
               { id: 'verifications', label: 'Verification Queue', fullTitle: 'Payment Verification Queue', icon: CreditCard, badge: metrics?.pendingCount },
@@ -539,13 +628,29 @@ export default function AdminConsolePage() {
               { id: 'subscriptions', label: 'Subscribers', fullTitle: 'Subscribers & Entitlements', icon: Users, badge: metrics?.activeSubscribersCount },
               { id: 'settings_preview', label: 'Payment Settings', fullTitle: 'Manage UPI Payment Settings', icon: Settings },
               { id: 'audit_logs', label: 'Audit Trail', fullTitle: 'Authoritative Audit Trail', icon: History, badge: metrics?.totalAuditLogsCount },
-            ].map((tab) => {
+            ].map((tab, tabIdx, tabArr) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as AdminTab)}
+                  id={`admin-tab-${tab.id}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls="admin-tab-panel"
+                  tabIndex={isActive ? 0 : -1}
+                  onClick={() => handleTabSelect(tab.id as AdminTab)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowRight') {
+                      e.preventDefault();
+                      const nextIdx = (tabIdx + 1) % tabArr.length;
+                      handleTabSelect(tabArr[nextIdx].id as AdminTab);
+                    } else if (e.key === 'ArrowLeft') {
+                      e.preventDefault();
+                      const prevIdx = (tabIdx - 1 + tabArr.length) % tabArr.length;
+                      handleTabSelect(tabArr[prevIdx].id as AdminTab);
+                    }
+                  }}
                   className={`admin-tab-btn ${isActive ? 'is-active' : ''}`}
                   title={tab.fullTitle}
                   aria-label={tab.fullTitle}
@@ -563,31 +668,56 @@ export default function AdminConsolePage() {
           </nav>
         </div>
 
-        {/* TAB 1: OVERVIEW */}
-        {activeTab === 'overview' && (
-          <div>
-            {/* Expiring Soon Alert Banner if any */}
-            {metrics && metrics.expiringSoonCount > 0 && (
-              <div className="admin-warning-banner" style={{ marginBottom: '1.25rem', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  <AlertTriangle size={18} style={{ color: '#fbbf24', flexShrink: 0 }} />
-                  <span>
-                    <strong>{metrics.expiringSoonCount} subscriber{metrics.expiringSoonCount > 1 ? 's' : ''} expiring within the next 7 days.</strong> Review active entitlements in the Subscribers tab.
-                  </span>
+        {/* Main Tab Panel Container with Direct Focus & Feedback */}
+        <div
+          ref={tabContentRef}
+          id="admin-tab-panel"
+          role="tabpanel"
+          aria-labelledby={`admin-tab-${activeTab}`}
+          tabIndex={-1}
+          className={`admin-tab-content-panel ${isTabFocused ? 'admin-tab-panel-focused' : ''}`}
+          style={{ outline: 'none', scrollMarginTop: '85px', position: 'relative' }}
+        >
+          {isTabFocused && (
+            <div className="admin-focus-clue-badge" role="status" aria-live="polite">
+              <ArrowDown size={11} strokeWidth={2.5} />
+              <span>
+                {activeTab === 'overview' && 'Overview & Metrics'}
+                {activeTab === 'verifications' && 'Verification Queue'}
+                {activeTab === 'ledger' && 'Payment Ledger'}
+                {activeTab === 'subscriptions' && 'Subscribers & Entitlements'}
+                {activeTab === 'settings_preview' && 'UPI Payment Settings'}
+                {activeTab === 'audit_logs' && 'Authoritative Audit Trail'}
+                {' in Focus'}
+              </span>
+            </div>
+          )}
+
+          {/* TAB 1: OVERVIEW */}
+          {activeTab === 'overview' && (
+            <div>
+              {/* Expiring Soon Alert Banner if any */}
+              {metrics && metrics.expiringSoonCount > 0 && (
+                <div className="admin-warning-banner" style={{ marginBottom: '1.25rem', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <AlertTriangle size={18} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                    <span>
+                      <strong>{metrics.expiringSoonCount} subscriber{metrics.expiringSoonCount > 1 ? 's' : ''} expiring within the next 7 days.</strong> Review active entitlements in the Subscribers tab.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubExpiringSoon(true);
+                      handleTabSelect('subscriptions');
+                    }}
+                    className="admin-btn-secondary"
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
+                  >
+                    View Expiring
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubExpiringSoon(true);
-                    setActiveTab('subscriptions');
-                  }}
-                  className="admin-btn-secondary"
-                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
-                >
-                  View Expiring
-                </button>
-              </div>
-            )}
+              )}
 
             {/* Metric Cards Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: '1rem', marginBottom: '2rem' }}>
@@ -690,7 +820,7 @@ export default function AdminConsolePage() {
               <button
                 onClick={() => {
                   setSubmissionFilter('pending_verification');
-                  setActiveTab('verifications');
+                  handleTabSelect('verifications');
                 }}
                 style={{ padding: '0.85rem 1.25rem', borderRadius: 12, background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#ffffff', fontWeight: 700, fontSize: '0.88rem', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
               >
@@ -745,7 +875,8 @@ export default function AdminConsolePage() {
                     key={f.id}
                     onClick={() => {
                       setSubmissionFilter(f.id as typeof submissionFilter);
-                      fetchSubmissions(f.id as typeof submissionFilter);
+                      setSubmissionPage(1);
+                      fetchSubmissions({ status: f.id as typeof submissionFilter, page: 1 });
                     }}
                     className={`admin-filter-btn ${submissionFilter === f.id ? 'is-active' : ''}`}
                   >
@@ -761,7 +892,12 @@ export default function AdminConsolePage() {
                     type="text"
                     placeholder="Search UTR, Email, User ID..."
                     value={verificationSearchQuery}
-                    onChange={(e) => setVerificationSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setVerificationSearchQuery(val);
+                      setSubmissionPage(1);
+                      fetchSubmissions({ query: val, page: 1 });
+                    }}
                     className="admin-form-input"
                     style={{
                       width: '100%',
@@ -773,7 +909,11 @@ export default function AdminConsolePage() {
                   {verificationSearchQuery && (
                     <button
                       type="button"
-                      onClick={() => setVerificationSearchQuery('')}
+                      onClick={() => {
+                        setVerificationSearchQuery('');
+                        setSubmissionPage(1);
+                        fetchSubmissions({ query: '', page: 1 });
+                      }}
                       style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
                     >
                       <X size={13} />
@@ -781,7 +921,7 @@ export default function AdminConsolePage() {
                   )}
                 </div>
                 <span style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-                  {submissions.length} total
+                  {submissionTotal} total
                 </span>
               </div>
             </div>
@@ -800,17 +940,7 @@ export default function AdminConsolePage() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                {submissions
-                  .filter((sub) => {
-                    if (!verificationSearchQuery.trim()) return true;
-                    const q = verificationSearchQuery.trim().toLowerCase();
-                    return (
-                      sub.utrNumber.toLowerCase().includes(q) ||
-                      sub.userId.toLowerCase().includes(q) ||
-                      (sub.userEmail && sub.userEmail.toLowerCase().includes(q))
-                    );
-                  })
-                  .map((sub) => {
+                {submissions.map((sub) => {
                     const isPending = sub.status === 'pending_verification';
                     const isApproved = sub.status === 'approved';
                     const isRejected = sub.status === 'rejected';
@@ -964,6 +1094,20 @@ export default function AdminConsolePage() {
                   })}
               </div>
             )}
+
+            {submissionTotal > 0 && (
+              <AdminPaginationBar
+                currentPage={submissionPage}
+                totalItems={submissionTotal}
+                pageSize={ADMIN_PAGE_SIZE}
+                loading={submissionsLoading}
+                itemName="submissions"
+                onPageChange={(newPage) => {
+                  setSubmissionPage(newPage);
+                  fetchSubmissions({ page: newPage });
+                }}
+              />
+            )}
           </div>
         )}
 
@@ -1071,7 +1215,8 @@ export default function AdminConsolePage() {
                     key={f.id}
                     onClick={() => {
                       setLedgerStatusFilter(f.id as typeof ledgerStatusFilter);
-                      fetchLedger({ status: f.id });
+                      setLedgerPage(1);
+                      fetchLedger({ status: f.id, page: 1 });
                     }}
                     className={`admin-filter-btn ${ledgerStatusFilter === f.id ? 'is-active' : ''}`}
                   >
@@ -1089,7 +1234,8 @@ export default function AdminConsolePage() {
                     value={ledgerQuery}
                     onChange={(e) => {
                       setLedgerQuery(e.target.value);
-                      fetchLedger({ query: e.target.value });
+                      setLedgerPage(1);
+                      fetchLedger({ query: e.target.value, page: 1 });
                     }}
                     className="admin-form-input"
                     style={{
@@ -1104,7 +1250,8 @@ export default function AdminConsolePage() {
                       type="button"
                       onClick={() => {
                         setLedgerQuery('');
-                        fetchLedger({ query: '' });
+                        setLedgerPage(1);
+                        fetchLedger({ query: '', page: 1 });
                       }}
                       style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
                     >
@@ -1417,6 +1564,20 @@ export default function AdminConsolePage() {
                     );
                   })}
                 </div>
+
+                {ledgerTotal > 0 && (
+                  <AdminPaginationBar
+                    currentPage={ledgerPage}
+                    totalItems={ledgerTotal}
+                    pageSize={ADMIN_PAGE_SIZE}
+                    loading={ledgerLoading}
+                    itemName="transactions"
+                    onPageChange={(newPage) => {
+                      setLedgerPage(newPage);
+                      fetchLedger({ page: newPage });
+                    }}
+                  />
+                )}
               </>
             )}
           </div>
@@ -1441,7 +1602,8 @@ export default function AdminConsolePage() {
                       key={f.id}
                       onClick={() => {
                         setSubStatusFilter(f.id as typeof subStatusFilter);
-                        fetchSubscriptions({ status: f.id });
+                        setSubPage(1);
+                        fetchSubscriptions({ status: f.id, page: 1 });
                       }}
                       style={{
                         padding: '0.4rem 0.75rem',
@@ -1463,7 +1625,8 @@ export default function AdminConsolePage() {
                     onClick={() => {
                       const next = !subExpiringSoon;
                       setSubExpiringSoon(next);
-                      fetchSubscriptions({ expiringSoon: next });
+                      setSubPage(1);
+                      fetchSubscriptions({ expiringSoon: next, page: 1 });
                     }}
                     style={{
                       padding: '0.4rem 0.75rem',
@@ -1508,13 +1671,19 @@ export default function AdminConsolePage() {
                     value={subSearchQuery}
                     onChange={(e) => setSubSearchQuery(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') fetchSubscriptions({ query: subSearchQuery });
+                      if (e.key === 'Enter') {
+                        setSubPage(1);
+                        fetchSubscriptions({ query: subSearchQuery, page: 1 });
+                      }
                     }}
                     className="admin-form-input"
                     style={{ width: '100%', padding: '0.45rem 0.75rem', borderRadius: 8, fontSize: '0.8rem' }}
                   />
                   <button
-                    onClick={() => fetchSubscriptions({ query: subSearchQuery })}
+                    onClick={() => {
+                      setSubPage(1);
+                      fetchSubscriptions({ query: subSearchQuery, page: 1 });
+                    }}
                     style={{ padding: '0.45rem 0.85rem', borderRadius: 8, background: '#6366f1', color: '#ffffff', fontWeight: 600, border: 'none', cursor: 'pointer' }}
                   >
                     <Search size={14} />
@@ -1528,7 +1697,8 @@ export default function AdminConsolePage() {
                     onChange={(e) => {
                       const val = e.target.value as typeof subSourceFilter;
                       setSubSourceFilter(val);
-                      fetchSubscriptions({ source: val });
+                      setSubPage(1);
+                      fetchSubscriptions({ source: val, page: 1 });
                     }}
                     className="admin-form-input"
                     style={{ padding: '0.4rem 0.65rem', borderRadius: 8, fontSize: '0.76rem' }}
@@ -1544,7 +1714,8 @@ export default function AdminConsolePage() {
                     onChange={(e) => {
                       const val = e.target.value as typeof subSortBy;
                       setSubSortBy(val);
-                      fetchSubscriptions({ sortBy: val });
+                      setSubPage(1);
+                      fetchSubscriptions({ sortBy: val, page: 1 });
                     }}
                     className="admin-form-input"
                     style={{ padding: '0.4rem 0.65rem', borderRadius: 8, fontSize: '0.76rem' }}
@@ -1555,6 +1726,10 @@ export default function AdminConsolePage() {
                     <option value="status">Status</option>
                   </select>
                 </div>
+
+                <span className="admin-text-label" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap', marginLeft: 'auto' }}>
+                  {subTotal} subscribers
+                </span>
               </div>
             </div>
 
@@ -1720,6 +1895,20 @@ export default function AdminConsolePage() {
                 })}
               </div>
             )}
+
+            {subTotal > 0 && (
+              <AdminPaginationBar
+                currentPage={subPage}
+                totalItems={subTotal}
+                pageSize={ADMIN_PAGE_SIZE}
+                loading={subscriptionsLoading}
+                itemName="subscribers"
+                onPageChange={(newPage) => {
+                  setSubPage(newPage);
+                  fetchSubscriptions({ page: newPage });
+                }}
+              />
+            )}
           </div>
         )}
 
@@ -1737,7 +1926,7 @@ export default function AdminConsolePage() {
                   Append-Only Administrative Governance Audit Trail
                 </h3>
                 <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                  Showing {auditLogs.length} audit records
+                  Showing {auditTotal} audit records
                 </span>
               </div>
 
@@ -1747,7 +1936,8 @@ export default function AdminConsolePage() {
                   value={auditActionFilter}
                   onChange={(e) => {
                     setAuditActionFilter(e.target.value);
-                    fetchAuditLogs({ action: e.target.value });
+                    setAuditPage(1);
+                    fetchAuditLogs({ action: e.target.value, page: 1 });
                   }}
                   className="admin-form-input"
                   style={{ padding: '0.4rem 0.65rem', borderRadius: 8, fontSize: '0.76rem' }}
@@ -1768,7 +1958,8 @@ export default function AdminConsolePage() {
                   value={auditEmailFilter}
                   onChange={(e) => {
                     setAuditEmailFilter(e.target.value);
-                    fetchAuditLogs({ adminEmail: e.target.value });
+                    setAuditPage(1);
+                    fetchAuditLogs({ adminEmail: e.target.value, page: 1 });
                   }}
                   className="admin-form-input"
                   style={{ padding: '0.4rem 0.65rem', borderRadius: 8, fontSize: '0.76rem', maxWidth: 180 }}
@@ -1780,7 +1971,8 @@ export default function AdminConsolePage() {
                   value={auditUserFilter}
                   onChange={(e) => {
                     setAuditUserFilter(e.target.value);
-                    fetchAuditLogs({ targetUserId: e.target.value });
+                    setAuditPage(1);
+                    fetchAuditLogs({ targetUserId: e.target.value, page: 1 });
                   }}
                   className="admin-form-input"
                   style={{ padding: '0.4rem 0.65rem', borderRadius: 8, fontSize: '0.76rem', maxWidth: 180 }}
@@ -1872,8 +2064,23 @@ export default function AdminConsolePage() {
                 ))}
               </div>
             )}
+
+            {auditTotal > 0 && (
+              <AdminPaginationBar
+                currentPage={auditPage}
+                totalItems={auditTotal}
+                pageSize={ADMIN_PAGE_SIZE}
+                loading={auditLoading}
+                itemName="audit records"
+                onPageChange={(newPage) => {
+                  setAuditPage(newPage);
+                  fetchAuditLogs({ page: newPage });
+                }}
+              />
+            )}
           </div>
         )}
+        </div>
       </main>
 
       {/* APPROVAL MODAL */}

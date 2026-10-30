@@ -18,7 +18,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status') || 'all';
-  const limitParam = parseInt(searchParams.get('limit') || '25', 10);
+  const queryParam = searchParams.get('query') || undefined;
+  const limitParam = parseInt(searchParams.get('limit') || '5', 10);
   const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
 
   const status =
@@ -31,7 +32,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const result = await getAdminSubmissions({
       status,
-      limit: isNaN(limitParam) ? 25 : limitParam,
+      query: queryParam,
+      limit: isNaN(limitParam) ? 5 : limitParam,
       offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
 
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       success: true,
       submissions: result.submissions,
       total: result.total,
-      limit: isNaN(limitParam) ? 25 : limitParam,
+      limit: isNaN(limitParam) ? 5 : limitParam,
       offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
   } catch (err) {

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const targetUserId = searchParams.get('targetUserId') || undefined;
   const dateFrom = searchParams.get('dateFrom') || undefined;
   const dateTo = searchParams.get('dateTo') || undefined;
-  const limitParam = parseInt(searchParams.get('limit') || '50', 10);
+  const limitParam = parseInt(searchParams.get('limit') || '5', 10);
   const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
@@ -32,14 +32,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       targetUserId,
       dateFrom,
       dateTo,
-      limit: isNaN(limitParam) ? 50 : limitParam,
+      limit: isNaN(limitParam) ? 5 : limitParam,
       offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
+
+    const totalCount = typeof (logs as { total?: number }).total === 'number' ? (logs as { total?: number }).total! : logs.length;
 
     return NextResponse.json({
       success: true,
       logs,
-      total: logs.length,
+      total: totalCount,
+      limit: isNaN(limitParam) ? 5 : limitParam,
+      offset: isNaN(offsetParam) ? 0 : offsetParam,
     });
   } catch (err) {
     console.error('[Admin Audit Logs GET Error]:', err);
