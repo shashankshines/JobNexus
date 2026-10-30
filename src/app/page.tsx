@@ -928,23 +928,28 @@ export default function Home() {
       }
     }
 
-    fetch('/api/jobs/popular')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && Array.isArray(data.pills) && data.pills.length > 0) {
-          setPopularPills(data.pills);
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('jobnexus_popular_searches', JSON.stringify(data.pills));
-            } catch {
-              // Ignore quota
+    // Defer non-critical popular search fetch to idle time to prioritize initial job catalog rendering
+    const popularTimer = setTimeout(() => {
+      fetch('/api/jobs/popular')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && Array.isArray(data.pills) && data.pills.length > 0) {
+            setPopularPills(data.pills);
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('jobnexus_popular_searches', JSON.stringify(data.pills));
+              } catch {
+                // Ignore quota
+              }
             }
           }
-        }
-      })
-      .catch(() => {
-        // Offline / fallback to defaults
-      });
+        })
+        .catch(() => {
+          // Offline / fallback to defaults
+        });
+    }, 800);
+
+    return () => clearTimeout(popularTimer);
   }, []);
 
   // Pre-load raw catalog on mount from sessionStorage and background fetch for instant 0ms pill clicking

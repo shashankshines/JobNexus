@@ -14,6 +14,7 @@ import {
 } from './utr-reservation';
 import { getPaymentSettings } from './settings.store';
 import { invalidateAdminStoresCache } from './admin-billing.store';
+import { bumpBillingSyncVersion } from './billing-sync.store';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 // ============================================================================
@@ -286,6 +287,11 @@ export async function createPaymentSubmission(params: {
 
   try {
     invalidateAdminStoresCache();
+    await bumpBillingSyncVersion({
+      mutationType: 'new_submission',
+      targetUserId: userId,
+      targetEntityId: submissionDoc.submissionId,
+    });
   } catch {
     // ignore
   }

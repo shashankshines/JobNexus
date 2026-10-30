@@ -13,6 +13,7 @@ export const FIRESTORE_COLLECTIONS = {
   ADMIN_AUDIT_LOGS: 'admin_audit_logs',
   EMAIL_OUTBOX: 'email_outbox',
   CONFIG: 'billing_config',
+  SYSTEM_METADATA: 'system_metadata',
 } as const;
 
 export type FirestoreCollectionName =
@@ -187,5 +188,9 @@ export function getEmailOutboxCollection(): CollectionReference<EmailOutboxDocum
 
 export function getBillingConfigCollection(): CollectionReference<PaymentSettingsDocument> {
   return getTypedCollection<PaymentSettingsDocument>(FIRESTORE_COLLECTIONS.CONFIG);
+}
+
+export function getSystemMetadataCollection(): CollectionReference<DocumentData> {
+  return getTypedCollection<DocumentData>(FIRESTORE_COLLECTIONS.SYSTEM_METADATA);
 }
 

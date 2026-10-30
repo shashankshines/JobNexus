@@ -39,11 +39,13 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
       const makeQuery = (
         predicate?: (doc: DocumentData) => boolean,
         limitCount?: number,
+        offsetCount?: number,
         orderField?: string,
         orderDir: 'asc' | 'desc' = 'asc'
       ) => ({
-        limit: (n: number) => makeQuery(predicate, n, orderField, orderDir),
-        orderBy: (f: string, d: 'asc' | 'desc' = 'asc') => makeQuery(predicate, limitCount, f, d),
+        limit: (n: number) => makeQuery(predicate, n, offsetCount, orderField, orderDir),
+        offset: (n: number) => makeQuery(predicate, limitCount, n, orderField, orderDir),
+        orderBy: (f: string, d: 'asc' | 'desc' = 'asc') => makeQuery(predicate, limitCount, offsetCount, f, d),
         where: (field: string, opStr: string, value: unknown) => {
           const nextPredicate = (doc: DocumentData) => {
             const prev = predicate ? predicate(doc) : true;
@@ -51,8 +53,21 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
             if (opStr === '==') return doc[field] === value;
             return true;
           };
-          return makeQuery(nextPredicate, limitCount, orderField, orderDir);
+          return makeQuery(nextPredicate, limitCount, offsetCount, orderField, orderDir);
         },
+        count: () => ({
+          get: async () => {
+            let count = 0;
+            for (const [, doc] of colData.entries()) {
+              if (!predicate || predicate(doc)) {
+                count++;
+              }
+            }
+            return {
+              data: () => ({ count }),
+            };
+          },
+        }),
         get: async (): Promise<QuerySnapshot> => {
           const matches: DocumentData[] = [];
           for (const [id, doc] of colData.entries()) {
@@ -69,7 +84,8 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
               return 0;
             });
           }
-          const sliced = limitCount ? matches.slice(0, limitCount) : matches;
+          const offset = offsetCount || 0;
+          const sliced = matches.slice(offset, limitCount ? offset + limitCount : undefined);
           return {
             empty: sliced.length === 0,
             size: sliced.length,
@@ -137,6 +153,8 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
         where: rootQuery.where,
         orderBy: rootQuery.orderBy,
         limit: rootQuery.limit,
+        offset: rootQuery.offset,
+        count: rootQuery.count,
         get: rootQuery.get,
       };
 

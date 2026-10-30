@@ -9,8 +9,12 @@ import {
   AdminAuditLogDocument,
 } from './collections';
 import { getUserById } from '@/modules/auth/server/session.store';
+import {
+  getBillingSyncVersion,
+  bumpBillingSyncVersion,
+} from './billing-sync.store';
 
-let cachedAuditLogs: { logs: AdminAuditLogDocument[]; timestamp: number } | null = null;
+let cachedAuditLogs: { logs: AdminAuditLogDocument[]; timestamp: number; version: number } | null = null;
 const AUDIT_CACHE_TTL_MS = 20 * 1000; // 20-second snapshot cache
 
 export function invalidateAuditLogsCache(): void {
@@ -51,11 +55,21 @@ export async function recordAdminAuditLog(params: {
 
   await auditLogsCol.doc(auditId).set(auditEntry);
   invalidateAuditLogsCache();
+  try {
+    await bumpBillingSyncVersion({
+      mutationType: 'audit_log',
+      targetUserId: params.targetUserId,
+      targetEntityId: auditId,
+    });
+  } catch {
+    // ignore
+  }
   return auditEntry;
 }
 
 /**
  * Retrieves audit logs with optional filtering by action, actor, target, and dates.
+ * Enforces cross-instance cache consistency using billing sync versioning.
  */
 export async function getAdminAuditLogs(
   params?: {
@@ -73,13 +87,21 @@ export async function getAdminAuditLogs(
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
   let logs: AdminAuditLogDocument[];
 
-  if (!isTestEnv && !options?.bypassCache && cachedAuditLogs && now - cachedAuditLogs.timestamp < AUDIT_CACHE_TTL_MS) {
+  const currentVersion = await getBillingSyncVersion();
+
+  if (
+    !isTestEnv &&
+    !options?.bypassCache &&
+    cachedAuditLogs &&
+    cachedAuditLogs.version === currentVersion &&
+    now - cachedAuditLogs.timestamp < AUDIT_CACHE_TTL_MS
+  ) {
     logs = [...cachedAuditLogs.logs];
   } else {
     const auditLogsCol = getAuditLogsCollection();
     const snap = await auditLogsCol.get();
     logs = snap.docs.map((d) => d.data());
-    cachedAuditLogs = { logs, timestamp: now };
+    cachedAuditLogs = { logs, timestamp: now, version: currentVersion };
   }
 
   if (params?.action && params.action !== 'all') {

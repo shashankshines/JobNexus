@@ -31,6 +31,7 @@ export class JobSearchService {
   private providers: JobProvider[];
   private isCustom: boolean;
   private instanceSearchCache = new Map<string, CachedSearchResult>();
+  private customInFlightPromise?: Promise<{ allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[] }> | null;
 
   private static readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
   private static readonly MAX_SEARCH_CACHE_ENTRIES = 300;
@@ -76,6 +77,7 @@ export class JobSearchService {
     JobSearchService.cacheTimestamp = 0;
     JobSearchService.inFlightFetchPromise = null;
     JobSearchService.searchCache.clear();
+    globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
   }
 
   constructor(customProviders?: JobProvider[]) {
@@ -92,8 +94,8 @@ export class JobSearchService {
 
     const fetchPromises = this.providers.map(async (provider) => {
       const startTime = Date.now();
-      // Cap provider timeout to 4000ms max so slow RSS or hung endpoints never stall the app
-      const providerTimeout = Math.min(provider.timeoutMs || 4000, 4000);
+      // Cap provider timeout to 2500ms max so slow RSS or hung endpoints never stall the app
+      const providerTimeout = Math.min(provider.timeoutMs || 2500, 2500);
       try {
         const fetchPromise = provider.fetchJobs(params);
         const timeoutPromise = new Promise<NormalizedJob[]>((_, reject) =>
@@ -150,9 +152,15 @@ export class JobSearchService {
     allJobs: NormalizedJob[];
     diagnostics: ProviderDiagnostic[];
   }> {
-    // If using custom providers (such as in unit tests), fetch directly
+    // If using custom providers (such as in unit tests), share in-flight promise across concurrent requests
     if (this.isCustom) {
-      return this.fetchFromProviders(params);
+      if (this.customInFlightPromise) {
+        return this.customInFlightPromise;
+      }
+      this.customInFlightPromise = this.fetchFromProviders(params).finally(() => {
+        this.customInFlightPromise = null;
+      });
+      return this.customInFlightPromise;
     }
 
     const now = Date.now();

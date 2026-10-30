@@ -165,27 +165,51 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
     if (!job.tags || !Array.isArray(job.tags)) return [];
     const industryLower = (job.industry || industryBadge.label || '').toLowerCase();
     const typeLower = (job.type || '').toLowerCase();
+    const roleCatLower = roleCategory.label.toLowerCase();
 
     return job.tags
       .filter((tag) => {
         if (!tag || typeof tag !== 'string') return false;
         const tagLower = tag.trim().toLowerCase();
-        // Skip workplace duplicates (e.g. "Remote", "Hybrid", "On-site")
-        if (tagLower === 'remote' || tagLower === 'hybrid' || tagLower === 'on-site' || tagLower === 'onsite') {
+        // Skip workplace duplicates (e.g. "Remote", "Hybrid", "On-site", "WFH")
+        if (
+          tagLower === 'remote' ||
+          tagLower === 'hybrid' ||
+          tagLower === 'on-site' ||
+          tagLower === 'onsite' ||
+          tagLower.includes('remote') ||
+          tagLower.includes('telecommute') ||
+          tagLower.includes('work from home') ||
+          tagLower === 'wfh'
+        ) {
           return false;
         }
-        // Skip duplicate of industry
-        if (tagLower === industryLower || industryLower.includes(tagLower)) {
+        // Skip duplicate of industry or role category
+        if (
+          tagLower === industryLower ||
+          industryLower.includes(tagLower) ||
+          tagLower.includes('technology') ||
+          tagLower === 'tech' ||
+          roleCatLower.includes(tagLower)
+        ) {
           return false;
         }
         // Skip duplicate of employment type (e.g. "full time", "full-time", "contract")
-        if (tagLower === typeLower || tagLower === 'full time' || tagLower === 'full-time' || tagLower === 'part time' || tagLower === 'part-time') {
+        if (
+          tagLower === typeLower ||
+          tagLower.includes('full time') ||
+          tagLower.includes('full-time') ||
+          tagLower.includes('part time') ||
+          tagLower.includes('part-time') ||
+          tagLower.includes('contract') ||
+          tagLower.includes('internship')
+        ) {
           return false;
         }
         return true;
       })
-      .slice(0, 4);
-  }, [job.tags, job.industry, industryBadge.label, job.type]);
+      .slice(0, 3);
+  }, [job.tags, job.industry, industryBadge.label, job.type, roleCategory.label]);
 
   const formattedDate = useMemo(() => {
     try {
@@ -370,7 +394,7 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ duration: 0.25, delay: isInitialBatch ? Math.min((index % 18) * 0.03, 0.3) : 0, ease: [0.16, 1, 0.3, 1] }}
-      whileHover={{ y: -5, scale: 1.01 }}
+      whileHover={{ y: -4 }}
       className={`${styles.card} ${CARD_THEME_CLASSES[roleCategory.palette] || styles.cardThemeIndigo}`}
       data-job-card-index={index + 1}
       onMouseMove={handleMouseMove}
@@ -504,7 +528,6 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
             <IndustryIcon size={12} strokeWidth={2.2} />
           </span>
           <span className={styles.industryBadgeLabel}>
-            <span className={styles.industryPrefix}>Industry:</span>
             <span>{industryBadge.label}</span>
           </span>
         </span>

@@ -23,6 +23,10 @@ import {
   sendPaymentRejectionNotification,
 } from '@/modules/email/email.service';
 import { invalidateAuditLogsCache } from './audit.store';
+import {
+  getBillingSyncVersion,
+  bumpBillingSyncVersion,
+} from './billing-sync.store';
 
 // ============================================================================
 // Types & Domain Errors
@@ -170,17 +174,18 @@ export class MandatoryReasonMissingError extends Error {
 }
 
 // ============================================================================
-// In-Memory Performance Cache (Phase 2B.5)
+// In-Memory Performance Cache (Phase 2B.5 & 2B.5.1 Multi-Instance Sync)
 // ============================================================================
 
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
+  version: number;
 }
 
 let cachedAdminOverview: CacheEntry<AdminOverviewMetrics> | null = null;
-let cachedLedgerSnapshot: { items: PaymentLedgerItem[]; summary: PaymentLedgerSummary; timestamp: number } | null = null;
-let cachedSubscriptionsSnapshot: { docs: SubscriptionDocument[]; timestamp: number } | null = null;
+let cachedLedgerSnapshot: { items: PaymentLedgerItem[]; summary: PaymentLedgerSummary; timestamp: number; version: number } | null = null;
+let cachedSubscriptionsSnapshot: { docs: SubscriptionDocument[]; timestamp: number; version: number } | null = null;
 const ADMIN_CACHE_TTL_MS = 20 * 1000; // 20-second snapshot cache
 
 export function invalidateAdminStoresCache(): void {
@@ -196,7 +201,15 @@ export function invalidateAdminStoresCache(): void {
 export async function getAdminOverview(options?: { bypassCache?: boolean; forceCache?: boolean }): Promise<AdminOverviewMetrics> {
   const now = Date.now();
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
-  if (!isTestEnv && !options?.bypassCache && cachedAdminOverview && now - cachedAdminOverview.timestamp < ADMIN_CACHE_TTL_MS) {
+  const currentVersion = await getBillingSyncVersion();
+
+  if (
+    !isTestEnv &&
+    !options?.bypassCache &&
+    cachedAdminOverview &&
+    cachedAdminOverview.version === currentVersion &&
+    now - cachedAdminOverview.timestamp < ADMIN_CACHE_TTL_MS
+  ) {
     return cachedAdminOverview.data;
   }
 
@@ -277,7 +290,7 @@ export async function getAdminOverview(options?: { bypassCache?: boolean; forceC
     expiringSoonCount,
   };
 
-  cachedAdminOverview = { data: metrics, timestamp: now };
+  cachedAdminOverview = { data: metrics, timestamp: now, version: currentVersion };
   return metrics;
 }
 
@@ -294,16 +307,43 @@ export async function getAdminSubmissions(filter?: {
   const submissionsCol = getSubmissionsCollection();
   const ordersCol = getOrdersCollection();
 
-  const query = filter?.status && filter.status !== 'all'
+  const baseQuery = filter?.status && filter.status !== 'all'
     ? submissionsCol.where('status', '==', filter.status)
     : submissionsCol;
 
-  const snap = await query.get();
-  let allSubmissions: PaymentSubmissionDocument[] = snap.docs
-    .map((d) => d.data())
-    .sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
+  const offset = filter?.offset || 0;
+  const limit = Math.min(Math.max(filter?.limit || 5, 1), 100);
 
-  if (filter?.query) {
+  let pagedSubmissions: PaymentSubmissionDocument[] = [];
+  let total = 0;
+
+  if (!filter?.query) {
+    // Bounded Firestore query with count aggregation and offset/limit pagination
+    const countPromise = 'count' in baseQuery && typeof (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count === 'function'
+      ? (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count().get().then((res) => res.data().count)
+      : baseQuery.get().then((res) => res.size);
+
+    const dataPromise = 'offset' in baseQuery && typeof (baseQuery as unknown as { offset: (n: number) => { limit: (n: number) => { get: () => Promise<{ docs: Array<{ data: () => PaymentSubmissionDocument }> }> } } }).offset === 'function'
+      ? (baseQuery as unknown as { orderBy: (f: string, d: string) => { offset: (n: number) => { limit: (n: number) => { get: () => Promise<{ docs: Array<{ data: () => PaymentSubmissionDocument }> }> } } } })
+          .orderBy('submittedAt', 'desc')
+          .offset(offset)
+          .limit(limit)
+          .get()
+      : baseQuery.get();
+
+    const [totalCount, pageSnap] = await Promise.all([countPromise, dataPromise]);
+    total = totalCount;
+    pagedSubmissions = pageSnap.docs.map((d) => d.data());
+    if (pagedSubmissions.length > limit) {
+      pagedSubmissions.sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
+      pagedSubmissions = pagedSubmissions.slice(offset, offset + limit);
+    }
+  } else {
+    const snap = await baseQuery.get();
+    let allSubmissions: PaymentSubmissionDocument[] = snap.docs
+      .map((d) => d.data())
+      .sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
+
     const q = filter.query.trim().toLowerCase();
     allSubmissions = allSubmissions.filter((sub) => {
       const localUser = getUserById(sub.userId);
@@ -314,12 +354,10 @@ export async function getAdminSubmissions(filter?: {
         email.toLowerCase().includes(q)
       );
     });
-  }
 
-  const total = allSubmissions.length;
-  const offset = filter?.offset || 0;
-  const limit = Math.min(Math.max(filter?.limit || 5, 1), 100);
-  const pagedSubmissions = allSubmissions.slice(offset, offset + limit);
+    total = allSubmissions.length;
+    pagedSubmissions = allSubmissions.slice(offset, offset + limit);
+  }
 
   // Attach associated orders and resolve subscriber email
   const submissionsWithOrders: SubmissionWithOrder[] = await Promise.all(
@@ -602,6 +640,15 @@ export async function approvePaymentSubmissionInTransaction(params: {
     invalidateAuditLogsCache();
     invalidateUserEntitlementCache(result.submission.userId);
     try {
+      await bumpBillingSyncVersion({
+        mutationType: 'payment_approved',
+        targetUserId: result.submission.userId,
+        targetEntityId: result.submission.submissionId,
+      });
+    } catch {
+      // ignore
+    }
+    try {
       await sendPaymentApprovalNotification({
         userId: result.submission.userId,
         orderId: result.submission.orderId,
@@ -762,6 +809,15 @@ export async function rejectPaymentSubmissionInTransaction(params: {
     invalidateAuditLogsCache();
     invalidateUserEntitlementCache(result.submission.userId);
     try {
+      await bumpBillingSyncVersion({
+        mutationType: 'payment_rejected',
+        targetUserId: result.submission.userId,
+        targetEntityId: result.submission.submissionId,
+      });
+    } catch {
+      // ignore
+    }
+    try {
       await sendPaymentRejectionNotification({
         userId: result.submission.userId,
         orderId: result.submission.orderId,
@@ -865,6 +921,15 @@ export async function adminManualGrantSubscriptionInTransaction(params: {
   invalidateAdminStoresCache();
   invalidateAuditLogsCache();
   invalidateUserEntitlementCache(targetUserId);
+  try {
+    await bumpBillingSyncVersion({
+      mutationType: 'admin_grant',
+      targetUserId,
+      targetEntityId: res.id,
+    });
+  } catch {
+    // ignore
+  }
   return res;
 }
 
@@ -945,6 +1010,15 @@ export async function adminExtendSubscriptionInTransaction(params: {
   invalidateAdminStoresCache();
   invalidateAuditLogsCache();
   invalidateUserEntitlementCache(targetUserId);
+  try {
+    await bumpBillingSyncVersion({
+      mutationType: 'subscription_extension',
+      targetUserId,
+      targetEntityId: res.id,
+    });
+  } catch {
+    // ignore
+  }
   return res;
 }
 
@@ -1033,6 +1107,15 @@ export async function adminSuspendSubscriptionInTransaction(params: {
   invalidateAdminStoresCache();
   invalidateAuditLogsCache();
   invalidateUserEntitlementCache(targetUserId);
+  try {
+    await bumpBillingSyncVersion({
+      mutationType: 'subscription_suspended',
+      targetUserId,
+      targetEntityId: res.id,
+    });
+  } catch {
+    // ignore
+  }
   return res;
 }
 
@@ -1144,6 +1227,15 @@ export async function adminReinstateSubscriptionInTransaction(params: {
   invalidateAdminStoresCache();
   invalidateAuditLogsCache();
   invalidateUserEntitlementCache(targetUserId);
+  try {
+    await bumpBillingSyncVersion({
+      mutationType: 'subscription_reinstated',
+      targetUserId,
+      targetEntityId: res.id,
+    });
+  } catch {
+    // ignore
+  }
   return res;
 }
 
@@ -1228,6 +1320,15 @@ export async function adminRevokeSubscriptionInTransaction(params: {
   invalidateAdminStoresCache();
   invalidateAuditLogsCache();
   invalidateUserEntitlementCache(targetUserId);
+  try {
+    await bumpBillingSyncVersion({
+      mutationType: 'subscription_revoked',
+      targetUserId,
+      targetEntityId: res.id,
+    });
+  } catch {
+    // ignore
+  }
   return res;
 }
 
@@ -1481,10 +1582,17 @@ export async function getConsolidatedPaymentLedger(
 }> {
   const now = Date.now();
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  const currentVersion = await getBillingSyncVersion();
   let items: PaymentLedgerItem[] = [];
   let summary!: PaymentLedgerSummary;
 
-  if (!isTestEnv && !options?.bypassCache && cachedLedgerSnapshot && now - cachedLedgerSnapshot.timestamp < ADMIN_CACHE_TTL_MS) {
+  if (
+    !isTestEnv &&
+    !options?.bypassCache &&
+    cachedLedgerSnapshot &&
+    cachedLedgerSnapshot.version === currentVersion &&
+    now - cachedLedgerSnapshot.timestamp < ADMIN_CACHE_TTL_MS
+  ) {
     items = [...cachedLedgerSnapshot.items];
     summary = cachedLedgerSnapshot.summary;
   } else {
@@ -1651,7 +1759,7 @@ export async function getConsolidatedPaymentLedger(
       'Refunds and payment reversals are not automated through this interface and must be audited manually against bank statements.',
   };
 
-    cachedLedgerSnapshot = { items: [...items], summary, timestamp: now };
+    cachedLedgerSnapshot = { items: [...items], summary, timestamp: now, version: currentVersion };
   }
 
   // Filter items
@@ -1725,9 +1833,16 @@ export async function getAdminSubscriptions(
 ): Promise<SubscriptionDocument[]> {
   const now = Date.now();
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  const currentVersion = await getBillingSyncVersion();
   let enriched: SubscriptionDocument[];
 
-  if (!isTestEnv && !options?.bypassCache && cachedSubscriptionsSnapshot && now - cachedSubscriptionsSnapshot.timestamp < ADMIN_CACHE_TTL_MS) {
+  if (
+    !isTestEnv &&
+    !options?.bypassCache &&
+    cachedSubscriptionsSnapshot &&
+    cachedSubscriptionsSnapshot.version === currentVersion &&
+    now - cachedSubscriptionsSnapshot.timestamp < ADMIN_CACHE_TTL_MS
+  ) {
     enriched = [...cachedSubscriptionsSnapshot.docs];
   } else {
     const subscriptionsCol = getSubscriptionsCollection();
@@ -1743,7 +1858,7 @@ export async function getAdminSubscriptions(
       };
     });
 
-    cachedSubscriptionsSnapshot = { docs: [...enriched], timestamp: now };
+    cachedSubscriptionsSnapshot = { docs: [...enriched], timestamp: now, version: currentVersion };
   }
 
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;

@@ -4,6 +4,7 @@ import {
 } from '../domain/subscription.types';
 import { getSubscriptionByUserId } from './subscription.store';
 import { getFirestoreSubscriptionByUserId } from '@/modules/storage/firestore/subscription.store';
+import { getBillingSyncVersion } from '@/modules/storage/firestore/billing-sync.store';
 
 /**
  * Pure entitlement evaluation engine.
@@ -174,13 +175,14 @@ export function evaluateSubscriptionEntitlement(
   };
 }
 
-// In-memory request-scoped TTL cache for authoritative entitlements
+// In-memory request-scoped TTL cache for authoritative entitlements with cross-instance version sync
 interface CachedEntitlementEntry {
   entitlement: UserEntitlement;
   timestamp: number;
+  version: number;
 }
 
-const ENTITLEMENT_CACHE_TTL_MS = 15 * 1000; // 15 seconds request/component deduplication window
+const ENTITLEMENT_CACHE_TTL_MS = 15 * 1000; // 15 seconds component deduplication window
 const entitlementCache = new Map<string, CachedEntitlementEntry>();
 
 /**
@@ -199,7 +201,8 @@ export function invalidateUserEntitlementCache(userId?: string): void {
 /**
  * Authoritative Async Entitlement Accessor.
  * Queries Cloud Firestore as the single production source of truth.
- * Caches results in-memory for 15s to eliminate redundant reads on concurrent component mounts.
+ * Protects against cross-instance stale reads by validating cached snapshot version
+ * against authoritative Firestore `billing_sync` version on every lookup.
  * Throws explicit error on Firestore operational failures (fail closed).
  */
 export async function getAuthoritativeUserEntitlement(
@@ -212,16 +215,22 @@ export async function getAuthoritativeUserEntitlement(
 
   const now = Date.now();
   const isTestEnv = process.env.NODE_ENV === 'test' && !options?.forceCache;
+  const currentVersion = await getBillingSyncVersion();
+
   if (!isTestEnv && !options?.bypassCache) {
     const cached = entitlementCache.get(userId);
-    if (cached && now - cached.timestamp < ENTITLEMENT_CACHE_TTL_MS) {
+    if (
+      cached &&
+      cached.version === currentVersion &&
+      now - cached.timestamp < ENTITLEMENT_CACHE_TTL_MS
+    ) {
       return cached.entitlement;
     }
   }
 
   const sub = await getFirestoreSubscriptionByUserId(userId);
   const entitlement = evaluateSubscriptionEntitlement(userId, sub);
-  entitlementCache.set(userId, { entitlement, timestamp: now });
+  entitlementCache.set(userId, { entitlement, timestamp: now, version: currentVersion });
   return entitlement;
 }
 
