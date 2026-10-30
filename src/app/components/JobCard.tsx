@@ -399,9 +399,19 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
       data-job-card-index={index + 1}
       onMouseMove={handleMouseMove}
     >
+      {/* 0. Top-Left Diagonal FRESH Corner Ribbon */}
+      {isFresh && (
+        <div className={styles.diagonalRibbonWrapper} aria-label="Fresh verified role">
+          <div className={styles.diagonalRibbon} title="Published recently — Verified Active Role">
+            <Flame size={10} strokeWidth={2.8} className={styles.diagonalFlameIcon} />
+            <span>FRESH</span>
+          </div>
+        </div>
+      )}
+
       {/* 1. Contextual Top Bar: Domain Pill (Left) & Actions (Right) */}
       <div className={styles.topBar}>
-        <div className={`${styles.domainPill} ${PALETTE_CLASSES[roleCategory.palette]}`}>
+        <div className={`${styles.domainPill} ${PALETTE_CLASSES[roleCategory.palette]} ${isFresh ? styles.domainPillFreshIndent : ''}`}>
           <span className={styles.domainIcon}>
             <RoleIcon size={12} strokeWidth={2.4} />
           </span>
@@ -409,14 +419,6 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
         </div>
 
         <div className={styles.topBarActions}>
-          {isFresh && (
-            <span className={styles.freshBadge} title="Published recently — Verified Active Role">
-              <span className={styles.freshDot} />
-              <Flame size={12} strokeWidth={2.4} />
-              <span>FRESH</span>
-            </span>
-          )}
-
           {/* Bookmark / Save Job Button */}
           <button
             type="button"

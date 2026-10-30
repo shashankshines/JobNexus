@@ -30,6 +30,7 @@ import {
   verifyProtectedOperationEntitlement,
   invalidateUserEntitlementCache,
 } from '../../billing/services/entitlement.service';
+import { SubscriptionRecord } from '../../billing/domain/subscription.types';
 import { fetchWithTimeout } from '../providers/provider.types';
 import { JobSearchService } from '../services/job-search.service';
 import { JobProvider } from '../providers/provider.types';
@@ -207,11 +208,12 @@ describe('JobNexus Phase 2B.5.2 — Cursor Pagination, Transactional Sync & Enti
     it('unconditionally revokes Premium access if status is halted even if cancelAtPeriodEnd is true and periodEnd is in the future', () => {
       const futureDateIso = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString();
 
-      const suspendedRecord = {
+      const suspendedRecord: SubscriptionRecord = {
         id: 'sub_suspended_test',
         userId: 'user_abusive_1',
         planId: 'premium_monthly',
-        status: 'halted' as const,
+        status: 'halted',
+        provider: 'manual_upi',
         currentPeriodStart: new Date().toISOString(),
         currentPeriodEnd: futureDateIso, // 20 days remaining in period
         cancelAtPeriodEnd: true, // Should NOT grant cancelled_grace!
@@ -287,7 +289,8 @@ describe('JobNexus Phase 2B.5.2 — Cursor Pagination, Transactional Sync & Enti
                   title: 'Too Late Job',
                   company: 'Late Inc',
                   location: 'Remote',
-                  url: 'https://example.com/job',
+                  description: 'Too late job description',
+                  applicationUrl: 'https://example.com/job',
                   sourceId: 'hanging_mock_provider',
                   sourceName: 'Hanging Mock',
                   publishedAt: new Date().toISOString(),
@@ -320,7 +323,8 @@ describe('JobNexus Phase 2B.5.2 — Cursor Pagination, Transactional Sync & Enti
               title: 'Fast Job',
               company: 'Fast Inc',
               location: 'Remote',
-              url: 'https://example.com/fast',
+              description: 'Fast job description',
+              applicationUrl: 'https://example.com/fast',
               sourceId: 'fast_mock_provider',
               sourceName: 'Fast Mock',
               publishedAt: new Date().toISOString(),
@@ -343,6 +347,7 @@ describe('JobNexus Phase 2B.5.2 — Cursor Pagination, Transactional Sync & Enti
       assert.strictEqual(jobs.length, 1);
       assert.strictEqual(jobs[0].title, 'Fast Job');
 
+      assert.ok(diagnostics);
       const hangingDiag = diagnostics.find((d) => d.providerId === 'hanging_mock_provider');
       assert.ok(hangingDiag);
       assert.strictEqual(hangingDiag.status, 'timeout');

@@ -217,5 +217,50 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
       'JobCard.tsx must filter duplicate workplace tags'
     );
   });
+
+  it('positions FRESH label diagonally on top-left corner of JobCard with highlighting badge colors', () => {
+    const cardJsxPath = path.resolve(process.cwd(), 'src/app/components/JobCard.tsx');
+    const cardCssPath = path.resolve(process.cwd(), 'src/app/components/JobCard.module.css');
+    const cardJsxContent = fs.readFileSync(cardJsxPath, 'utf8');
+    const cardCssContent = fs.readFileSync(cardCssPath, 'utf8');
+
+    // Diagonal corner ribbon wrapper and badge in JSX
+    assert.ok(
+      cardJsxContent.includes('styles.diagonalRibbonWrapper'),
+      'JobCard.tsx must render diagonalRibbonWrapper for fresh roles'
+    );
+    assert.ok(
+      cardJsxContent.includes('styles.diagonalRibbon'),
+      'JobCard.tsx must render diagonalRibbon badge'
+    );
+    assert.ok(
+      cardJsxContent.includes('styles.domainPillFreshIndent'),
+      'JobCard.tsx must apply domainPillFreshIndent when isFresh is true to prevent overlap'
+    );
+
+    // CSS geometry: -45deg diagonal rotation on top-left corner
+    assert.ok(
+      cardCssContent.includes('.diagonalRibbonWrapper {') &&
+      cardCssContent.includes('border-top-left-radius: 16px;'),
+      'JobCard.module.css must position diagonalRibbonWrapper at top-left with rounded corner clipping'
+    );
+    assert.ok(
+      cardCssContent.includes('.diagonalRibbon {') &&
+      cardCssContent.includes('transform: rotate(-45deg);'),
+      'JobCard.module.css must rotate diagonal ribbon at -45 degrees'
+    );
+
+    // Highlighting badge-type colors
+    assert.ok(
+      cardCssContent.includes('background: linear-gradient(135deg,') &&
+      cardCssContent.includes('box-shadow: 0 2px 10px rgba('),
+      'JobCard.module.css must use highlighting gradient and luminous shadow on ribbon'
+    );
+    assert.ok(
+      cardCssContent.includes('.domainPillFreshIndent {') &&
+      cardCssContent.includes('margin-left:'),
+      'JobCard.module.css must provide margin-left on domain pill to avoid overlap with diagonal badge'
+    );
+  });
 });
 
