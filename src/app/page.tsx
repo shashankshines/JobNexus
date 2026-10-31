@@ -3995,9 +3995,9 @@ export default function Home() {
                       gap: '0.35rem',
                       padding: '0.22rem 0.6rem',
                       borderRadius: 9999,
-                      background: 'rgba(236, 72, 153, 0.15)',
-                      border: '1px solid rgba(236, 72, 153, 0.35)',
-                      color: '#f472b6',
+                      background: 'var(--badge-cyan-bg)',
+                      border: '1px solid var(--badge-cyan-border)',
+                      color: 'var(--badge-cyan-text)',
                       fontSize: '0.76rem',
                       fontWeight: 600,
                     }}

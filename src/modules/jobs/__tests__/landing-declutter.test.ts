@@ -300,5 +300,37 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
       'globals.css must ensure live-feed-view-panel focus outline is strictly disabled'
     );
   });
+
+  it('guarantees high-contrast visibility for filter buttons and pills in light mode', () => {
+    // 1. Filters toggle button active & inactive light theme overrides
+    assert.ok(
+      cssContent.includes(':root[data-theme="light"] .search-filters-toggle-btn.is-active') &&
+      cssContent.includes('color: #1e1b4b !important;'),
+      'globals.css must provide high-contrast deep indigo text for active filters button in light mode'
+    );
+    assert.ok(
+      cssContent.includes(':root[data-theme="light"] .search-filters-toggle-btn.is-active svg') &&
+      cssContent.includes('color: #4338ca !important;'),
+      'globals.css must provide high-contrast deep indigo icon for active filters button in light mode'
+    );
+    assert.ok(
+      cssContent.includes(':root[data-theme="light"] .search-filters-badge'),
+      'globals.css must define search-filters-badge override for light mode'
+    );
+
+    // 2. Industry rail pills light theme visibility
+    assert.ok(
+      cssContent.includes(':root[data-theme="light"] .industry-rail-pill.is-active') &&
+      cssContent.includes('color: #1e1b4b !important;'),
+      'globals.css must ensure active industry pill has high-contrast text in light mode'
+    );
+
+    // 3. Quick search pills light theme visibility
+    assert.ok(
+      cssContent.includes(':root[data-theme="light"] .quick-pill-btn.is-active') &&
+      cssContent.includes('color: #1e1b4b !important;'),
+      'globals.css must ensure active quick pill has high-contrast text in light mode'
+    );
+  });
 });
 
