@@ -2218,6 +2218,7 @@ export default function Home() {
                   flex: '1.8',
                   minWidth: 260,
                   position: 'relative',
+                  zIndex: showJobDropdown ? 300 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   background: 'var(--input-bg)',
@@ -2342,6 +2343,7 @@ export default function Home() {
                   flex: '1.2',
                   minWidth: 200,
                   position: 'relative',
+                  zIndex: showLocDropdown ? 300 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   background: 'var(--input-bg)',
@@ -2627,6 +2629,7 @@ export default function Home() {
                       className="search-refinement-role"
                       style={{
                         position: 'relative',
+                        zIndex: showRoleDropdown ? 300 : 1,
                         flex: '1.1',
                         minWidth: 160,
                       }}
@@ -2888,6 +2891,7 @@ export default function Home() {
                       className="search-refinement-company"
                       style={{
                         position: 'relative',
+                        zIndex: showCompanyDropdown ? 300 : 1,
                         flex: '1.1',
                         minWidth: 155,
                       }}
@@ -3111,6 +3115,7 @@ export default function Home() {
                       className="search-refinement-industry"
                       style={{
                         position: 'relative',
+                        zIndex: showIndustryDropdown ? 300 : 1,
                         flex: '1.4',
                         minWidth: 190,
                       }}
@@ -3272,6 +3277,7 @@ export default function Home() {
                       className="search-refinement-workplace"
                       style={{
                         position: 'relative',
+                        zIndex: showWorkplaceDropdown ? 300 : 1,
                         flex: '0.85',
                         minWidth: 140,
                       }}
@@ -3430,6 +3436,7 @@ export default function Home() {
                       className="search-refinement-type"
                       style={{
                         position: 'relative',
+                        zIndex: showTypeDropdown ? 300 : 1,
                         flex: '0.75',
                         minWidth: 120,
                       }}
@@ -3582,6 +3589,7 @@ export default function Home() {
                       className="search-refinement-level"
                       style={{
                         position: 'relative',
+                        zIndex: showLevelDropdown ? 300 : 1,
                         flex: '0.8',
                         minWidth: 130,
                       }}
