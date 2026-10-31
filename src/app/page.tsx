@@ -216,6 +216,24 @@ interface QuickPill {
   trend?: 'hot' | 'rising' | 'steady';
 }
 
+interface SearchCriteria {
+  query: string;
+  role: string;
+  company: string;
+  location: string;
+  type: string;
+  level: string;
+  remote: string;
+  industry: string;
+}
+
+interface CachedSearchResult {
+  jobs: Job[];
+  count: number;
+  truncated: boolean;
+  timestamp: number;
+}
+
 const DEFAULT_POPULAR_PILLS: QuickPill[] = [
   { id: 'full-stack-developer', label: '⚡ Full Stack Developer', query: 'Full Stack Developer', avgSearches: 140, formattedAverage: '140/day', trend: 'hot' },
   { id: 'react-developer', label: '⚛️ React Developer', query: 'React Developer', avgSearches: 125, formattedAverage: '125/day', trend: 'hot' },
@@ -237,91 +255,6 @@ const WORKPLACE_OPTIONS = [
   { value: 'hybrid', label: 'Hybrid', icon: '🔄' },
   { value: 'onsite', label: 'On-site', icon: '🏢' },
 ];
-
-/**
- * High-performance client-side in-memory filter engine.
- * Instantly renders matching jobs in 0ms when pills or searches are clicked,
- * completely eliminating loading lag and skeleton card flickering.
- */
-function filterJobsClientSide(
-  jobs: Job[],
-  filters: {
-    query?: string;
-    company?: string;
-    location?: string;
-    type?: string;
-    level?: string;
-    remote?: string;
-    industry?: string;
-  }
-): Job[] {
-  if (!jobs || jobs.length === 0) return [];
-  const q = filters.query?.toLowerCase().trim();
-  const comp = filters.company?.toLowerCase().trim();
-  const loc = filters.location?.toLowerCase().trim();
-  const typ = filters.type?.toLowerCase().trim();
-  const lvl = filters.level?.toLowerCase().trim();
-  const rem = filters.remote?.toLowerCase().trim();
-  const ind = filters.industry?.toLowerCase().trim();
-
-  return jobs.filter((job) => {
-    // Workplace filter: Remote, Hybrid, On-site
-    if (rem && rem !== 'all') {
-      if (rem === 'remote' && !job.isRemote && job.workplaceType !== 'remote') return false;
-      if (rem === 'hybrid' && job.workplaceType !== 'hybrid') return false;
-      if (rem === 'onsite' && (job.isRemote || job.workplaceType === 'remote' || job.workplaceType === 'hybrid')) return false;
-    }
-
-    // Canonical industry filter
-    if (ind && ind !== 'all') {
-      const jobInd = (job.industry || '').toLowerCase();
-      const jobCat = (job.category || '').toLowerCase();
-      const matchInd =
-        jobInd.includes(ind) ||
-        ind.includes(jobInd) ||
-        jobCat.includes(ind) ||
-        ind.includes(jobCat);
-      if (!matchInd) return false;
-    }
-
-    // Company filter
-    if (comp) {
-      if (!job.company || !job.company.toLowerCase().includes(comp)) return false;
-    }
-
-    // Employment type filter
-    if (typ && typ !== 'all') {
-      const jobType = (job.type || '').toLowerCase();
-      if (!jobType.includes(typ)) return false;
-    }
-
-    // Experience / Seniority level filter
-    if (lvl && lvl !== 'all') {
-      const title = (job.title || '').toLowerCase();
-      const tags = (job.tags || []).map((t) => t.toLowerCase()).join(' ');
-      if (lvl === 'entry' && !title.includes('junior') && !title.includes('entry') && !title.includes('intern') && !title.includes('graduate') && !tags.includes('entry')) return false;
-      if (lvl === 'senior' && !title.includes('senior') && !title.includes('lead') && !title.includes('principal') && !title.includes('staff')) return false;
-      if (lvl === 'lead' && !title.includes('lead') && !title.includes('manager') && !title.includes('director') && !title.includes('head')) return false;
-    }
-
-    // Location filter
-    if (loc) {
-      const jobLoc = (job.location || '').toLowerCase();
-      if (!jobLoc.includes(loc)) return false;
-    }
-
-    // Query text match (title, tags, category)
-    if (q) {
-      const title = (job.title || '').toLowerCase();
-      const tags = (job.tags || []).map((t) => t.toLowerCase()).join(' ');
-      const category = (job.category || '').toLowerCase();
-      const match = title.includes(q) || tags.includes(q) || category.includes(q);
-      if (!match) return false;
-    }
-
-    return true;
-  });
-}
 
 const TYPE_OPTIONS = [
   { value: '', label: 'Any Type' },
@@ -489,6 +422,20 @@ export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [matchingCount, setMatchingCount] = useState(0);
+  const [searchTruncated, setSearchTruncated] = useState(false);
+  const [appliedSearchCriteria, setAppliedSearchCriteria] = useState<SearchCriteria>({
+    query: '',
+    role: '',
+    company: '',
+    location: '',
+    type: '',
+    level: '',
+    remote: '',
+    industry: '',
+  });
+  const [pendingSearchCriteria, setPendingSearchCriteria] = useState<SearchCriteria | null>(null);
+  const [searchError, setSearchError] = useState('');
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Progressive Chunk Lazy Loading (Infinite Scroll) state
@@ -532,16 +479,6 @@ export default function Home() {
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const levelDropdownRef = useRef<HTMLDivElement>(null);
   const intentProcessedRef = useRef(false);
-  const lastSubmittedSearchRef = useRef<{
-    query: string;
-    location: string;
-    type: string;
-    level: string;
-    selectedRole: string;
-    remote: string;
-    industry: string;
-    company: string;
-  } | null>(null);
   const jobGridRef = useRef<HTMLDivElement>(null);
   const resultsSectionRef = useRef<HTMLDivElement>(null);
   const tracksContentRef = useRef<HTMLDivElement>(null);
@@ -555,9 +492,10 @@ export default function Home() {
   const [isHeroPaused, setIsHeroPaused] = useState(false);
 
   // High-performance client-side multi-key search & pill cache
-  const clientSearchCacheRef = useRef<Map<string, { jobs: Job[]; timestamp: number }>>(new Map());
-  const allRawJobsCacheRef = useRef<Job[]>([]);
+  const clientSearchCacheRef = useRef<Map<string, CachedSearchResult>>(new Map());
   const activeSearchAbortRef = useRef<AbortController | null>(null);
+  const searchRequestIdRef = useRef(0);
+  const catalogWarmupStartedRef = useRef(false);
 
   useEffect(() => {
     if (isHeroPaused) return;
@@ -580,26 +518,32 @@ export default function Home() {
     if (Number.isFinite(updatedAt)) popularPillsUpdatedAtRef.current = updatedAt;
 
     setPopularPills(rolePills);
-    try {
-      localStorage.setItem('jobnexus_popular_role_searches', JSON.stringify(rolePills));
-    } catch {
-      // Ignore storage quota errors; live server results remain available.
-    }
   }, []);
 
   const executeSearch = useCallback(
     async (
-      searchQuery = query,
-      searchLoc = location,
-      searchType = type,
-      searchLevel = level,
-      roleCategory = selectedRole,
-      searchRemote = remote,
-      searchIndustry = industry,
-      searchCompany = company,
-      recordPopularity = false
+      criteria: SearchCriteria,
+      options: { markSearched?: boolean; recordPopularity?: boolean } = {}
     ) => {
-      setSearched(true);
+      const searchCriteria: SearchCriteria = {
+        query: criteria.query.trim(),
+        role: criteria.role.trim(),
+        company: criteria.company.trim(),
+        location: criteria.location.trim(),
+        type: criteria.type.trim(),
+        level: criteria.level.trim(),
+        remote: criteria.remote.trim(),
+        industry: criteria.industry.trim(),
+      };
+      const markSearched = options.markSearched !== false;
+
+      if (markSearched) {
+        setSearched(true);
+        setPendingSearchCriteria(searchCriteria);
+      } else {
+        setPendingSearchCriteria(null);
+      }
+      setSearchError('');
       setShowJobDropdown(false);
       setShowLocDropdown(false);
       setShowRoleDropdown(false);
@@ -610,18 +554,21 @@ export default function Home() {
       setShowLevelDropdown(false);
 
       const params = new URLSearchParams();
-      const effectiveQuery = [searchQuery, roleCategory].filter(Boolean).join(' ').trim();
-      if (effectiveQuery) params.append('query', effectiveQuery);
-      if (searchCompany) params.append('company', searchCompany);
-      if (searchLoc) params.append('location', searchLoc);
-      if (searchType) params.append('type', searchType);
-      if (searchLevel) params.append('level', searchLevel);
-      if (searchRemote) params.append('remote', searchRemote);
-      if (searchIndustry && searchIndustry !== 'all') params.append('industry', searchIndustry);
+      if (searchCriteria.query) params.set('query', searchCriteria.query);
+      if (searchCriteria.role) params.set('role', searchCriteria.role);
+      if (searchCriteria.company) params.set('company', searchCriteria.company);
+      if (searchCriteria.location) params.set('location', searchCriteria.location);
+      if (searchCriteria.type) params.set('type', searchCriteria.type);
+      if (searchCriteria.level) params.set('level', searchCriteria.level);
+      if (searchCriteria.remote) params.set('remote', searchCriteria.remote);
+      if (searchCriteria.industry && searchCriteria.industry !== 'all') {
+        params.set('industry', searchCriteria.industry);
+      }
 
-      const cacheKey = params.toString();
-      const popularityQuery = effectiveQuery;
-      if (recordPopularity && popularityQuery.trim().length >= 2) {
+      const requestKey = params.toString();
+      const cacheKey = `${requestKey}::auth=${isAuthenticated ? '1' : '0'}`;
+      const popularityQuery = searchCriteria.query || searchCriteria.role;
+      if (options.recordPopularity && popularityQuery.trim().length >= 2) {
         fetch('/api/jobs/popular', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -638,56 +585,33 @@ export default function Home() {
       }
 
       const isUnconstrained =
-        !effectiveQuery &&
-        !searchLoc &&
-        !searchType &&
-        !searchLevel &&
-        !searchRemote &&
-        (!searchIndustry || searchIndustry === 'all') &&
-        !searchCompany;
+        Object.entries(searchCriteria).every(([key, value]) =>
+          key === 'industry' ? !value || value === 'all' : !value
+        );
 
-      // 1. Instant Cache Hit Check: If this query/pill was already visited, return in 0ms!
+      const requestId = ++searchRequestIdRef.current;
+      activeSearchAbortRef.current?.abort();
+      activeSearchAbortRef.current = null;
+
       const cached = clientSearchCacheRef.current.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL_MS) {
         setJobs(cached.jobs);
+        setMatchingCount(cached.count);
+        setSearchTruncated(cached.truncated);
+        setAppliedSearchCriteria(searchCriteria);
+        setPendingSearchCriteria(null);
         setLoading(false);
-        if (isUnconstrained) {
-          syncFromJobsCount(cached.jobs.length);
-        }
+        if (isUnconstrained) syncFromJobsCount(cached.count);
         return;
       }
 
-      // 2. Optimistic Instant In-Memory Filter:
-      // If we already have the raw job catalog in memory, instantly render matching jobs in 0ms!
-      if (allRawJobsCacheRef.current.length > 0) {
-        const optimisticJobs = filterJobsClientSide(allRawJobsCacheRef.current, {
-          query: effectiveQuery,
-          company: searchCompany,
-          location: searchLoc,
-          type: searchType,
-          level: searchLevel,
-          remote: searchRemote,
-          industry: searchIndustry,
-        });
-        if (optimisticJobs.length > 0) {
-          setJobs(optimisticJobs);
-          setLoading(false);
-        } else {
-          setLoading(true);
-        }
-      } else {
-        setLoading(true);
-      }
+      setLoading(true);
 
-      // Abort any prior in-flight request so rapid pill clicks don't collide
-      if (activeSearchAbortRef.current) {
-        activeSearchAbortRef.current.abort();
-      }
       const abortController = new AbortController();
       activeSearchAbortRef.current = abortController;
 
       try {
-        const res = await fetch(`/api/jobs?${cacheKey}`, {
+        const res = await fetch(`/api/jobs?${requestKey}`, {
           signal: abortController.signal,
           headers: { Accept: 'application/json' },
         });
@@ -697,51 +621,56 @@ export default function Home() {
         }
 
         const data = await res.json();
-
-        if (data.jobs && Array.isArray(data.jobs)) {
-          setJobs(data.jobs);
-          clientSearchCacheRef.current.set(cacheKey, {
-            jobs: data.jobs,
-            timestamp: Date.now(),
-          });
-
-          if (isUnconstrained) {
-            allRawJobsCacheRef.current = data.jobs;
-            syncFromJobsCount(data.jobs.length);
-          } else if (allRawJobsCacheRef.current.length === 0) {
-            allRawJobsCacheRef.current = data.jobs;
-          }
-
-          if (typeof window !== 'undefined' && data.jobs.length > 0) {
-            try {
-              sessionStorage.setItem('jobnexus_initial_catalog', JSON.stringify(data.jobs.slice(0, 100)));
-            } catch {
-              // Ignore quota
-            }
-          }
-        } else {
-          setJobs([]);
+        if (requestId !== searchRequestIdRef.current) return;
+        if (!Array.isArray(data.jobs)) {
+          throw new Error('Search response did not contain a jobs array');
+        }
+        if (
+          !Number.isSafeInteger(data.count) ||
+          data.count < data.jobs.length ||
+          data.returnedCount !== data.jobs.length ||
+          typeof data.truncated !== 'boolean' ||
+          data.truncated !== (data.count > data.returnedCount)
+        ) {
+          throw new Error('Search response contained invalid result counts');
         }
 
+        const count: number = data.count;
+        const truncated: boolean = data.truncated;
+        setJobs(data.jobs);
+        setMatchingCount(count);
+        setSearchTruncated(truncated);
+        setAppliedSearchCriteria(searchCriteria);
+        setPendingSearchCriteria(null);
+        clientSearchCacheRef.current.set(cacheKey, {
+          jobs: data.jobs,
+          count,
+          truncated,
+          timestamp: Date.now(),
+        });
+        if (isUnconstrained) syncFromJobsCount(count);
       } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') {
           return;
         }
+        if (requestId !== searchRequestIdRef.current) return;
         console.error('[Search Error]:', error);
-        if (allRawJobsCacheRef.current.length === 0) {
-          setJobs([]);
-        }
+        setSearchError('We could not refresh jobs right now. Your previous results are still shown; please try again.');
+        setPendingSearchCriteria(null);
       } finally {
-        if (activeSearchAbortRef.current === abortController) {
+        if (requestId === searchRequestIdRef.current && activeSearchAbortRef.current === abortController) {
           setLoading(false);
           activeSearchAbortRef.current = null;
         }
       }
     },
-    [query, company, location, type, level, selectedRole, remote, industry, syncFromJobsCount, applyPopularPills]
+    [isAuthenticated, syncFromJobsCount, applyPopularPills]
   );
 
   const resetToDiscovery = useCallback(() => {
+    searchRequestIdRef.current += 1;
+    activeSearchAbortRef.current?.abort();
+    activeSearchAbortRef.current = null;
     setQuery('');
     setCompany('');
     setLocation('');
@@ -764,6 +693,21 @@ export default function Home() {
     setCompanySearchQuery('');
     setJobs([]);
     setSearched(false);
+    setMatchingCount(0);
+    setSearchTruncated(false);
+    setAppliedSearchCriteria({
+      query: '',
+      role: '',
+      company: '',
+      location: '',
+      type: '',
+      level: '',
+      remote: '',
+      industry: '',
+    });
+    setPendingSearchCriteria(null);
+    setSearchError('');
+    setLoading(false);
     setVisibleCount(JOBS_BATCH_SIZE);
     setActiveDiscoveryTab('feed');
     if (typeof window !== 'undefined') {
@@ -793,24 +737,11 @@ export default function Home() {
         resetToDiscovery();
       } else if (!wasAuthenticated && isAuthenticated) {
         if (searched || jobs.length > 0) {
-          const submittedSearch = lastSubmittedSearchRef.current;
-          if (submittedSearch) {
-            executeSearch(
-              submittedSearch.query,
-              submittedSearch.location,
-              submittedSearch.type,
-              submittedSearch.level,
-              submittedSearch.selectedRole,
-              submittedSearch.remote,
-              submittedSearch.industry,
-              submittedSearch.company,
-              true
-            );
-          }
+          void executeSearch(appliedSearchCriteria, { markSearched: searched });
         }
       }
     }
-  }, [isAuthenticated, searched, jobs.length, executeSearch, resetToDiscovery]);
+  }, [isAuthenticated, searched, jobs.length, appliedSearchCriteria, executeSearch, resetToDiscovery]);
 
   // Seamlessly execute any search or application action triggered before login
   useEffect(() => {
@@ -896,21 +827,6 @@ export default function Home() {
 
   // Keep the search trend strip synchronized without polling hidden tabs.
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('jobnexus_popular_role_searches');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const rolePills = parsed.filter(
-            (pill: QuickPill) => typeof pill.query === 'string' && pill.query.trim().length > 0
-          );
-          if (rolePills.length > 0) setPopularPills(rolePills);
-        }
-      }
-    } catch {
-      // Fall back to the server response.
-    }
-
     let active = true;
     let requestInFlight = false;
     const refreshPopularPills = async () => {
@@ -928,7 +844,7 @@ export default function Home() {
       }
     };
 
-    const initialTimer = window.setTimeout(() => void refreshPopularPills(), 800);
+    void refreshPopularPills();
     const pollTimer = window.setInterval(() => void refreshPopularPills(), 15_000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') void refreshPopularPills();
@@ -937,32 +853,25 @@ export default function Home() {
 
     return () => {
       active = false;
-      window.clearTimeout(initialTimer);
       window.clearInterval(pollTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [applyPopularPills]);
 
-  // Pre-load raw catalog on mount from sessionStorage and background fetch for instant 0ms pill clicking
+  // Load the discovery feed once; searches use complete server-filtered results.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('jobnexus_initial_catalog');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            allRawJobsCacheRef.current = parsed;
-          }
-        }
-      } catch {
-        // Fall back gracefully
-      }
-    }
-
-    // Warm up the raw jobs catalog in background so all future searches/pill clicks resolve in 0ms!
-    if (allRawJobsCacheRef.current.length === 0) {
-      executeSearch('', '', '', '', '', '', '', '');
-    }
+    if (catalogWarmupStartedRef.current) return;
+    catalogWarmupStartedRef.current = true;
+    void executeSearch({
+      query: '',
+      role: '',
+      company: '',
+      location: '',
+      type: '',
+      level: '',
+      remote: '',
+      industry: '',
+    }, { markSearched: false });
   }, [executeSearch]);
 
   // Close dropdowns on outside click
@@ -1165,31 +1074,23 @@ export default function Home() {
   };
 
   const handleBrowseAllClick = () => {
-    setQuery('');
-    setCompany('');
-    setLocation('');
-    setType('');
-    setLevel('');
-    setSelectedRole('');
-    setRemote('');
-    setIndustry('');
-    setActiveDiscoveryTab('feed');
+    clearAllFilters();
   };
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    const submittedSearch = { query, location, type, level, selectedRole, remote, industry, company };
-    lastSubmittedSearchRef.current = submittedSearch;
-    executeSearch(
-      submittedSearch.query,
-      submittedSearch.location,
-      submittedSearch.type,
-      submittedSearch.level,
-      submittedSearch.selectedRole,
-      submittedSearch.remote,
-      submittedSearch.industry,
-      submittedSearch.company
-    );
+    setActiveView('all');
+    setActiveDiscoveryTab('feed');
+    void executeSearch({
+      query,
+      role: selectedRole,
+      company,
+      location,
+      type,
+      level,
+      remote,
+      industry,
+    }, { recordPopularity: true });
     scrollToResults();
   };
 
@@ -1272,6 +1173,32 @@ export default function Home() {
     [industry]
   );
 
+  const appliedRoleLabel = useMemo(() => {
+    if (!appliedSearchCriteria.role) return '';
+    for (const group of JOB_POST_GROUPS) {
+      const match = group.posts.find((post) => post.value === appliedSearchCriteria.role);
+      if (match) return match.label;
+    }
+    return appliedSearchCriteria.role;
+  }, [appliedSearchCriteria.role]);
+
+  const appliedWorkplaceObj = useMemo(
+    () => WORKPLACE_OPTIONS.find((opt) => opt.value === appliedSearchCriteria.remote) || WORKPLACE_OPTIONS[0],
+    [appliedSearchCriteria.remote]
+  );
+  const appliedTypeObj = useMemo(
+    () => TYPE_OPTIONS.find((opt) => opt.value === appliedSearchCriteria.type) || TYPE_OPTIONS[0],
+    [appliedSearchCriteria.type]
+  );
+  const appliedLevelObj = useMemo(
+    () => LEVEL_OPTIONS.find((opt) => opt.value === appliedSearchCriteria.level) || LEVEL_OPTIONS[0],
+    [appliedSearchCriteria.level]
+  );
+  const appliedIndustryObj = useMemo(
+    () => INDUSTRY_OPTIONS.find((opt) => opt.value === appliedSearchCriteria.industry) || INDUSTRY_OPTIONS[0],
+    [appliedSearchCriteria.industry]
+  );
+
   const handleSelectCompany = useCallback(
     (selectedComp: string) => {
       setCompany(selectedComp);
@@ -1337,6 +1264,34 @@ export default function Home() {
     setShowLevelDropdown(false);
     setRoleSearchQuery('');
     setCompanySearchQuery('');
+    setSortBy('relevance');
+    setActiveView('all');
+    setActiveDiscoveryTab('feed');
+    void executeSearch({
+      query: '',
+      role: '',
+      company: '',
+      location: '',
+      type: '',
+      level: '',
+      remote: '',
+      industry: '',
+    });
+  };
+
+  const removeAppliedFilter = (filter: keyof SearchCriteria) => {
+    const remainingCriteria = { ...appliedSearchCriteria, [filter]: '' };
+    setActiveView('all');
+    setActiveDiscoveryTab('feed');
+    if (filter === 'query' && query === appliedSearchCriteria.query) setQuery('');
+    if (filter === 'role' && selectedRole === appliedSearchCriteria.role) setSelectedRole('');
+    if (filter === 'company' && company === appliedSearchCriteria.company) setCompany('');
+    if (filter === 'location' && location === appliedSearchCriteria.location) setLocation('');
+    if (filter === 'type' && type === appliedSearchCriteria.type) setType('');
+    if (filter === 'level' && level === appliedSearchCriteria.level) setLevel('');
+    if (filter === 'remote' && remote === appliedSearchCriteria.remote) setRemote('');
+    if (filter === 'industry' && industry === appliedSearchCriteria.industry) setIndustry('');
+    void executeSearch(remainingCriteria);
   };
 
   // Client-side instant sorting & activeView filtering
@@ -1348,7 +1303,7 @@ export default function Home() {
       return [...jobs].sort((a, b) => {
         const timeA = a.date ? new Date(a.date).getTime() : 0;
         const timeB = b.date ? new Date(b.date).getTime() : 0;
-        return timeB - timeA;
+        return timeB - timeA || a.id.localeCompare(b.id);
       });
     }
     return jobs;
@@ -1536,16 +1491,16 @@ export default function Home() {
 
             {/* Dynamic Live Aggregation Status Pill */}
             <motion.div
-              key={searched ? `searched-${displayedJobs.length}` : activeView === 'saved' ? `saved-${savedJobs.length}` : `total-${formattedCount}`}
+              key={searched ? `searched-${matchingCount}` : activeView === 'saved' ? `saved-${savedJobs.length}` : `total-${formattedCount}`}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
               className={`site-header-status ${isScrollingCards ? 'is-scrolling-cards' : ''}`}
               title={
                 isScrollingCards
-                  ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} matched roles (${Math.round(progressPercent)}% viewed)`
+                  ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches)`
                   : searched
-                    ? `Showing ${displayedJobs.length.toLocaleString()} active roles filtered from ${formattedCount} live verified openings across ${sourcesCount} direct ATS feeds`
+                    ? `${matchingCount.toLocaleString()} active roles match; ${displayedJobs.length.toLocaleString()} are loaded from ${formattedCount} live verified openings across ${sourcesCount} direct ATS feeds`
                     : activeView === 'saved'
                       ? `${savedJobs.length} bookmarked tech opportunities`
                       : `Total ${formattedCount} live verified opportunities actively aggregated from ${sourcesCount} direct employer ATS feeds`
@@ -1560,15 +1515,15 @@ export default function Home() {
                         <span className="elapsed-counter-num">{animatedElapsedCount}</span>
                         <span className="elapsed-counter-of">of</span>
                         <span className="elapsed-counter-total">{displayedJobs.length.toLocaleString()}</span>
-                        <span className="elapsed-counter-label">Roles Matched</span>
+                        <span className="elapsed-counter-label">Loaded Matches</span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
                         <span className="elapsed-counter-verified count-secondary">
-                          {isAllViewed ? 'All Roles Viewed' : `${formattedCount} Total Verified`}
+                          {isAllViewed ? (searchTruncated ? 'All Loaded Roles Viewed' : 'All Roles Viewed') : `${formattedCount} Total Verified`}
                         </span>
                       </span>
                     ) : (
                       <span className="elapsed-counter-status">
-                        <span className="elapsed-counter-num">{displayedJobs.length.toLocaleString()}</span>
+                        <span className="elapsed-counter-num">{matchingCount.toLocaleString()}</span>
                         <span className="elapsed-counter-label">Roles Matched</span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
                         <span className="elapsed-counter-verified count-secondary">{formattedCount} Total Verified</span>
@@ -1607,11 +1562,11 @@ export default function Home() {
                         <span className="elapsed-counter-num">{animatedElapsedCount}</span>
                         <span className="elapsed-counter-of">/</span>
                         <span className="elapsed-counter-total">{displayedJobs.length.toLocaleString()}</span>
-                        <span className="elapsed-counter-label">Matched</span>
+                        <span className="elapsed-counter-label">Loaded</span>
                       </span>
                     ) : (
                       <span className="elapsed-counter-status">
-                        <span className="elapsed-counter-num">{displayedJobs.length.toLocaleString()}</span>
+                        <span className="elapsed-counter-num">{matchingCount.toLocaleString()}</span>
                         <span className="elapsed-counter-label">Matched</span>
                       </span>
                     )
@@ -1915,14 +1870,14 @@ export default function Home() {
         {/* Hero Section */}
         <section style={{ margin: '0.85rem 0 1.25rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <motion.div
-            key={searched ? `hero-searched-${displayedJobs.length}` : `hero-total-${formattedCount}`}
+            key={searched ? `hero-searched-${matchingCount}` : `hero-total-${formattedCount}`}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             className="hero-ats-badge"
           >
             <Sparkles size={14} className="hero-ats-badge-icon" />
             <span className="hero-ats-badge-accent">
-              {searched ? `${displayedJobs.length.toLocaleString()} Roles Matched` : `${formattedCount} Live Roles`}
+              {searched ? `${matchingCount.toLocaleString()} Roles Matched` : `${formattedCount} Live Roles`}
             </span>
             <span className="hero-ats-badge-bullet">•</span>
             <span className="hero-ats-badge-secondary">
@@ -3651,7 +3606,7 @@ export default function Home() {
                     </div>
 
                     {/* Clear Filters CTA if active */}
-                    {(query || company || location || remote || selectedRole || type || level || industry) && (
+                    {searched && (appliedSearchCriteria.query || appliedSearchCriteria.company || appliedSearchCriteria.location || appliedSearchCriteria.remote || appliedSearchCriteria.role || appliedSearchCriteria.type || appliedSearchCriteria.level || appliedSearchCriteria.industry) && (
                       <button
                         type="button"
                         onClick={clearAllFilters}
@@ -3678,7 +3633,7 @@ export default function Home() {
             </div>
 
             {/* Active Filter Chips Bar */}
-            {(query || company || location || remote || selectedRole || type || level || industry) && (
+            {searched && (appliedSearchCriteria.query || appliedSearchCriteria.company || appliedSearchCriteria.location || appliedSearchCriteria.remote || appliedSearchCriteria.role || appliedSearchCriteria.type || appliedSearchCriteria.level || appliedSearchCriteria.industry) && (
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -3695,7 +3650,7 @@ export default function Home() {
                   Active:
                 </span>
 
-                {query && (
+                {appliedSearchCriteria.query && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3710,11 +3665,11 @@ export default function Home() {
                       fontWeight: 600,
                     }}
                   >
-                    <span>&ldquo;{query}&rdquo;</span>
+                    <span>&ldquo;{appliedSearchCriteria.query}&rdquo;</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setQuery('');
+                        removeAppliedFilter('query');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove keyword filter"
@@ -3724,7 +3679,7 @@ export default function Home() {
                   </span>
                 )}
 
-                {company && (
+                {appliedSearchCriteria.company && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3740,11 +3695,11 @@ export default function Home() {
                     }}
                   >
                     <Building2 size={11} />
-                    <span>{company}</span>
+                    <span>{appliedSearchCriteria.company}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setCompany('');
+                        removeAppliedFilter('company');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove company filter"
@@ -3754,7 +3709,7 @@ export default function Home() {
                   </span>
                 )}
 
-                {location && (
+                {appliedSearchCriteria.location && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3770,11 +3725,11 @@ export default function Home() {
                     }}
                   >
                     <MapPin size={11} />
-                    <span>{location}</span>
+                    <span>{appliedSearchCriteria.location}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setLocation('');
+                        removeAppliedFilter('location');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove location filter"
@@ -3784,7 +3739,7 @@ export default function Home() {
                   </span>
                 )}
 
-                {selectedRole && (
+                {appliedSearchCriteria.role && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3800,10 +3755,10 @@ export default function Home() {
                     }}
                   >
                     <Briefcase size={11} />
-                    <span>{selectedRoleLabel}</span>
+                    <span>{appliedRoleLabel}</span>
                     <button
                       type="button"
-                      onClick={() => handleClearRole()}
+                      onClick={() => removeAppliedFilter('role')}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove role filter"
                     >
@@ -3812,7 +3767,7 @@ export default function Home() {
                   </span>
                 )}
 
-                {remote && (
+                {appliedSearchCriteria.remote && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3827,12 +3782,12 @@ export default function Home() {
                       fontWeight: 600,
                     }}
                   >
-                    <span>{selectedWorkplaceObj.icon}</span>
-                    <span>{selectedWorkplaceObj.label}</span>
+                    <span>{appliedWorkplaceObj.icon}</span>
+                    <span>{appliedWorkplaceObj.label}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setRemote('');
+                        removeAppliedFilter('remote');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove workplace filter"
@@ -3842,7 +3797,7 @@ export default function Home() {
                   </span>
                 )}
 
-                {type && (
+                {appliedSearchCriteria.type && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3857,11 +3812,11 @@ export default function Home() {
                       fontWeight: 600,
                     }}
                   >
-                    <span>{selectedTypeObj.label}</span>
+                    <span>{appliedTypeObj.label}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setType('');
+                        removeAppliedFilter('type');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove employment type filter"
@@ -3871,7 +3826,7 @@ export default function Home() {
                   </span>
                 )}
 
-                {level && (
+                {appliedSearchCriteria.level && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3886,11 +3841,11 @@ export default function Home() {
                       fontWeight: 600,
                     }}
                   >
-                    <span>{selectedLevelObj.label}</span>
+                    <span>{appliedLevelObj.label}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setLevel('');
+                        removeAppliedFilter('level');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove seniority filter"
@@ -3900,7 +3855,7 @@ export default function Home() {
                   </span>
                 )}
 
-                {industry && (
+                {appliedSearchCriteria.industry && (
                   <span
                     style={{
                       display: 'inline-flex',
@@ -3915,12 +3870,12 @@ export default function Home() {
                       fontWeight: 600,
                     }}
                   >
-                    <span>{selectedIndustryObj.icon}</span>
-                    <span>{selectedIndustryObj.label}</span>
+                    <span>{appliedIndustryObj.icon}</span>
+                    <span>{appliedIndustryObj.label}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setIndustry('');
+                        removeAppliedFilter('industry');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove industry filter"
@@ -3991,6 +3946,34 @@ export default function Home() {
           }}
           aria-label="Search results and opportunities feed"
         >
+          {searched && (pendingSearchCriteria || searchError || searchTruncated) && (
+            <div
+              role={searchError ? 'alert' : 'status'}
+              aria-live={searchError ? 'assertive' : 'polite'}
+              style={{
+                marginBottom: '0.85rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '0.75rem',
+                border: `1px solid ${searchError ? 'rgba(248, 113, 113, 0.35)' : 'rgba(99, 102, 241, 0.25)'}`,
+                background: searchError ? 'rgba(127, 29, 29, 0.16)' : 'rgba(99, 102, 241, 0.08)',
+                color: searchError ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontSize: '0.86rem',
+              }}
+            >
+              {pendingSearchCriteria && (
+                <p style={{ margin: 0 }}>
+                  Updating job results. The last completed results remain visible until this search finishes.
+                </p>
+              )}
+              {searchError && <p style={{ margin: 0 }}>{searchError}</p>}
+              {searchTruncated && (
+                <p style={{ margin: searchError ? '0.35rem 0 0' : 0 }}>
+                  {matchingCount.toLocaleString()} jobs match; {displayedJobs.length.toLocaleString()} are loaded. Refine your search to narrow the results.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Results Header Toolbar (World-class Responsive Command Bar) */}
           {!loading && (activeView === 'saved' ? savedJobs.length > 0 : (searched && displayedJobs.length > 0)) && (
             <motion.div
@@ -4004,10 +3987,12 @@ export default function Home() {
                   <h3 className="results-heading">
                     {activeView === 'saved' ? (
                       `${savedJobs.length} Saved Positions`
+                    ) : searchTruncated ? (
+                      `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} loaded (${matchingCount.toLocaleString()} matches)`
                     ) : (
                       displayedJobs.length > JOBS_BATCH_SIZE
                         ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
-                        : `${displayedJobs.length.toLocaleString()} Verified Positions`
+                        : `${matchingCount.toLocaleString()} Verified Positions`
                     )}
                   </h3>
 
@@ -4037,12 +4022,12 @@ export default function Home() {
                       <span className="desktop-only">
                         {isScrollingCards ? (
                           <>
-                            <span className="count-main">{animatedElapsedCount} of {displayedJobs.length.toLocaleString()} Roles Matched</span>
+                            <span className="count-main">{animatedElapsedCount} of {matchingCount.toLocaleString()} Roles Matched</span>
                             <span className="count-secondary"> • {formattedCount} Total Verified</span>
                           </>
                         ) : (
                           <>
-                            <span className="count-main">{displayedJobs.length.toLocaleString()} Roles Matched</span>
+                            <span className="count-main">{matchingCount.toLocaleString()} Roles Matched</span>
                             <span className="count-secondary"> • {formattedCount} Total Verified</span>
                           </>
                         )}

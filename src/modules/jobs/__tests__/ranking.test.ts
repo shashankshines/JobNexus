@@ -28,6 +28,44 @@ function makeJob(partial: Partial<NormalizedJob>): NormalizedJob {
 }
 
 describe('Job Ranking & Filtering Unit Tests', () => {
+  it('ANDs keyword and selected-role criteria and supports role synonyms', () => {
+    const reactFrontend = makeJob({
+      id: 'react-frontend',
+      title: 'Frontend Engineer',
+      tags: ['React'],
+      location: 'Bengaluru, India',
+    });
+    const teacher = makeJob({
+      id: 'teacher',
+      title: 'Primary School Teacher',
+      tags: ['education'],
+      location: 'Bengaluru, India',
+      isRemote: false,
+      workplaceType: 'onsite',
+    });
+    const reactBackend = makeJob({
+      id: 'react-backend',
+      title: 'Backend Engineer',
+      tags: ['React'],
+      location: 'Bengaluru, India',
+    });
+
+    const results = filterAndRankJobs([teacher, reactBackend, reactFrontend], {
+      query: 'React',
+      role: 'Frontend Developer',
+    });
+
+    assert.deepStrictEqual(results.map((job) => job.id), ['react-frontend']);
+    assert.deepStrictEqual(
+      filterAndRankJobs([teacher], { role: 'Frontend Developer' }),
+      []
+    );
+    assert.deepStrictEqual(
+      filterAndRankJobs([teacher], { role: 'Teacher' }).map((job) => job.id),
+      ['teacher']
+    );
+  });
+
   it('prioritizes exact title match over tags/description', () => {
     const jobExact = makeJob({
       id: 'exact-match',
@@ -144,7 +182,7 @@ describe('Job Ranking & Filtering Unit Tests', () => {
 
     // Remote only
     const remoteOnlyRes = filterAndRankJobs([remoteGlobal, onsiteBlr, hybridPune], { remote: 'remote' });
-    assert.strictEqual(remoteOnlyRes.length, 2);
+    assert.strictEqual(remoteOnlyRes.length, 1);
     assert.ok(remoteOnlyRes.some((j) => j.id === 'job-remote-global'));
     assert.ok(!remoteOnlyRes.some((j) => j.id === 'job-onsite-blr'));
 
@@ -484,6 +522,12 @@ describe('Combined Role + Location Keyword Query Suite', () => {
     assert.deepStrictEqual(parsed.locationTokens, ['san francisco']);
   });
 
+  it('recognizes location names followed by punctuation', () => {
+    const parsed = parseQueryTokens('Mumbai, Maharashtra');
+    assert.deepStrictEqual(parsed.roleTokens, []);
+    assert.deepStrictEqual(parsed.locationTokens, ['mumbai', 'maharashtra']);
+  });
+
   it('ranks role matches in requested location higher than role matches elsewhere', () => {
     const blrReact = makeJob({
       id: 'blr-react',
@@ -501,9 +545,8 @@ describe('Combined Role + Location Keyword Query Suite', () => {
       query: 'React Developer Bangalore',
     });
 
-    assert.strictEqual(results.length, 2);
+    assert.strictEqual(results.length, 1);
     assert.strictEqual(results[0].id, 'blr-react');
-    assert.ok((results[0].score ?? 0) > (results[1].score ?? 0));
   });
 
   it('negative: irrelevant role in matching location is NOT returned', () => {
@@ -520,13 +563,12 @@ describe('Combined Role + Location Keyword Query Suite', () => {
       location: 'Remote',
     });
 
-    // Query "React Developer Bangalore" should NOT match accountant in Bangalore
+    // Both the role and the requested location are required.
     const results = filterAndRankJobs([accountantInBlr, reactEngineer], {
       query: 'React Developer Bangalore',
     });
 
-    assert.strictEqual(results.length, 1);
-    assert.strictEqual(results[0].id, 'react-eng');
+    assert.strictEqual(results.length, 0);
   });
 
   it('pure location query without role keywords matches all roles in that location', () => {

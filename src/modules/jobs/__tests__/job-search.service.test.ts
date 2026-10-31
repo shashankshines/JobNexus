@@ -53,6 +53,17 @@ class TimeoutProvider implements JobProvider {
   }
 }
 
+class StaticProvider implements JobProvider {
+  readonly id = 'static';
+  readonly name = 'StaticProvider';
+
+  constructor(private readonly jobs: NormalizedJob[]) {}
+
+  async fetchJobs(): Promise<NormalizedJob[]> {
+    return this.jobs;
+  }
+}
+
 describe('JobSearchService Integration & Resilience Tests', () => {
   it('aggregates jobs from healthy providers successfully', async () => {
     const service = new JobSearchService([new HealthyProvider()]);
@@ -116,5 +127,51 @@ describe('JobSearchService Integration & Resilience Tests', () => {
     assert.ok('source' in sampleJob);
     assert.ok('tags' in sampleJob);
     assert.ok('description' in sampleJob);
+  });
+
+  it('keeps selected role filters independent in search results and cache keys', async () => {
+    const service = new JobSearchService([
+      new StaticProvider([
+        {
+          ...mockHealthyJob,
+          id: 'frontend',
+          sourceId: 'frontend',
+          applicationUrl: 'https://innovatecorp.com/jobs/frontend',
+          title: 'Frontend Developer',
+        },
+        {
+          ...mockHealthyJob,
+          id: 'backend',
+          sourceId: 'backend',
+          applicationUrl: 'https://innovatecorp.com/jobs/backend',
+          title: 'Backend Developer',
+        },
+      ]),
+    ]);
+
+    const frontend = await service.searchJobs({ role: 'Frontend Developer' });
+    const backend = await service.searchJobs({ role: 'Backend Developer' });
+
+    assert.deepStrictEqual(frontend.jobs.map((job) => job.id), ['frontend']);
+    assert.deepStrictEqual(backend.jobs.map((job) => job.id), ['backend']);
+  });
+
+  it('reports the full matching count and response truncation separately', async () => {
+    const jobs = Array.from({ length: 260 }, (_, index) => ({
+      ...mockHealthyJob,
+      id: `job-${String(index).padStart(3, '0')}`,
+      sourceId: String(index),
+      applicationUrl: `https://innovatecorp.com/jobs/${index}`,
+      title: `Software Engineer ${index}`,
+      industry: 'technology',
+    }));
+    const service = new JobSearchService([new StaticProvider(jobs)]);
+
+    const response = await service.searchJobs({});
+
+    assert.strictEqual(response.count, 260);
+    assert.strictEqual(response.returnedCount, 250);
+    assert.strictEqual(response.jobs.length, 250);
+    assert.strictEqual(response.truncated, true);
   });
 });

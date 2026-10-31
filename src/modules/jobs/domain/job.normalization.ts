@@ -172,40 +172,41 @@ export function normalizeLocation(rawLocation?: string): {
   location: string;
   isRemote: boolean;
   isIndiaEligible: boolean;
-  workplaceType: 'remote' | 'hybrid' | 'onsite';
+  workplaceType: 'remote' | 'hybrid' | 'onsite' | 'unknown';
 } {
   const clean = (rawLocation || '').trim();
   const lower = clean.toLowerCase();
 
   const isHybrid = lower.includes('hybrid') || lower.includes('partially remote');
   const isRemote =
-    !clean ||
-    lower.includes('remote') ||
-    lower.includes('anywhere') ||
-    lower.includes('worldwide') ||
-    lower.includes('global') ||
-    lower.includes('telecommute') ||
-    lower.includes('distributed') ||
-    lower.includes('work from home');
-
+    !isHybrid &&
+    (lower.includes('remote') ||
+      lower.includes('anywhere') ||
+      lower.includes('worldwide') ||
+      lower.includes('global') ||
+      lower.includes('telecommute') ||
+      lower.includes('distributed') ||
+      lower.includes('work from home'));
   const isIndiaDirect = INDIAN_HUBS.some((hub) => lower.includes(hub));
   const isWorldwideRemote =
     lower.includes('anywhere in the world') ||
     lower.includes('worldwide') ||
     lower.includes('global') ||
-    lower === 'remote';
+    lower.includes('remote worldwide');
 
   const isIndiaEligible = isIndiaDirect || isWorldwideRemote;
 
-  const workplaceType: 'remote' | 'hybrid' | 'onsite' = isHybrid
+  const workplaceType: 'remote' | 'hybrid' | 'onsite' | 'unknown' = !clean
+    ? 'unknown'
+    : isHybrid
     ? 'hybrid'
     : isRemote
     ? 'remote'
     : 'onsite';
 
   return {
-    location: clean || 'Remote',
-    isRemote: isRemote || isHybrid,
+    location: clean || 'Location not provided',
+    isRemote,
     isIndiaEligible,
     workplaceType,
   };

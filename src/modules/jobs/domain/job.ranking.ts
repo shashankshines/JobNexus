@@ -430,11 +430,12 @@ export function parseQueryTokens(query: string): ParsedQuery {
   const roleTokens: string[] = [];
 
   for (const word of words) {
-    if (COMMON_STOP_WORDS.has(word)) {
+    const locationWord = word.replace(/^[,;:!?()[\]{}]+|[,;:!?()[\]{}]+$/g, '');
+    if (COMMON_STOP_WORDS.has(locationWord)) {
       continue;
     }
-    if (isKnownLocation(word)) {
-      locationTokens.push(word);
+    if (isKnownLocation(locationWord)) {
+      locationTokens.push(locationWord);
     } else {
       roleTokens.push(word);
     }
@@ -478,25 +479,23 @@ export function matchesSingleLocation(
   const f = filter.trim().toLowerCase();
   if (!f) return true;
 
-  // Remote / Worldwide check
-  if (
-    f === 'remote' ||
+  const worldwideFilter =
     f === 'remote (worldwide)' ||
     f === 'worldwide' ||
     f === 'global' ||
     f === 'anywhere in the world' ||
-    f === 'anywhere'
-  ) {
-    if (isRemote) return true;
-    if (
-      jobLoc.includes('remote') ||
-      jobLoc.includes('worldwide') ||
-      jobLoc.includes('anywhere in the world') ||
-      jobLoc.includes('global') ||
-      jobLoc.includes('anywhere')
-    ) {
-      return true;
-    }
+    f === 'anywhere';
+  if (worldwideFilter) {
+    return (
+      isRemote &&
+      (jobLoc.includes('worldwide') ||
+        jobLoc.includes('anywhere in the world') ||
+        jobLoc.includes('global') ||
+        jobLoc.includes('open to all countries'))
+    );
+  }
+  if (f === 'remote') {
+    return isRemote;
   }
 
   // Direct safe match
@@ -609,7 +608,15 @@ export function matchesLocation(job: NormalizedJob, filterLocation: string): boo
 
   const rawFilter = filterLocation.trim().toLowerCase();
   const jobLoc = (job.location || '').toLowerCase();
-  const isRemote = Boolean(job.isRemote || job.workplaceType === 'remote');
+  const workplace = job.workplaceType ||
+    (/\b(hybrid|partially remote)\b/i.test(jobLoc)
+      ? 'hybrid'
+      : job.isRemote || /\b(remote|telecommute|work from home)\b/i.test(jobLoc)
+        ? 'remote'
+        : jobLoc.trim()
+          ? 'onsite'
+          : 'unknown');
+  const isRemote = workplace === 'remote';
   const isIndiaEligible = Boolean(job.isIndiaEligible);
 
   // 1. Direct atomic match with variant expansion
@@ -817,6 +824,101 @@ export function matchesLevel(job: NormalizedJob, filterLevel?: string): boolean 
   return false;
 }
 
+const ROLE_TITLE_SYNONYMS: Record<string, string[]> = {
+  'frontend developer': [
+    'frontend developer',
+    'front end developer',
+    'frontend engineer',
+    'front end engineer',
+    'ui developer',
+    'web ui engineer',
+  ],
+  'frontend engineer': [
+    'frontend engineer',
+    'front end engineer',
+    'frontend developer',
+    'front end developer',
+    'ui developer',
+    'web ui engineer',
+  ],
+  'backend developer': [
+    'backend developer',
+    'backend engineer',
+    'api developer',
+    'server side developer',
+  ],
+  'backend engineer': [
+    'backend engineer',
+    'backend developer',
+    'api developer',
+    'server side developer',
+  ],
+  'full stack developer': ['full stack developer', 'fullstack developer', 'full stack engineer', 'fullstack engineer'],
+  'data analyst': ['data analyst', 'bi analyst', 'business intelligence analyst', 'reporting analyst'],
+  'data engineer': ['data engineer', 'etl engineer', 'data pipeline engineer'],
+  teacher: ['teacher', 'school teacher', 'educator', 'teaching faculty', 'teaching staff'],
+  accountant: ['accountant', 'financial accountant', 'accounts executive', 'chartered accountant'],
+  'hr executive': ['hr executive', 'hr generalist', 'human resources executive'],
+  'sales executive': ['sales executive', 'business development executive', 'sales representative'],
+  'customer support': ['customer support', 'customer service representative', 'support executive'],
+  'customer service': [
+    'customer service',
+    'customer support',
+    'customer service representative',
+    'support executive',
+    'call center',
+    'helpdesk',
+  ],
+  'react developer': [
+    'react developer',
+    'react engineer',
+    'frontend developer',
+    'frontend engineer',
+    'front end developer',
+    'front end engineer',
+    'ui developer',
+  ],
+  'ui ux designer': ['ui ux designer', 'ux designer', 'ui designer', 'product designer'],
+  'ui ux product designer': ['ui ux designer', 'ux designer', 'ui designer', 'product designer'],
+};
+
+function normalizeSearchPhrase(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9+#]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function phraseMatches(target: string, phrase: string): boolean {
+  const normalizedTarget = normalizeSearchPhrase(target);
+  const normalizedPhrase = normalizeSearchPhrase(phrase);
+  return Boolean(normalizedPhrase) && ` ${normalizedTarget} `.includes(` ${normalizedPhrase} `);
+}
+
+function getRoleAlternatives(role: string): string[] {
+  const cleanRole = normalizeSearchPhrase(role).replace(/^remote /, '');
+  return ROLE_TITLE_SYNONYMS[cleanRole] || [cleanRole];
+}
+
+export function matchesRole(job: NormalizedJob, filterRole?: string): boolean {
+  if (!filterRole?.trim()) return true;
+
+  const role = normalizeSearchPhrase(filterRole).replace(/^remote /, '');
+  if (!role || role === 'remote' || role.startsWith('all remote ')) return true;
+
+  const title = normalizeSearchPhrase(job.title || '');
+  const tags = (job.tags || []).map(normalizeSearchPhrase);
+  const alternatives = getRoleAlternatives(role);
+
+  if (alternatives.some((alternative) => phraseMatches(title, alternative))) return true;
+  if (alternatives.some((alternative) => tags.some((tag) => phraseMatches(tag, alternative)))) return true;
+
+  const roleTokens = role.split(' ').filter(Boolean);
+  return roleTokens.length > 0 && roleTokens.every((token) => title.split(' ').includes(token));
+}
+
 /**
  * Evaluates whether a job matches a search query.
  * Distinguishes role tokens from location tokens so that:
@@ -835,85 +937,65 @@ export function matchesQuery(
   }
 
   const parsed = parseQueryTokens(query);
-  const title = (job.title || '').toLowerCase();
-  const company = (job.company || '').toLowerCase();
-  const tags = (job.tags || []).map((t) => t.toLowerCase());
-  const desc = (job.description || '').toLowerCase();
+  const title = normalizeSearchPhrase(job.title || '');
+  const company = normalizeSearchPhrase(job.company || '');
+  const tags = (job.tags || []).map(normalizeSearchPhrase);
+  const description = normalizeSearchPhrase(job.description || '');
+  const category = normalizeSearchPhrase(`${job.industry || ''} ${job.category || ''}`);
+  const queryPhrase = normalizeSearchPhrase(parsed.rolePhrase);
+  const queryTokens = Array.from(new Set(queryPhrase.split(' ').filter(Boolean)));
 
-  let score = 0;
-
-  // Case 1: Query contains role tokens (e.g. "React Developer", "React Developer Bangalore")
   if (parsed.hasRoleTokens) {
-    let hasRoleMatch = false;
+    let score = 0;
+    const titleAliases = getRoleAlternatives(queryPhrase);
+    const exactTitleMatch = phraseMatches(title, queryPhrase);
+    const aliasTitleMatch = titleAliases.some((alias) => phraseMatches(title, alias));
+    const allTitleTokensMatch =
+      queryTokens.length > 0 && queryTokens.every((token) => title.split(' ').includes(token));
+    const allTitleOrTagTokensMatch =
+      queryTokens.length > 0 &&
+      queryTokens.every((token) => title.split(' ').includes(token) || tags.some((tag) => tag.split(' ').includes(token)));
 
-    // Exact role phrase match in title
-    if (parsed.rolePhrase && title.includes(parsed.rolePhrase)) {
-      score += 35;
-      hasRoleMatch = true;
-    }
-
-    // Individual role tokens match across title, tags, company, description
-    for (const token of parsed.roleTokens) {
-      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-
-      if (regex.test(title)) {
-        score += 15;
-        hasRoleMatch = true;
-      } else if (tags.some((t) => regex.test(t))) {
-        score += 10;
-        hasRoleMatch = true;
-      } else if (regex.test(company)) {
-        score += 8;
-        hasRoleMatch = true;
-      } else if (regex.test(desc)) {
-        score += 2;
-        hasRoleMatch = true;
+    if (exactTitleMatch) {
+      score = 180;
+    } else if (aliasTitleMatch) {
+      score = 145;
+    } else if (allTitleTokensMatch) {
+      score = 130;
+    } else if (allTitleOrTagTokensMatch) {
+      score = 85 + queryTokens.filter((token) => title.split(' ').includes(token)).length * 10;
+    } else if (queryTokens.every((token) => company.split(' ').includes(token))) {
+      score = 55;
+    } else if (queryTokens.every((token) => category.split(' ').includes(token))) {
+      score = 50;
+    } else if (phraseMatches(description, queryPhrase)) {
+      score = 18;
+    } else if (queryTokens.length === 1) {
+      const token = queryTokens[0];
+      const contextualSynonyms = ROLE_CONTEXTUAL_MAPPINGS[token] || [];
+      if (contextualSynonyms.some((synonym) => phraseMatches(title, synonym))) {
+        score = 70;
+      } else if (contextualSynonyms.some((synonym) => tags.some((tag) => phraseMatches(tag, synonym)))) {
+        score = 55;
+      } else if (tags.some((tag) => tag.split(' ').includes(token))) {
+        score = 90;
+      } else if (title.split(' ').includes(token)) {
+        score = 110;
+      } else if (company.split(' ').includes(token)) {
+        score = 45;
+      } else if (description.split(' ').includes(token)) {
+        score = 12;
       }
     }
 
-    // If direct token match did not match, check contextual mappings across roles & industries
-    if (!hasRoleMatch) {
-      const candidates = [parsed.rolePhrase, ...parsed.roleTokens].filter(Boolean);
-      for (const candidate of candidates) {
-        const contextualSynonyms = ROLE_CONTEXTUAL_MAPPINGS[candidate.toLowerCase()] || [];
-        for (const syn of contextualSynonyms) {
-          const escaped = syn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-          if (regex.test(title)) {
-            score += 12;
-            hasRoleMatch = true;
-            break;
-          } else if (tags.some((t) => regex.test(t))) {
-            score += 8;
-            hasRoleMatch = true;
-            break;
-          } else if (regex.test(desc)) {
-            score += 2;
-            hasRoleMatch = true;
-            break;
-          }
-        }
-        if (hasRoleMatch) break;
-      }
-    }
-
-    // If query specified roles/skills, this job MUST match at least one role token or contextual synonym!
-    if (!hasRoleMatch) {
+    if (score === 0) return { matches: false, baseScore: 0 };
+    if (
+      parsed.hasLocationTokens &&
+      !parsed.locationTokens.some((location) => matchesLocation(job, location))
+    ) {
       return { matches: false, baseScore: 0 };
     }
-
-    // If query ALSO included location terms (e.g. "React Developer Bangalore"),
-    // confer a high geographic boost when the location matches.
-    if (parsed.hasLocationTokens) {
-      const matchesAnyLocationToken = parsed.locationTokens.some((loc) =>
-        matchesLocation(job, loc)
-      );
-      if (matchesAnyLocationToken) {
-        score += 25;
-      }
-    }
-
+    if (parsed.hasLocationTokens) score += 15;
     return { matches: true, baseScore: score };
   }
 
@@ -1120,39 +1202,34 @@ export function matchesRemote(job: NormalizedJob, filterRemote?: string): boolea
   if (!filterRemote || !filterRemote.trim()) return true;
   const filter = filterRemote.trim().toLowerCase();
   const loc = (job.location || '').toLowerCase();
+  const workplace = job.workplaceType ||
+    (/\b(hybrid|partially remote)\b/i.test(loc)
+      ? 'hybrid'
+      : job.isRemote || /\b(remote|telecommute|work from home)\b/i.test(loc)
+        ? 'remote'
+        : loc.trim()
+          ? 'onsite'
+          : 'unknown');
 
   if (filter === 'remote') {
-    return (
-      job.isRemote === true ||
-      job.workplaceType === 'remote' ||
-      loc.includes('remote')
-    );
+    return workplace === 'remote';
   }
   if (filter === 'onsite' || filter === 'on-site') {
-    return (
-      job.workplaceType === 'onsite' ||
-      (!job.isRemote &&
-        job.workplaceType !== 'hybrid' &&
-        !loc.includes('remote') &&
-        !loc.includes('hybrid'))
-    );
+    return workplace === 'onsite';
   }
   if (filter === 'hybrid') {
-    return job.workplaceType === 'hybrid' || loc.includes('hybrid');
+    return workplace === 'hybrid';
   }
   if (filter === 'remote_india') {
-    return (
-      (job.isRemote === true || job.workplaceType === 'remote') &&
-      Boolean(job.isIndiaEligible)
-    );
+    return workplace === 'remote' && Boolean(job.isIndiaEligible);
   }
   if (filter === 'remote_worldwide') {
     return (
-      (job.isRemote === true || job.workplaceType === 'remote') &&
+      workplace === 'remote' &&
       (loc.includes('worldwide') ||
         loc.includes('anywhere in the world') ||
-        loc === 'remote' ||
-        Boolean(job.isIndiaEligible))
+        loc.includes('global') ||
+        loc.includes('open to all countries'))
     );
   }
 
@@ -1183,6 +1260,7 @@ export function filterAndRankJobs(
   params: JobSearchParams
 ): NormalizedJob[] {
   const query = params.query || '';
+  const role = params.role || '';
   const company = params.company || '';
   const location = params.location || '';
   const type = params.type || '';
@@ -1195,9 +1273,10 @@ export function filterAndRankJobs(
   const filtered: NormalizedJob[] = [];
 
   for (const job of jobs) {
-    // 1. Check keyword/role
+    // Independent keyword and selected-role dimensions must both match.
     const queryResult = matchesQuery(job, query);
     if (!queryResult.matches) continue;
+    if (!matchesRole(job, role)) continue;
 
     // 2. Check company filter
     if (!matchesCompany(job, company)) continue;
@@ -1218,6 +1297,7 @@ export function filterAndRankJobs(
     if (!matchesIndustry(job, industry)) continue;
 
     let score = queryResult.baseScore;
+    if (role) score += 100;
 
     // Company filter match boost
     if (company && matchesCompany(job, company)) {
@@ -1260,7 +1340,8 @@ export function filterAndRankJobs(
     }
     const timeA = new Date(a.publishedAt).getTime() || 0;
     const timeB = new Date(b.publishedAt).getTime() || 0;
-    return timeB - timeA;
+    if (timeA !== timeB) return timeB - timeA;
+    return a.id.localeCompare(b.id);
   });
 
   // When browsing the unconstrained discovery feed (no query, no specific industry or company filters),
@@ -1268,6 +1349,7 @@ export function filterAndRankJobs(
   // see diverse opportunities across sectors on the landing screen.
   const isUnconstrained =
     !query &&
+    !role &&
     !company &&
     !location &&
     !type &&

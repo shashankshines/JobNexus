@@ -87,9 +87,7 @@ describe('JobNexus — Blazing Fast Search & Pill Caching Architecture', () => {
     const service = new JobSearchService([trackingProvider]);
 
     // 1st Search / Pill click: Industry "technology"
-    const start1 = performance.now();
     const res1 = await service.searchJobs({ industry: 'technology' });
-    const duration1 = performance.now() - start1;
 
     assert.strictEqual(res1.jobs.length, 1);
     assert.strictEqual(res1.jobs[0].title, 'Senior Frontend Architect');
@@ -106,7 +104,7 @@ describe('JobNexus — Blazing Fast Search & Pill Caching Architecture', () => {
     assert.ok(duration2 < 10, `Cached query should take under 10ms, took ${duration2}ms`);
   });
 
-  it('verifies frontend page.tsx implements clientSearchCacheRef, allRawJobsCacheRef, and abort controllers', () => {
+  it('verifies frontend caches exact searches and aborts stale requests', () => {
     const pagePath = path.resolve(process.cwd(), 'src/app/page.tsx');
     const pageContent = fs.readFileSync(pagePath, 'utf8');
 
@@ -120,14 +118,14 @@ describe('JobNexus — Blazing Fast Search & Pill Caching Architecture', () => {
       'page.tsx must check clientSearchCacheRef before triggering network fetch'
     );
 
-    // 2. Full Catalog Cache for Instant In-Memory Optimistic Filtering
+    // Searches use exact server-filtered results rather than a partial client catalog.
     assert.ok(
-      pageContent.includes('allRawJobsCacheRef = useRef<Job[]>([])'),
-      'page.tsx must maintain allRawJobsCacheRef'
+      !pageContent.includes('filterJobsClientSide('),
+      'page.tsx must not apply a second, incomplete client-side filter'
     );
     assert.ok(
-      pageContent.includes('filterJobsClientSide(allRawJobsCacheRef.current,'),
-      'page.tsx must run optimistic client-side filter to eliminate skeleton flicker'
+      pageContent.includes('const cacheKey = `${requestKey}::auth='),
+      'page.tsx must keep authenticated and anonymous result caches separate'
     );
 
     // 3. AbortController for Rapid Clicks
@@ -136,8 +134,8 @@ describe('JobNexus — Blazing Fast Search & Pill Caching Architecture', () => {
       'page.tsx must maintain activeSearchAbortRef'
     );
     assert.ok(
-      pageContent.includes('activeSearchAbortRef.current.abort()'),
-      'page.tsx must abort pending requests when user clicks another pill'
+      pageContent.includes('activeSearchAbortRef.current?.abort()'),
+      'page.tsx must abort pending requests when a newer search starts'
     );
   });
 

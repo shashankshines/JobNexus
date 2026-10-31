@@ -17,7 +17,7 @@ export interface NormalizedJob {
   tags: string[];
   status?: 'active' | 'expired' | 'unknown';
   isIndiaEligible?: boolean;
-  workplaceType?: 'remote' | 'hybrid' | 'onsite';
+  workplaceType?: 'remote' | 'hybrid' | 'onsite' | 'unknown';
   score?: number;
   alternateSources?: Array<{ sourceName: string; sourceUrl?: string; applicationUrl: string }>;
   salary?: string;
@@ -27,6 +27,7 @@ export interface NormalizedJob {
 
 export interface JobSearchParams {
   query?: string;
+  role?: string;
   company?: string;
   location?: string;
   type?: string;
@@ -69,7 +70,10 @@ export interface ProviderDiagnostic {
 
 export interface JobSearchResponse {
   jobs: LegacyJob[];
+  /** Total matching jobs before the response cap is applied. */
   count: number;
+  returnedCount: number;
+  truncated: boolean;
   sources: string[];
   diagnostics?: ProviderDiagnostic[];
 }
@@ -103,7 +107,7 @@ export function toLegacyJob(job: NormalizedJob): LegacyJob {
     description: job.description,
     score: job.score,
     isRemote: job.isRemote,
-    workplaceType: job.workplaceType || (job.isRemote ? 'remote' : 'onsite'),
+    workplaceType: job.workplaceType ?? (job.isRemote ? 'remote' : job.location?.trim() ? 'onsite' : 'unknown'),
     isIndiaEligible: job.isIndiaEligible,
     isFresh,
     salary: job.salary,

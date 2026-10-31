@@ -94,6 +94,24 @@ describe('Job Normalization & Sanitization Unit Tests', () => {
       assert.strictEqual(res3.isRemote, false);
       assert.strictEqual(res3.isIndiaEligible, false);
     });
+
+    it('does not infer geographic eligibility or workplace type from incomplete locations', () => {
+      const genericRemote = normalizeLocation('Remote');
+      assert.strictEqual(genericRemote.isRemote, true);
+      assert.strictEqual(genericRemote.isIndiaEligible, false);
+      assert.strictEqual(genericRemote.workplaceType, 'remote');
+
+      const hybrid = normalizeLocation('Pune, India (Hybrid)');
+      assert.strictEqual(hybrid.isRemote, false);
+      assert.strictEqual(hybrid.isIndiaEligible, true);
+      assert.strictEqual(hybrid.workplaceType, 'hybrid');
+
+      const unknown = normalizeLocation('');
+      assert.strictEqual(unknown.location, 'Location not provided');
+      assert.strictEqual(unknown.isRemote, false);
+      assert.strictEqual(unknown.isIndiaEligible, false);
+      assert.strictEqual(unknown.workplaceType, 'unknown');
+    });
   });
 
   describe('normalizeEmploymentType & normalizeSeniority', () => {

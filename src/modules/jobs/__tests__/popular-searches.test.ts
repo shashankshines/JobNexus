@@ -104,6 +104,18 @@ describe('JobNexus — Dynamic Popular Search Pills & Average Search Volume Suit
     assert.strictEqual(beforeCount, afterCount, 'Noisy searches should be ignored');
   });
 
+  it('records only the role portion of mixed searches and ignores location-only searches', () => {
+    PopularSearchesService.recordSearch('React Developer in Bengaluru');
+    PopularSearchesService.recordSearch('Mumbai, Maharashtra');
+
+    const pills = PopularSearchesService.getPopularPills(20);
+    const reactPill = pills.find((pill) => pill.query === 'React Developer');
+
+    assert.ok(reactPill);
+    assert.strictEqual(reactPill.searchCount, 3751);
+    assert.ok(!pills.some((pill) => /bengaluru|mumbai|maharashtra/i.test(pill.query)));
+  });
+
   it('respects requested limits and returns metadata via getPopularSearchesResponse', () => {
     const response = PopularSearchesService.getPopularSearchesResponse(5);
 
@@ -174,11 +186,11 @@ describe('JobNexus — Dynamic Popular Search Pills & Average Search Volume Suit
     const cacheReturn = pageContent.indexOf('clientSearchCacheRef.current.get(cacheKey)');
 
     assert.ok(recordRequest >= 0 && recordRequest < cacheReturn, 'Search volume must be recorded before a cached result can return');
-    assert.ok(pageContent.includes('const popularityQuery = effectiveQuery'), 'Only role/query terms must be recorded');
-    assert.ok(pageContent.includes('if (recordPopularity && popularityQuery.trim().length >= 2)'), 'Only explicit submissions must count toward popularity');
-    assert.ok(!pageContent.includes('effectiveQuery || searchCompany || searchLoc'), 'Company and location-only searches must not be recorded');
+    assert.ok(pageContent.includes('const popularityQuery = searchCriteria.query || searchCriteria.role'), 'Only role/query terms must be recorded');
+    assert.ok(pageContent.includes('if (options.recordPopularity && popularityQuery.trim().length >= 2)'), 'Only explicit submissions must count toward popularity');
+    assert.ok(!pageContent.includes('searchCriteria.query || searchCriteria.role || searchCriteria.company'), 'Company and location-only searches must not be recorded');
     assert.ok(pageContent.includes("body: JSON.stringify({ query: popularityQuery })"), 'Location must not be sent to the popularity API');
-    assert.ok(/submittedSearch\.company,\s*true/.test(pageContent), 'Submitting the form must record its role query');
+    assert.ok(/executeSearch\(\{[\s\S]*?query,[\s\S]*?role: selectedRole,[\s\S]*?\}, \{ recordPopularity: true \}\)/.test(pageContent), 'Submitting the form must record its role query');
     assert.ok(pageContent.includes('applyPopularPills(data)'), 'The UI must apply authoritative server rankings after searches');
     assert.ok(pageContent.includes("fetch('/api/jobs/popular?limit=10', { cache: 'no-store' })"), 'The visible list must refresh from uncached server data');
     assert.ok(pageContent.includes('window.setInterval(() => void refreshPopularPills(), 15_000)'), 'The visible list must periodically pick up other recent searches');

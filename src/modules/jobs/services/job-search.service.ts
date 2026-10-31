@@ -242,7 +242,18 @@ export class JobSearchService {
   }
 
   async searchJobs(params: JobSearchParams): Promise<JobSearchResponse> {
-    const cacheKey = `${params.query || ''}::${params.company || ''}::${params.location || ''}::${params.type || ''}::${params.level || ''}::${params.remote || ''}::${params.industry || ''}::${params.limit || ''}`;
+    const normalizeFilter = (value?: string) => value?.trim().toLowerCase() || '';
+    const cacheKey = JSON.stringify([
+      normalizeFilter(params.query),
+      normalizeFilter(params.role),
+      normalizeFilter(params.company),
+      normalizeFilter(params.location),
+      normalizeFilter(params.type),
+      normalizeFilter(params.level),
+      normalizeFilter(params.remote),
+      normalizeFilter(params.industry),
+      params.limit || '',
+    ]);
     const activeCache = this.isCustom ? this.instanceSearchCache : JobSearchService.searchCache;
 
     const cached = activeCache.get(cacheKey);
@@ -274,6 +285,8 @@ export class JobSearchService {
     const response: JobSearchResponse = {
       jobs: legacyJobs,
       count: rankedJobs.length,
+      returnedCount: limitedJobs.length,
+      truncated: rankedJobs.length > limitedJobs.length,
       sources: this.providers.map((p) => p.name),
       diagnostics,
     };
@@ -330,4 +343,3 @@ export class JobSearchService {
     return result;
   }
 }
-

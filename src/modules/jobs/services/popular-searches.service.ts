@@ -1,4 +1,5 @@
 import { PopularSearchPill, PopularSearchesResponse } from '../domain/popular-searches.types';
+import { parseQueryTokens } from '../domain/job.ranking';
 import { DurableStore } from '../../storage/durable.store';
 
 const WINDOW_DAYS = 30;
@@ -148,6 +149,25 @@ function normalizeKey(str: string): string {
     .trim();
 }
 
+function getRoleOnlyQuery(rawQuery: string): string {
+  const parsed = parseQueryTokens(rawQuery);
+  if (!parsed.hasRoleTokens) return '';
+
+  let roleQuery = rawQuery;
+  for (const location of parsed.locationTokens) {
+    const escaped = location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    roleQuery = roleQuery.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), ' ');
+  }
+  roleQuery = roleQuery
+    .replace(/\b(in|at|near|within|of)\b/gi, ' ')
+    .replace(/[,\s]+/g, ' ')
+    .trim();
+
+  return normalizeKey(roleQuery) === normalizeKey(parsed.rolePhrase)
+    ? roleQuery
+    : parsed.rolePhrase;
+}
+
 export class PopularSearchesService {
   private static store = new DurableStore<PopularSearchPill & { dailySearches?: Record<string, number> }>('popular_searches');
   private static initialized = false;
@@ -177,7 +197,16 @@ export class PopularSearchesService {
 
   static getPopularPills(limit = 8): PopularSearchPill[] {
     this.initDefaults();
-    const storedItems = this.store.getAll();
+    const storedItems = this.store.getAll().flatMap((item) => {
+      const roleQuery = getRoleOnlyQuery(item.query);
+      if (!roleQuery) return [];
+      const hasLocationTokens = parseQueryTokens(item.query).hasLocationTokens;
+      return [{
+        ...item,
+        query: roleQuery,
+        label: hasLocationTokens ? `${resolveEmojiIcon(roleQuery)} ${roleQuery}` : item.label,
+      }];
+    });
     const now = new Date();
     const hasRecentSearches = storedItems.some((item) => this.getRecentSearchCount(item, now) > 0);
     const items = storedItems.map((item) => {
@@ -237,7 +266,10 @@ export class PopularSearchesService {
     this.initDefaults();
     const pills = this.getPopularPills(limit);
     const allItems = this.store.getAll();
-    const totalSearchesRecorded = allItems.reduce((acc, p) => acc + p.searchCount, 0);
+    const totalSearchesRecorded = allItems.reduce(
+      (acc, pill) => acc + (getRoleOnlyQuery(pill.query) ? pill.searchCount : 0),
+      0
+    );
 
     return {
       pills,
@@ -249,7 +281,7 @@ export class PopularSearchesService {
 
   static recordSearch(rawQuery: string, limit = 8): PopularSearchPill[] {
     this.initDefaults();
-    const clean = (rawQuery || '').trim();
+    const clean = getRoleOnlyQuery(rawQuery || '');
     if (!clean || clean.length < 2) {
       return this.getPopularPills(limit);
     }
@@ -265,7 +297,7 @@ export class PopularSearchesService {
 
     // Check for existing query match
     for (const item of allItems) {
-      const itemNormQuery = normalizeKey(item.query);
+      const itemNormQuery = normalizeKey(getRoleOnlyQuery(item.query));
       const itemNormLabel = normalizeKey(item.label);
       if (itemNormQuery === normQuery || itemNormLabel === normQuery) {
         matchedItem = item;
