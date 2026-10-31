@@ -2861,7 +2861,12 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
 /* ==========================================================================
    Responsive Search Console Architecture
    ========================================================================== */
+/* Keep the complete search console above its following industry rail.
+   Framer Motion transforms create stacking contexts; z-index on a nested
+   dropdown cannot escape the search console's ancestor stacking context. */
 .search-console-form {
+  position: relative;
+  z-index: 20;
   width: 100%;
   transition: padding 0.2s ease;
 }
@@ -3059,7 +3064,11 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
 }
 
 /* Multi-Industry Horizontal Rail (Streamlined & Clean) */
+/* This section follows the search console in the DOM and must remain
+   below its dropdown layer, even while its entrance animation is active. */
 .industry-showcase-container {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 100%;
   margin: 0.5rem auto 0.25rem;
@@ -3070,12 +3079,10 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
 }
 
 .industry-showcase-wrapper {
-  /* position: relative; */
   display: flex;
   align-items: center;
   width: 100%;
   gap: 0.45rem;
-  z-index: 0;
 }
 
 .industry-showcase-pills {
