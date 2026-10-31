@@ -104,17 +104,16 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
     assert.ok(!staleResults.some((j) => j.id === 'job-design-1'), 'Genuine design job was blocked by stale industry');
   });
 
-  it('updates role suggestions without searching until the form is submitted', () => {
+  it('updates keyword drafts without clearing independent role or industry filters', () => {
     const pagePath = path.resolve(process.cwd(), 'src/app/page.tsx');
     const content = fs.readFileSync(pagePath, 'utf8');
 
-    // handleJobSuggestionClick must clear industry and selectedRole
     const suggestionHandlerMatch = content.match(/const handleJobSuggestionClick = \(suggestion: string\) => \{([\s\S]*?)\};/);
     assert.ok(suggestionHandlerMatch, 'handleJobSuggestionClick must be defined in page.tsx');
     const handlerBody = suggestionHandlerMatch[1];
 
-    assert.ok(handlerBody.includes("setIndustry('')"), 'handleJobSuggestionClick must setIndustry to empty string');
-    assert.ok(handlerBody.includes("setSelectedRole('')"), 'handleJobSuggestionClick must setSelectedRole to empty string');
+    assert.ok(!handlerBody.includes("setIndustry('')"), 'Keyword suggestions must preserve the industry filter');
+    assert.ok(!handlerBody.includes("setSelectedRole('')"), 'Keyword suggestions must preserve the role filter');
     assert.ok(!handlerBody.includes('executeSearch('), 'Selecting a suggestion must not execute a search');
     const submitHandlerMatch = content.match(/const handleSearchSubmit = \(e\?: React\.FormEvent\) => \{([\s\S]*?)\n  \};/);
     assert.ok(submitHandlerMatch, 'handleSearchSubmit must be defined in page.tsx');
@@ -123,7 +122,7 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
     assert.ok(content.includes('Your selected criteria apply only after you click Search Jobs.'), 'The UI must explain that edits are applied on submit');
   });
 
-  it('verifies that page.tsx clears industry in handleRoleSelect', () => {
+  it('keeps industry independent when a role is selected', () => {
     const pagePath = path.resolve(process.cwd(), 'src/app/page.tsx');
     const content = fs.readFileSync(pagePath, 'utf8');
 
@@ -131,21 +130,23 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
     assert.ok(roleSelectMatch, 'handleRoleSelect must be defined in page.tsx');
     const handlerBody = roleSelectMatch[1];
 
-    assert.ok(handlerBody.includes("setIndustry('')"), 'handleRoleSelect must setIndustry to empty string');
+    assert.ok(!handlerBody.includes("setIndustry('')"), 'handleRoleSelect must preserve the industry filter');
     assert.ok(!handlerBody.includes('executeSearch('), 'Selecting a role must not execute a search');
   });
 
-  it('verifies that page.tsx resets industry when clicking a role quick pill', () => {
+  it('executes quick pills immediately without carrying an unrelated role or industry filter', () => {
     const pagePath = path.resolve(process.cwd(), 'src/app/page.tsx');
     const content = fs.readFileSync(pagePath, 'utf8');
 
-    const quickPillMatch = content.match(/const handleQuickPillClick = \(pill: QuickPill\) => \{([\s\S]*?)\};/);
+    const quickPillMatch = content.match(/const handleQuickPillClick = \(pill: QuickPill\) => \{([\s\S]*?)\n  \};/);
     assert.ok(quickPillMatch, 'handleQuickPillClick must be defined in page.tsx');
     const handlerBody = quickPillMatch[1];
 
-    assert.ok(handlerBody.includes("setIndustry('')"), 'handleQuickPillClick must reset a stale industry filter');
-    assert.ok(handlerBody.includes('setQuery(pill.query ?? \'\')'), 'handleQuickPillClick must set the role query');
-    assert.ok(!handlerBody.includes('executeSearch('), 'Clicking a role pill must not execute a search');
+    assert.ok(handlerBody.includes("role: ''"), 'A fresh quick search must clear a conflicting selected role');
+    assert.ok(handlerBody.includes("industry: ''"), 'A fresh quick search must clear a conflicting industry');
+    assert.ok(handlerBody.includes("query: pill.query ?? ''"), 'The quick search must use its configured query');
+    assert.ok(handlerBody.includes('void executeSearch(criteria'), 'Clicking a quick pill must execute a search immediately');
+    assert.ok(handlerBody.includes('recordPopularity: true'), 'Quick-search activity must use the existing popularity recording path');
   });
 
   it('verifies results header toolbar styling and responsive structure in globals.css', () => {

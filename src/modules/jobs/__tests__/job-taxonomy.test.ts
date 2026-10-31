@@ -211,7 +211,7 @@ describe('JobNexus — Canonical Industry & Category Taxonomy Suite', () => {
       }
     });
 
-    it('classifies Technology & Engineering roles accurately', () => {
+    it('classifies technology only when sector metadata is explicit', () => {
       const roles = [
         'Senior Full-Stack TypeScript Developer',
         'Cloud Infrastructure DevOps Engineer',
@@ -220,9 +220,17 @@ describe('JobNexus — Canonical Industry & Category Taxonomy Suite', () => {
         'Lead QA Automation Engineer',
       ];
       for (const title of roles) {
-        const result = classifyJobIndustry(title);
+        const result = classifyJobIndustry(title, ['Technology']);
         assert.strictEqual(result.industry, 'technology', `Failed for title: ${title}`);
       }
+    });
+
+    it('does not infer employer industry from a generic software role', () => {
+      assert.strictEqual(classifyJobIndustry('Software Engineer').industry, 'other');
+      assert.strictEqual(
+        classifyJobIndustry('Software Engineer', [], 'Build tools for healthcare providers').industry,
+        'healthcare'
+      );
     });
   });
 
@@ -252,7 +260,7 @@ describe('JobNexus — Canonical Industry & Category Taxonomy Suite', () => {
         category: 'Clinical Operations',
       });
       assert.strictEqual(result.industry, 'healthcare');
-      assert.strictEqual(result.category, 'Clinical Operations');
+      assert.strictEqual(result.category, 'Healthcare & Medical');
     });
 
     it('resolves industry labels correctly via getIndustryLabel', () => {
@@ -264,4 +272,3 @@ describe('JobNexus — Canonical Industry & Category Taxonomy Suite', () => {
     });
   });
 });
-

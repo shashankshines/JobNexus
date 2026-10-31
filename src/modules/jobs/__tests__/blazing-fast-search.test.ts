@@ -124,7 +124,8 @@ describe('JobNexus — Blazing Fast Search & Pill Caching Architecture', () => {
       'page.tsx must not apply a second, incomplete client-side filter'
     );
     assert.ok(
-      pageContent.includes('const cacheKey = `${requestKey}::auth='),
+      pageContent.includes('function getClientSearchCacheKey(params: URLSearchParams, isAuthenticated: boolean)') &&
+        pageContent.includes('::auth=${isAuthenticated ? \'1\' : \'0\'}'),
       'page.tsx must keep authenticated and anonymous result caches separate'
     );
 

@@ -1,5 +1,5 @@
 import { NormalizedJob, JobSearchParams } from './job.types';
-import { classifyJobIndustry } from './job.taxonomy';
+import { normalizeIndustryFilter, resolveJobIndustry } from './job.taxonomy';
 
 export const INDIAN_CITIES = [
   // Tier 1 Metros & Prime Tech Hubs
@@ -1237,22 +1237,16 @@ export function matchesRemote(job: NormalizedJob, filterRemote?: string): boolea
 }
 
 export function matchesIndustry(job: NormalizedJob, filterIndustry?: string): boolean {
-  if (!filterIndustry || !filterIndustry.trim() || filterIndustry === 'all') {
-    return true;
-  }
-  const target = filterIndustry.trim().toLowerCase();
-  const currentIndustry = (job.industry || classifyJobIndustry(job.title, job.tags, job.description).industry).toLowerCase();
-
-  if (currentIndustry === target) {
-    return true;
-  }
-
-  // Also check category or label match
-  if (job.category && job.category.toLowerCase().includes(target)) {
-    return true;
-  }
-
-  return false;
+  const target = normalizeIndustryFilter(filterIndustry);
+  if (target === '') return true;
+  if (!target) return false;
+  return resolveJobIndustry(
+    job.industry,
+    job.category,
+    job.title,
+    job.tags,
+    job.description
+  ) === target;
 }
 
 export function filterAndRankJobs(

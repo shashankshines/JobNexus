@@ -34,7 +34,11 @@ export interface JobSearchParams {
   level?: string;
   remote?: string;
   industry?: string;
+  sort?: 'relevance' | 'date';
+  page?: number;
+  pageSize?: number;
   limit?: number;
+  forceRefresh?: boolean;
   signal?: AbortSignal;
 }
 
@@ -70,10 +74,22 @@ export interface ProviderDiagnostic {
 
 export interface JobSearchResponse {
   jobs: LegacyJob[];
-  /** Total matching jobs before the response cap is applied. */
+  /** Total matching jobs in the current normalized provider snapshot. */
   count: number;
+  /** Total unique jobs in the current normalized provider snapshot. */
+  totalAvailable: number;
+  /** Stable fingerprint of the ordered matching jobs for consistent pagination. */
+  snapshotId: string;
   returnedCount: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
   truncated: boolean;
+  providerCoverage: {
+    configured: number;
+    succeeded: number;
+    incomplete: boolean;
+  };
   sources: string[];
   diagnostics?: ProviderDiagnostic[];
 }
@@ -82,6 +98,11 @@ export interface JobStatsResponse {
   totalJobs: number;
   formattedCount: string;
   exactCount: number;
+  providerCoverage: {
+    configured: number;
+    succeeded: number;
+    incomplete: boolean;
+  };
   remoteJobs: number;
   indiaEligibleJobs: number;
   sources: string[];

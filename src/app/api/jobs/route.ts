@@ -10,6 +10,7 @@ import {
   maskJobsForAnonymous,
 } from '@/modules/jobs/domain/job.masking';
 import { buildExternalPlatformSearchLinks } from '@/modules/jobs/domain/job.links';
+import { normalizeIndustryFilter } from '@/modules/jobs/domain/job.taxonomy';
 
 // Re-export Job interface for backward compatibility with existing imports
 export type Job = LegacyJob;
@@ -51,8 +52,47 @@ export async function GET(request: Request) {
     const type = searchParams.get('type') || '';
     const level = searchParams.get('level') || '';
     const remote = searchParams.get('remote') || '';
-    const industry = searchParams.get('industry') || '';
+    const rawIndustry = searchParams.get('industry') || '';
+    const industry = normalizeIndustryFilter(rawIndustry);
+    const page = Number(searchParams.get('page') || '1');
+    const rawPageSize = searchParams.get('pageSize');
+    const pageSize = rawPageSize === null ? undefined : Number(rawPageSize);
+    const rawSort = searchParams.get('sort') || 'relevance';
+    const rawRefresh = searchParams.get('refresh');
     const jobId = searchParams.get('id');
+
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      (pageSize !== undefined &&
+        (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100)) ||
+      (rawSort !== 'relevance' && rawSort !== 'date')
+      || (rawRefresh !== null && rawRefresh !== '1')
+    ) {
+      return NextResponse.json({ error: 'Invalid pagination parameters' }, { status: 400 });
+    }
+    if (industry === null) {
+      return NextResponse.json({ error: 'Invalid industry filter' }, { status: 400 });
+    }
+
+    // Single-job resolution must search the full normalized snapshot, not only its first page.
+    if (jobId) {
+      const targetJob = await searchService.getJobById(jobId);
+      if (!targetJob) {
+        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+      }
+      return NextResponse.json(
+        {
+          job: isAuthenticated ? targetJob : maskJobForAnonymous(targetJob),
+        },
+        {
+          headers: {
+            'Vary': 'Cookie, Authorization',
+            'Cache-Control': 'private, max-age=15, stale-while-revalidate=60',
+          },
+        }
+      );
+    }
 
     // Step 1: Execute server-side job aggregation, deduplication, and ranking on raw data
     const result = await searchService.searchJobs({
@@ -64,28 +104,16 @@ export async function GET(request: Request) {
       level,
       remote,
       industry,
+      page,
+      pageSize,
+      forceRefresh: rawRefresh === '1',
+      sort: rawSort,
     });
 
     const responseHeaders: Record<string, string> = {
       'Vary': 'Cookie, Authorization',
       'Cache-Control': 'private, max-age=15, stale-while-revalidate=60',
     };
-
-    // Support single job query by id
-    if (jobId) {
-      const targetJob = result.jobs.find((j) => j.id === jobId);
-      if (!targetJob) {
-        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-      }
-      return NextResponse.json(
-        {
-          job: isAuthenticated ? targetJob : maskJobForAnonymous(targetJob),
-        },
-        {
-          headers: responseHeaders,
-        }
-      );
-    }
 
     // Step 2: Server-side data boundary shaping
     // Anonymous users receive masked company names, masked sources, empty provider list, and omitted diagnostics.
@@ -98,8 +126,14 @@ export async function GET(request: Request) {
       {
         jobs: shapedJobs,
         count: result.count,
+        totalAvailable: result.totalAvailable,
+        snapshotId: result.snapshotId,
         returnedCount: result.returnedCount,
+        page: result.page,
+        pageSize: result.pageSize,
+        hasMore: result.hasMore,
         truncated: result.truncated,
+        providerCoverage: result.providerCoverage,
         sources: isAuthenticated ? result.sources : [],
         diagnostics: isAuthenticated ? result.diagnostics : undefined,
         externalDiscovery: buildExternalPlatformSearchLinks({

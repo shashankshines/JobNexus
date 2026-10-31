@@ -103,7 +103,8 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
     });
 
     it('ensures dropdown items in All Roles, Any Workplace, Any Level render on a single line with nowrap', () => {
-      assert.ok(pageContent.includes("minWidth: 'max(100%, 320px)'"), 'Role popover must have minWidth >= 320px');
+      assert.ok(pageContent.includes('minWidth: roleDropdownIsMobile ? 0 : 320'), 'Role popover must keep desktop width without overflowing mobile viewports');
+      assert.ok(pageContent.includes('Math.min(440, Math.max(rect.width, 320), window.innerWidth - 16)'), 'Role popover width must be bounded by the viewport');
       assert.ok(pageContent.includes("minWidth: 'max(100%, 280px)'"), 'Industry popover must guarantee at least 280px width for all items');
       assert.ok(pageContent.includes("minWidth: 'max(100%, 190px)'"), 'Workplace popover must guarantee at least 190px width for all items');
       assert.ok(pageContent.includes("minWidth: 'max(100%, 175px)'"), 'Type popover must guarantee at least 175px width for all items');

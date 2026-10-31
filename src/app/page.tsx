@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { createPortal } from 'react-dom';
 import {
   Search,
   MapPin,
@@ -45,6 +46,7 @@ import {
   Landmark,
   Headphones,
   GraduationCap,
+  Leaf,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
@@ -53,13 +55,19 @@ import JobNexusLogo from './components/JobNexusLogo';
 import { useAuth } from './context/AuthContext';
 import { useJobStats } from '@/modules/jobs/hooks/useJobStats';
 import { useElapsedJobCounter } from '@/modules/jobs/hooks/useElapsedJobCounter';
-
+import {
+  getIndustryLabel,
+  INDUSTRY_TAXONOMY,
+  normalizeIndustryFilter,
+  type JobIndustry,
+} from '@/modules/jobs/domain/job.taxonomy';
 const PremiumOfferModal = dynamic(
   () => import('./components/PremiumOfferModal').then((mod) => mod.PremiumOfferModal),
   { ssr: false }
 );
 
 const CLIENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes client cache
+const SEARCH_PAGE_SIZE = 50;
 import {
   isValidApplicationUrl,
   getFallbackApplicationUrl,
@@ -77,115 +85,115 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface DiscoveryDomain {
-  title: string;
-  count: string;
+  industry: JobIndustry;
   desc: string;
   tags: string[];
   icon: React.ComponentType<{ size?: number; color?: string; className?: string }>;
-  query?: string;
-  remote?: string;
-  location?: string;
-  industry?: string;
 }
 
-const DISCOVERY_DOMAINS: DiscoveryDomain[] = [
-  {
-    title: 'Healthcare & Clinical Care',
-    count: '400+ Roles',
+const INDUSTRY_DISCOVERY_DETAILS: Record<
+  JobIndustry,
+  Pick<DiscoveryDomain, 'desc' | 'tags' | 'icon'>
+> = {
+  technology: {
+    desc: 'Software development, cloud systems, AI/ML, data engineering, cybersecurity, and IT operations.',
+    tags: ['Full Stack', 'Cloud & DevOps', 'AI & ML', 'Cybersecurity'],
+    icon: Code2,
+  },
+  healthcare: {
     desc: 'Physicians, registered nurses, clinical practice, pharmacy, and hospital healthcare teams.',
     tags: ['Nursing', 'Clinical Care', 'Pharmacy', 'Hospital Care'],
     icon: HeartPulse,
-    industry: 'healthcare',
   },
-  {
-    title: 'Technology & IT Engineering',
-    count: '1,200+ Roles',
-    desc: 'Full-stack development, cloud systems, AI/ML, data engineering, and tech architecture.',
-    tags: ['Full Stack', 'Cloud & DevOps', 'AI & ML', 'Cybersecurity'],
-    icon: Code2,
-    industry: 'technology',
-  },
-  {
-    title: 'Finance, Banking & Accounts',
-    count: '350+ Roles',
-    desc: 'Chartered accounting, auditing, taxation, financial analysis, investment, and banking.',
-    tags: ['Accounting', 'Audit & Tax', 'Financial Analyst', 'Corporate Finance'],
-    icon: TrendingUp,
-    industry: 'finance_accounting',
-  },
-  {
-    title: 'Education & Academic Training',
-    count: '280+ Roles',
-    desc: 'School teachers, university professors, instructional leadership, and academic curriculum.',
-    tags: ['Teaching', 'Higher Education', 'Curriculum', 'Pedagogy'],
-    icon: GraduationCap,
-    industry: 'education',
-  },
-  {
-    title: 'Construction & Skilled Trades',
-    count: '150+ Roles',
-    desc: 'Civil engineering, site supervision, electrical, plumbing, carpentry, and infrastructure.',
+  construction_trades: {
+    desc: 'Civil construction, site supervision, electrical, plumbing, carpentry, and infrastructure.',
     tags: ['Civil Engineering', 'Site Engineer', 'Electrical', 'Trades'],
     icon: HardHat,
-    industry: 'construction_trades',
   },
-  {
-    title: 'Logistics & Supply Chain',
-    count: '220+ Roles',
-    desc: 'Global supply chain managers, warehouse operations, freight dispatchers, and fleet logistics.',
-    tags: ['Supply Chain', 'Warehousing', 'Freight', 'Fleet Operations'],
-    icon: Truck,
-    industry: 'logistics_transport',
-  },
-  {
-    title: 'Manufacturing & Industrial',
-    count: '190+ Roles',
+  manufacturing: {
     desc: 'Plant operations, mechanical engineering, production supervision, and quality assurance.',
     tags: ['Mechanical', 'Plant Operations', 'Production', 'Quality Control'],
     icon: Factory,
-    industry: 'manufacturing',
   },
-  {
-    title: 'Retail, Sales & Commerce',
-    count: '550+ Roles',
-    desc: 'Store management, merchandising, account executives, B2B enterprise sales, and retail leads.',
+  logistics_transport: {
+    desc: 'Supply chain management, warehouse operations, freight, transport, and fleet logistics.',
+    tags: ['Supply Chain', 'Warehousing', 'Freight', 'Fleet Operations'],
+    icon: Truck,
+  },
+  retail_sales: {
+    desc: 'Store management, merchandising, account executives, business development, and retail.',
     tags: ['B2B Sales', 'Store Operations', 'Merchandising', 'Account Executive'],
     icon: ShoppingBag,
-    industry: 'retail_sales',
   },
-  {
-    title: 'Hospitality & Tourism',
-    count: '120+ Roles',
-    desc: 'Executive chefs, hotel managers, front office operations, catering, and guest services.',
+  hospitality_tourism: {
+    desc: 'Chefs, hotel managers, front office operations, catering, tourism, and guest services.',
     tags: ['Hotel Management', 'Culinary Arts', 'Catering', 'Guest Relations'],
     icon: UtensilsCrossed,
-    industry: 'hospitality_tourism',
   },
-  {
-    title: 'Administration & Human Resources',
-    count: '260+ Roles',
+  education: {
+    desc: 'School teachers, university faculty, instructional design, and academic leadership.',
+    tags: ['Teaching', 'Higher Education', 'Curriculum', 'Pedagogy'],
+    icon: GraduationCap,
+  },
+  finance_accounting: {
+    desc: 'Accounting, auditing, taxation, financial analysis, investment, and banking.',
+    tags: ['Accounting', 'Audit & Tax', 'Financial Analyst', 'Corporate Finance'],
+    icon: TrendingUp,
+  },
+  administration_hr: {
     desc: 'People operations, talent acquisition, office management, and executive administration.',
     tags: ['People Ops', 'Recruiting', 'Office Management', 'HR Partner'],
     icon: Users,
-    industry: 'administration_hr',
   },
-  {
-    title: 'Government & Public Sector',
-    count: '180+ Roles',
-    desc: 'Civil services, public administration, humanitarian aid, disaster relief, and municipal policy.',
+  agriculture: {
+    desc: 'Agronomy, farming, forestry, horticulture, livestock, and agricultural operations.',
+    tags: ['Agronomy', 'Farming', 'Forestry', 'Horticulture'],
+    icon: Leaf,
+  },
+  government_public: {
+    desc: 'Civil services, public administration, humanitarian aid, and municipal policy.',
     tags: ['Civil Services', 'Public Policy', 'Humanitarian', 'Disaster Relief'],
     icon: Landmark,
-    industry: 'government_public',
   },
-  {
-    title: 'Customer Support & Service',
-    count: '210+ Roles',
-    desc: 'Client success managers, technical helpdesk, customer care specialists, and contact center leads.',
+  customer_service: {
+    desc: 'Customer care, technical helpdesk, client success, and contact center roles.',
     tags: ['Customer Success', 'Technical Support', 'Helpdesk', 'Client Care'],
     icon: Headphones,
-    industry: 'customer_service',
   },
-];
+  security_facilities: {
+    desc: 'Security, facilities operations, workplace safety, and building maintenance.',
+    tags: ['Security', 'Facilities', 'Workplace Safety', 'Maintenance'],
+    icon: ShieldCheck,
+  },
+  other: {
+    desc: 'Cross-functional roles that do not have enough evidence for a specific industry.',
+    tags: ['Cross-functional', 'General Roles', 'Other'],
+    icon: Briefcase,
+  },
+};
+
+const DISCOVERY_DOMAINS: DiscoveryDomain[] = Object.values(INDUSTRY_TAXONOMY).map(({ id }) => ({
+  industry: id,
+  ...INDUSTRY_DISCOVERY_DETAILS[id],
+}));
+
+const INDUSTRY_EMOJI: Record<JobIndustry, string> = {
+  technology: '💻',
+  healthcare: '🏥',
+  construction_trades: '🏗️',
+  manufacturing: '⚙️',
+  logistics_transport: '🚚',
+  retail_sales: '🛍️',
+  hospitality_tourism: '🍽️',
+  education: '🎓',
+  finance_accounting: '📊',
+  administration_hr: '📋',
+  agriculture: '🌱',
+  government_public: '🏛️',
+  customer_service: '🎧',
+  security_facilities: '🛡️',
+  other: '📁',
+};
 
 interface Job {
   id: string;
@@ -227,10 +235,58 @@ interface SearchCriteria {
   industry: string;
 }
 
+function getSearchCriteriaFromUrl(params: URLSearchParams): SearchCriteria {
+  const rawIndustry = params.get('industry') || '';
+  const normalizedIndustry = normalizeIndustryFilter(rawIndustry);
+  return {
+    query: params.get('query') || '',
+    role: params.get('role') || '',
+    company: params.get('company') || '',
+    location: params.get('location') || '',
+    type: params.get('type') || '',
+    level: params.get('level') || '',
+    remote: params.get('remote') || '',
+    industry: normalizedIndustry === null ? rawIndustry : normalizedIndustry,
+  };
+}
+
+function getSearchCriteriaSummary(criteria: SearchCriteria): string {
+  const role = JOB_POST_GROUPS.flatMap((group) => group.posts)
+    .find((post) => post.value === criteria.role)?.label || criteria.role;
+  const workplace = WORKPLACE_OPTIONS.find((option) => option.value === criteria.remote)?.label;
+  const jobType = TYPE_OPTIONS.find((option) => option.value === criteria.type)?.label;
+  const seniority = LEVEL_OPTIONS.find((option) => option.value === criteria.level)?.label;
+
+  return [
+    criteria.industry ? getIndustryLabel(criteria.industry) : '',
+    criteria.location,
+    workplace,
+    jobType,
+    seniority,
+    role,
+    criteria.company,
+    criteria.query ? `“${criteria.query}”` : '',
+  ].filter(Boolean).join(' · ');
+}
+
+function hasActiveSearchCriteria(criteria: SearchCriteria): boolean {
+  return Object.values(criteria).some((value) => Boolean(value && value !== 'all'));
+}
+
+function getClientSearchCacheKey(params: URLSearchParams, isAuthenticated: boolean): string {
+  const entries = Array.from(params.entries()).sort(
+    ([keyA, valueA], [keyB, valueB]) => keyA.localeCompare(keyB) || valueA.localeCompare(valueB)
+  );
+  return `${new URLSearchParams(entries).toString()}::auth=${isAuthenticated ? '1' : '0'}`;
+}
+
 interface CachedSearchResult {
   jobs: Job[];
   count: number;
+  totalAvailable: number;
+  snapshotId: string;
   truncated: boolean;
+  page: number;
   timestamp: number;
 }
 
@@ -275,21 +331,11 @@ const LEVEL_OPTIONS = [
 
 const INDUSTRY_OPTIONS = [
   { value: '', label: 'All Industries', icon: '🌐' },
-  { value: 'technology', label: 'Technology & IT', icon: '💻' },
-  { value: 'healthcare', label: 'Healthcare & Medical', icon: '🏥' },
-  { value: 'education', label: 'Education & Teaching', icon: '🎓' },
-  { value: 'finance_accounting', label: 'Finance & Accounting', icon: '📊' },
-  { value: 'construction_trades', label: 'Construction & Trades', icon: '🏗️' },
-  { value: 'manufacturing', label: 'Manufacturing & Industrial', icon: '⚙️' },
-  { value: 'logistics_transport', label: 'Logistics & Supply Chain', icon: '🚚' },
-  { value: 'retail_sales', label: 'Retail & Sales', icon: '🛍️' },
-  { value: 'hospitality_tourism', label: 'Hospitality & Tourism', icon: '🍽️' },
-  { value: 'administration_hr', label: 'Administration & HR', icon: '📋' },
-  { value: 'agriculture', label: 'Agriculture & Forestry', icon: '🌱' },
-  { value: 'government_public', label: 'Government & Public Sector', icon: '🏛️' },
-  { value: 'customer_service', label: 'Customer Service & Support', icon: '🎧' },
-  { value: 'security_facilities', label: 'Security & Facilities', icon: '🛡️' },
-  { value: 'other', label: 'General / Other', icon: '📁' },
+  ...Object.values(INDUSTRY_TAXONOMY).map((industry) => ({
+    value: industry.id,
+    label: industry.label,
+    icon: INDUSTRY_EMOJI[industry.id],
+  })),
 ];
 
 const HERO_ROTATING_WORDS = [
@@ -369,7 +415,18 @@ export default function Home() {
     clearToast,
     showToast,
   } = useAuth();
-  const { formattedCount, sourcesCount, syncFromJobsCount } = useJobStats();
+  const {
+    formattedCount,
+    sourcesCount,
+    error: inventoryStatsError,
+  } = useJobStats();
+  const globalInventorySummary = inventoryStatsError
+    ? formattedCount === 'Unavailable'
+      ? 'Job feed unavailable'
+      : `Last available feed snapshot: ${formattedCount} jobs (refresh failed)`
+    : formattedCount === 'Loading'
+      ? 'Job feed loading'
+      : `${formattedCount} jobs in the current JobNexus feed`;
   const [activeView, setActiveView] = useState<'all' | 'saved'>('all');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -419,11 +476,14 @@ export default function Home() {
   const [selectedRole, setSelectedRole] = useState('');
   const [remote, setRemote] = useState('');
   const [sortBy, setSortBy] = useState<'relevance' | 'date'>('relevance');
+  const [appliedSortBy, setAppliedSortBy] = useState<'relevance' | 'date'>('relevance');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [matchingCount, setMatchingCount] = useState(0);
+  const [totalAvailableJobs, setTotalAvailableJobs] = useState(0);
   const [searchTruncated, setSearchTruncated] = useState(false);
+  const [searchPage, setSearchPage] = useState(0);
   const [appliedSearchCriteria, setAppliedSearchCriteria] = useState<SearchCriteria>({
     query: '',
     role: '',
@@ -436,12 +496,17 @@ export default function Home() {
   });
   const [pendingSearchCriteria, setPendingSearchCriteria] = useState<SearchCriteria | null>(null);
   const [searchError, setSearchError] = useState('');
+  const [failedSearch, setFailedSearch] = useState<{
+    criteria: SearchCriteria;
+    sort: 'relevance' | 'date';
+  } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Progressive Chunk Lazy Loading (Infinite Scroll) state
   const JOBS_BATCH_SIZE = 18;
   const [visibleCount, setVisibleCount] = useState(JOBS_BATCH_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const paginationAbortRef = useRef<AbortController | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -452,19 +517,39 @@ export default function Home() {
   // Suggestions state
   const [jobSuggestions, setJobSuggestions] = useState<string[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
+  const [activeJobSuggestionIndex, setActiveJobSuggestionIndex] = useState(-1);
+  const [activeLocationSuggestionIndex, setActiveLocationSuggestionIndex] = useState(-1);
   const [showJobDropdown, setShowJobDropdown] = useState(false);
   const [showLocDropdown, setShowLocDropdown] = useState(false);
 
   // Refinement Filter Dropdowns state
   const [industry, setIndustry] = useState('');
+  const draftSearchCriteria: SearchCriteria = {
+    query: query.trim(),
+    role: selectedRole.trim(),
+    company: company.trim(),
+    location: location.trim(),
+    type: type.trim(),
+    level: level.trim(),
+    remote: remote.trim(),
+    industry: industry.trim(),
+  };
+  const hasUnappliedDraft =
+    Object.keys(draftSearchCriteria).some((key) => {
+      const criterion = key as keyof SearchCriteria;
+      return draftSearchCriteria[criterion] !== appliedSearchCriteria[criterion];
+    }) || sortBy !== appliedSortBy;
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
+  const [roleDropdownPosition, setRoleDropdownPosition] = useState<React.CSSProperties | null>(null);
+  const [roleDropdownIsMobile, setRoleDropdownIsMobile] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [companySearchQuery, setCompanySearchQuery] = useState('');
   const [showIndustryDropdown, setShowIndustryDropdown] = useState(false);
   const [showWorkplaceDropdown, setShowWorkplaceDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Advanced Refinements Drawer state
   const searchBoxRef = useRef<HTMLDivElement>(null);
@@ -473,6 +558,7 @@ export default function Home() {
   const headerWrapperRef = useRef<HTMLDivElement>(null);
   const headerBackdropRef = useRef<HTMLDivElement>(null);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
+  const roleDropdownMenuRef = useRef<HTMLDivElement>(null);
   const companyDropdownRef = useRef<HTMLDivElement>(null);
   const industryDropdownRef = useRef<HTMLDivElement>(null);
   const workplaceDropdownRef = useRef<HTMLDivElement>(null);
@@ -497,6 +583,74 @@ export default function Home() {
   const searchRequestIdRef = useRef(0);
   const catalogWarmupStartedRef = useRef(false);
 
+  useLayoutEffect(() => {
+    if (!showRoleDropdown) return;
+
+    const updatePosition = () => {
+      const trigger = roleDropdownRef.current?.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]');
+      if (!trigger) return;
+
+      const viewport = window.visualViewport;
+      const mobile = window.matchMedia('(max-width: 640px)').matches;
+      setRoleDropdownIsMobile(mobile);
+
+      if (mobile) {
+        const viewportHeight = viewport?.height ?? window.innerHeight;
+        const viewportOffsetTop = viewport?.offsetTop ?? 0;
+        const keyboardOffset = Math.max(0, window.innerHeight - viewportOffsetTop - viewportHeight);
+        setRoleDropdownPosition({
+          position: 'fixed',
+          top: 'auto',
+          left: 12,
+          right: 12,
+          bottom: `calc(${keyboardOffset + 8}px + env(safe-area-inset-bottom, 0px))`,
+          width: 'auto',
+          maxHeight: Math.max(0, Math.min(560, viewportHeight - 24)),
+          zIndex: 1001,
+        });
+        return;
+      }
+
+      const rect = trigger.getBoundingClientRect();
+      const desiredHeight = 380;
+      const availableBelow = window.innerHeight - rect.bottom - 8;
+      const availableAbove = rect.top - 8;
+      const placeAbove = availableBelow < Math.min(280, desiredHeight) && availableAbove > availableBelow;
+      const availableHeight = Math.max(0, placeAbove ? availableAbove : availableBelow);
+      const maxHeight = Math.min(desiredHeight, availableHeight);
+      const width = Math.max(0, Math.min(440, Math.max(rect.width, 320), window.innerWidth - 16));
+      setRoleDropdownPosition({
+        position: 'fixed',
+        top: placeAbove ? Math.max(8, rect.top - maxHeight - 6) : rect.bottom + 6,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        width,
+        maxHeight,
+        zIndex: 1001,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    window.visualViewport?.addEventListener('resize', updatePosition);
+    window.visualViewport?.addEventListener('scroll', updatePosition);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.visualViewport?.removeEventListener('resize', updatePosition);
+      window.visualViewport?.removeEventListener('scroll', updatePosition);
+    };
+  }, [showRoleDropdown]);
+
+  useEffect(() => {
+    if (!showRoleDropdown || !roleDropdownIsMobile) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showRoleDropdown, roleDropdownIsMobile]);
+
   useEffect(() => {
     if (isHeroPaused) return;
     const interval = setInterval(() => {
@@ -520,11 +674,49 @@ export default function Home() {
     setPopularPills(rolePills);
   }, []);
 
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+
+      const dropdownRefs = [
+        roleDropdownRef,
+        companyDropdownRef,
+        industryDropdownRef,
+        workplaceDropdownRef,
+        typeDropdownRef,
+        levelDropdownRef,
+      ];
+      const triggerToRestore = dropdownRefs
+        .map((ref) => ref.current?.querySelector<HTMLButtonElement>('button[aria-expanded="true"]'))
+        .find((trigger) => Boolean(trigger));
+
+      setShowJobDropdown(false);
+      setShowLocDropdown(false);
+      setShowRoleDropdown(false);
+      setShowCompanyDropdown(false);
+      setShowIndustryDropdown(false);
+      setShowWorkplaceDropdown(false);
+      setShowTypeDropdown(false);
+      setShowLevelDropdown(false);
+      triggerToRestore?.focus();
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
+
   const executeSearch = useCallback(
     async (
       criteria: SearchCriteria,
-      options: { markSearched?: boolean; recordPopularity?: boolean } = {}
+      options: {
+        markSearched?: boolean;
+        recordPopularity?: boolean;
+        syncUrl?: boolean;
+        sort?: 'relevance' | 'date';
+        forceRefresh?: boolean;
+      } = {}
     ) => {
+      const normalizedIndustry = normalizeIndustryFilter(criteria.industry);
       const searchCriteria: SearchCriteria = {
         query: criteria.query.trim(),
         role: criteria.role.trim(),
@@ -533,17 +725,19 @@ export default function Home() {
         type: criteria.type.trim(),
         level: criteria.level.trim(),
         remote: criteria.remote.trim(),
-        industry: criteria.industry.trim(),
+        industry: normalizedIndustry === null ? criteria.industry.trim() : normalizedIndustry,
       };
       const markSearched = options.markSearched !== false;
+      const selectedSort = options.sort ?? sortBy;
 
       if (markSearched) {
         setSearched(true);
-        setPendingSearchCriteria(searchCriteria);
-      } else {
-        setPendingSearchCriteria(null);
       }
+      setPendingSearchCriteria(searchCriteria);
       setSearchError('');
+      setFailedSearch(null);
+      setVisibleCount(JOBS_BATCH_SIZE);
+      setIsLoadingMore(false);
       setShowJobDropdown(false);
       setShowLocDropdown(false);
       setShowRoleDropdown(false);
@@ -564,9 +758,25 @@ export default function Home() {
       if (searchCriteria.industry && searchCriteria.industry !== 'all') {
         params.set('industry', searchCriteria.industry);
       }
+      if (selectedSort === 'date') params.set('sort', selectedSort);
 
+      const canonicalSearch = params.toString();
+      const syncSearchUrl = () => {
+        if (!markSearched || options.syncUrl === false || typeof window === 'undefined') return;
+        const nextUrl = `${window.location.pathname}${canonicalSearch ? `?${canonicalSearch}` : ''}`;
+        const currentUrl = `${window.location.pathname}${window.location.search}`;
+        if (nextUrl !== currentUrl) {
+          window.history.pushState({ ...window.history.state, searchCriteria }, '', nextUrl);
+        }
+      };
+
+      params.set('page', '1');
+      params.set('pageSize', String(SEARCH_PAGE_SIZE));
+      params.set('sort', selectedSort);
       const requestKey = params.toString();
-      const cacheKey = `${requestKey}::auth=${isAuthenticated ? '1' : '0'}`;
+      const cacheKey = getClientSearchCacheKey(params, isAuthenticated);
+      const requestParams = new URLSearchParams(requestKey);
+      if (options.forceRefresh) requestParams.set('refresh', '1');
       const popularityQuery = searchCriteria.query || searchCriteria.role;
       if (options.recordPopularity && popularityQuery.trim().length >= 2) {
         fetch('/api/jobs/popular', {
@@ -584,24 +794,24 @@ export default function Home() {
           });
       }
 
-      const isUnconstrained =
-        Object.entries(searchCriteria).every(([key, value]) =>
-          key === 'industry' ? !value || value === 'all' : !value
-        );
-
       const requestId = ++searchRequestIdRef.current;
       activeSearchAbortRef.current?.abort();
       activeSearchAbortRef.current = null;
+      paginationAbortRef.current = null;
 
       const cached = clientSearchCacheRef.current.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL_MS) {
+      if (!options.forceRefresh && cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL_MS) {
+        syncSearchUrl();
         setJobs(cached.jobs);
         setMatchingCount(cached.count);
+        setTotalAvailableJobs(cached.totalAvailable);
         setSearchTruncated(cached.truncated);
+        setSearchPage(cached.page);
         setAppliedSearchCriteria(searchCriteria);
+        setAppliedSortBy(selectedSort);
         setPendingSearchCriteria(null);
+        setFailedSearch(null);
         setLoading(false);
-        if (isUnconstrained) syncFromJobsCount(cached.count);
         return;
       }
 
@@ -611,7 +821,8 @@ export default function Home() {
       activeSearchAbortRef.current = abortController;
 
       try {
-        const res = await fetch(`/api/jobs?${requestKey}`, {
+        const res = await fetch(`/api/jobs?${requestParams.toString()}`, {
+          cache: options.forceRefresh ? 'no-store' : 'default',
           signal: abortController.signal,
           headers: { Accept: 'application/json' },
         });
@@ -627,35 +838,70 @@ export default function Home() {
         }
         if (
           !Number.isSafeInteger(data.count) ||
+          !Number.isSafeInteger(data.totalAvailable) ||
+          data.totalAvailable < data.count ||
           data.count < data.jobs.length ||
+          typeof data.snapshotId !== 'string' ||
+          !/^[a-f0-9]{64}$/.test(data.snapshotId) ||
           data.returnedCount !== data.jobs.length ||
+          data.page !== 1 ||
+          data.pageSize !== SEARCH_PAGE_SIZE ||
+          typeof data.hasMore !== 'boolean' ||
+          !Number.isSafeInteger(data.providerCoverage?.configured) ||
+          !Number.isSafeInteger(data.providerCoverage?.succeeded) ||
+          data.providerCoverage.configured < 0 ||
+          data.providerCoverage.succeeded < 0 ||
+          data.providerCoverage.succeeded > data.providerCoverage.configured ||
+          typeof data.providerCoverage?.incomplete !== 'boolean' ||
           typeof data.truncated !== 'boolean' ||
-          data.truncated !== (data.count > data.returnedCount)
+          data.truncated !== data.hasMore
         ) {
           throw new Error('Search response contained invalid result counts');
+        }
+        if (
+          data.providerCoverage.configured === 0 ||
+          data.providerCoverage.succeeded === 0
+        ) {
+          throw new Error('No configured job providers completed the search');
         }
 
         const count: number = data.count;
         const truncated: boolean = data.truncated;
+        syncSearchUrl();
         setJobs(data.jobs);
         setMatchingCount(count);
+        setTotalAvailableJobs(data.totalAvailable);
         setSearchTruncated(truncated);
+        setSearchPage(data.page);
         setAppliedSearchCriteria(searchCriteria);
+        setAppliedSortBy(selectedSort);
         setPendingSearchCriteria(null);
+        setFailedSearch(null);
         clientSearchCacheRef.current.set(cacheKey, {
           jobs: data.jobs,
           count,
+          totalAvailable: data.totalAvailable,
+          snapshotId: data.snapshotId,
           truncated,
+          page: data.page,
           timestamp: Date.now(),
         });
-        if (isUnconstrained) syncFromJobsCount(count);
       } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') {
           return;
         }
         if (requestId !== searchRequestIdRef.current) return;
         console.error('[Search Error]:', error);
-        setSearchError('We could not refresh jobs right now. Your previous results are still shown; please try again.');
+        clientSearchCacheRef.current.delete(cacheKey);
+        setJobs([]);
+        setMatchingCount(0);
+        setTotalAvailableJobs(0);
+        setSearchTruncated(false);
+        setSearchPage(0);
+        setAppliedSearchCriteria(searchCriteria);
+        setAppliedSortBy(selectedSort);
+        setFailedSearch({ criteria: searchCriteria, sort: selectedSort });
+        setSearchError('We could not complete this search. Please try again.');
         setPendingSearchCriteria(null);
       } finally {
         if (requestId === searchRequestIdRef.current && activeSearchAbortRef.current === abortController) {
@@ -664,13 +910,136 @@ export default function Home() {
         }
       }
     },
-    [isAuthenticated, syncFromJobsCount, applyPopularPills]
+    [isAuthenticated, applyPopularPills, sortBy]
   );
+
+  const loadNextSearchPage = useCallback(async () => {
+    if (
+      loading ||
+      isLoadingMore ||
+      paginationAbortRef.current ||
+      !searchTruncated ||
+      activeView !== 'all'
+    ) return;
+
+    const requestId = searchRequestIdRef.current;
+    const page = searchPage + 1;
+    const params = new URLSearchParams();
+    if (appliedSearchCriteria.query) params.set('query', appliedSearchCriteria.query);
+    if (appliedSearchCriteria.role) params.set('role', appliedSearchCriteria.role);
+    if (appliedSearchCriteria.company) params.set('company', appliedSearchCriteria.company);
+    if (appliedSearchCriteria.location) params.set('location', appliedSearchCriteria.location);
+    if (appliedSearchCriteria.type) params.set('type', appliedSearchCriteria.type);
+    if (appliedSearchCriteria.level) params.set('level', appliedSearchCriteria.level);
+    if (appliedSearchCriteria.remote) params.set('remote', appliedSearchCriteria.remote);
+    if (appliedSearchCriteria.industry && appliedSearchCriteria.industry !== 'all') {
+      params.set('industry', appliedSearchCriteria.industry);
+    }
+    params.set('sort', appliedSortBy);
+    const baseRequestKey = params.toString();
+    params.set('page', String(page));
+    params.set('pageSize', String(SEARCH_PAGE_SIZE));
+    const firstPageParams = new URLSearchParams(baseRequestKey);
+    firstPageParams.set('page', '1');
+    firstPageParams.set('pageSize', String(SEARCH_PAGE_SIZE));
+    const cacheKey = getClientSearchCacheKey(firstPageParams, isAuthenticated);
+    const cached = clientSearchCacheRef.current.get(cacheKey);
+
+    const abortController = new AbortController();
+    paginationAbortRef.current = abortController;
+    activeSearchAbortRef.current = abortController;
+    setIsLoadingMore(true);
+    try {
+      const response = await fetch(`/api/jobs?${params.toString()}`, {
+        signal: abortController.signal,
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
+
+      const data = await response.json();
+      if (requestId !== searchRequestIdRef.current) return;
+      if (
+        !Array.isArray(data.jobs) ||
+        !Number.isSafeInteger(data.count) ||
+        !Number.isSafeInteger(data.totalAvailable) ||
+        data.totalAvailable < data.count ||
+        data.page !== page ||
+        data.pageSize !== SEARCH_PAGE_SIZE ||
+        data.count !== matchingCount ||
+        data.totalAvailable !== totalAvailableJobs ||
+        typeof data.snapshotId !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(data.snapshotId) ||
+        data.snapshotId !== cached?.snapshotId ||
+        data.returnedCount !== data.jobs.length ||
+        typeof data.hasMore !== 'boolean' ||
+        typeof data.providerCoverage?.incomplete !== 'boolean' ||
+        data.truncated !== data.hasMore
+      ) {
+        throw new Error('The next page did not match the active search result snapshot');
+      }
+
+      const mergedJobs = [...(cached?.jobs ?? jobs)];
+      const knownIds = new Set(mergedJobs.map((job) => job.id));
+      for (const job of data.jobs as Job[]) {
+        if (!knownIds.has(job.id)) {
+          mergedJobs.push(job);
+          knownIds.add(job.id);
+        }
+      }
+      setJobs(mergedJobs);
+      setMatchingCount(data.count);
+      setTotalAvailableJobs(data.totalAvailable);
+      setSearchTruncated(data.hasMore);
+      setSearchPage(page);
+      setSearchError('');
+      clientSearchCacheRef.current.set(cacheKey, {
+        jobs: mergedJobs,
+        count: data.count,
+        totalAvailable: data.totalAvailable,
+        snapshotId: data.snapshotId,
+        truncated: data.hasMore,
+        page,
+        timestamp: Date.now(),
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      if (requestId !== searchRequestIdRef.current) return;
+      console.error('[Search Pagination Error]:', error);
+      setSearchError(
+        error instanceof Error && error.message.includes('active search result snapshot')
+          ? 'The results changed while loading more jobs. Your current results are still available.'
+          : 'We could not load more jobs. Your current results are still available.'
+      );
+    } finally {
+      if (requestId === searchRequestIdRef.current) {
+        setIsLoadingMore(false);
+        if (activeSearchAbortRef.current === abortController) {
+          activeSearchAbortRef.current = null;
+        }
+      }
+      if (paginationAbortRef.current === abortController) {
+        paginationAbortRef.current = null;
+      }
+    }
+  }, [
+    activeView,
+    appliedSearchCriteria,
+    isAuthenticated,
+    isLoadingMore,
+    jobs,
+    loading,
+    matchingCount,
+    totalAvailableJobs,
+    searchPage,
+    searchTruncated,
+    appliedSortBy,
+  ]);
 
   const resetToDiscovery = useCallback(() => {
     searchRequestIdRef.current += 1;
     activeSearchAbortRef.current?.abort();
     activeSearchAbortRef.current = null;
+    paginationAbortRef.current = null;
     setQuery('');
     setCompany('');
     setLocation('');
@@ -680,6 +1049,7 @@ export default function Home() {
     setRemote('');
     setIndustry('');
     setSortBy('relevance');
+    setAppliedSortBy('relevance');
     setActiveView('all');
     setShowRoleDropdown(false);
     setShowCompanyDropdown(false);
@@ -687,6 +1057,7 @@ export default function Home() {
     setShowWorkplaceDropdown(false);
     setShowTypeDropdown(false);
     setShowLevelDropdown(false);
+    setShowAdvancedFilters(false);
     setShowJobDropdown(false);
     setShowLocDropdown(false);
     setRoleSearchQuery('');
@@ -694,7 +1065,10 @@ export default function Home() {
     setJobs([]);
     setSearched(false);
     setMatchingCount(0);
+    setTotalAvailableJobs(0);
     setSearchTruncated(false);
+    setSearchPage(0);
+    setIsLoadingMore(false);
     setAppliedSearchCriteria({
       query: '',
       role: '',
@@ -707,6 +1081,7 @@ export default function Home() {
     });
     setPendingSearchCriteria(null);
     setSearchError('');
+    setFailedSearch(null);
     setLoading(false);
     setVisibleCount(JOBS_BATCH_SIZE);
     setActiveDiscoveryTab('feed');
@@ -746,9 +1121,9 @@ export default function Home() {
   // Seamlessly execute any search or application action triggered before login
   useEffect(() => {
     if (isAuthenticated && !intentProcessedRef.current) {
-      intentProcessedRef.current = true;
       const intent = consumePendingIntent();
       if (intent) {
+        intentProcessedRef.current = true;
         if (intent.type === 'apply') {
           const targetJobId = intent.jobId || intent.job?.id;
           let applicationUrl = intent.url;
@@ -862,16 +1237,51 @@ export default function Home() {
   useEffect(() => {
     if (catalogWarmupStartedRef.current) return;
     catalogWarmupStartedRef.current = true;
-    void executeSearch({
-      query: '',
-      role: '',
-      company: '',
-      location: '',
-      type: '',
-      level: '',
-      remote: '',
-      industry: '',
-    }, { markSearched: false });
+    const urlParams = new URLSearchParams(window.location.search);
+    const criteria = getSearchCriteriaFromUrl(urlParams);
+    const initialSort = urlParams.get('sort') === 'date' ? 'date' : 'relevance';
+    const hasFilters = hasActiveSearchCriteria(criteria);
+    setQuery(criteria.query);
+    setSelectedRole(criteria.role);
+    setCompany(criteria.company);
+    setLocation(criteria.location);
+    setType(criteria.type);
+    setLevel(criteria.level);
+    setRemote(criteria.remote);
+    setIndustry(criteria.industry);
+    setSortBy(initialSort);
+    void executeSearch(criteria, {
+      markSearched: hasFilters,
+      syncUrl: false,
+      sort: initialSort,
+    });
+  }, [executeSearch]);
+
+  useEffect(() => {
+    const restoreSearchFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const criteria = getSearchCriteriaFromUrl(params);
+      const restoredSort = params.get('sort') === 'date' ? 'date' : 'relevance';
+      setQuery(criteria.query);
+      setSelectedRole(criteria.role);
+      setCompany(criteria.company);
+      setLocation(criteria.location);
+      setType(criteria.type);
+      setLevel(criteria.level);
+      setRemote(criteria.remote);
+      setIndustry(criteria.industry);
+      setSortBy(restoredSort);
+      setActiveView('all');
+      setActiveDiscoveryTab('feed');
+      void executeSearch(criteria, {
+        markSearched: hasActiveSearchCriteria(criteria),
+        syncUrl: false,
+        sort: restoredSort,
+      });
+    };
+
+    window.addEventListener('popstate', restoreSearchFromUrl);
+    return () => window.removeEventListener('popstate', restoreSearchFromUrl);
   }, [executeSearch]);
 
   // Close dropdowns on outside click
@@ -887,7 +1297,11 @@ export default function Home() {
       if (userMenuRef.current && !userMenuRef.current.contains(target)) {
         setIsUserMenuOpen(false);
       }
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(target)) {
+      if (
+        roleDropdownRef.current &&
+        !roleDropdownRef.current.contains(target) &&
+        !roleDropdownMenuRef.current?.contains(target)
+      ) {
         setShowRoleDropdown(false);
       }
       if (companyDropdownRef.current && !companyDropdownRef.current.contains(target)) {
@@ -1006,6 +1420,9 @@ export default function Home() {
 
   const handleSortSelect = useCallback((newSort: 'relevance' | 'date') => {
     setSortBy(newSort);
+    if (activeView === 'all' && searched) {
+      void executeSearch(appliedSearchCriteria, { sort: newSort });
+    }
     setTabFocusBadge(newSort === 'relevance' ? 'Sorted by Best Match' : 'Sorted by Freshest First');
     setIsResultsFocused(true);
 
@@ -1025,7 +1442,7 @@ export default function Home() {
         } catch { }
       }
     }, 45);
-  }, []);
+  }, [activeView, appliedSearchCriteria, executeSearch, searched]);
 
   const handleViewSelect = useCallback((targetView: 'all' | 'saved') => {
     setActiveView(targetView);
@@ -1060,17 +1477,29 @@ export default function Home() {
     }, 45);
   }, []);
 
+  const updateDraftSearchCriteria = (criteria: SearchCriteria) => {
+    setQuery(criteria.query);
+    setSelectedRole(criteria.role);
+    setCompany(criteria.company);
+    setLocation(criteria.location);
+    setType(criteria.type);
+    setLevel(criteria.level);
+    setRemote(criteria.remote);
+    setIndustry(criteria.industry);
+  };
+
   const handleDomainClick = (domain: DiscoveryDomain) => {
-    const nextQuery = domain.query ?? '';
-    const nextLoc = domain.location ?? '';
-    const nextRemote = domain.remote ?? '';
-    const nextIndustry = domain.industry ?? '';
-    setQuery(nextQuery);
-    setLocation(nextLoc);
-    setRemote(nextRemote);
-    setIndustry(nextIndustry);
-    setSelectedRole('');
+    const criteria: SearchCriteria = {
+      ...appliedSearchCriteria,
+      query: '',
+      role: '',
+      industry: domain.industry ?? '',
+    };
+    updateDraftSearchCriteria(criteria);
+    setActiveView('all');
     setActiveDiscoveryTab('feed');
+    void executeSearch(criteria);
+    scrollToResults();
   };
 
   const handleBrowseAllClick = () => {
@@ -1097,23 +1526,24 @@ export default function Home() {
   const handleJobSuggestionClick = (suggestion: string) => {
     setQuery(suggestion);
     setShowJobDropdown(false);
-    // Clearing stale industry and selectedRole ensures searching for specific job titles
-    // explores across all verified sectors and doesn't get constrained by earlier navigation
-    setIndustry('');
-    setSelectedRole('');
+    setActiveJobSuggestionIndex(-1);
   };
 
   const handleLocSuggestionClick = (loc: string) => {
     setLocation(loc);
     setShowLocDropdown(false);
+    setActiveLocationSuggestionIndex(-1);
   };
 
   const handleRoleSelect = (roleVal: string) => {
     setSelectedRole(roleVal);
     setShowRoleDropdown(false);
     setRoleSearchQuery('');
-    // Selecting a role category clears lingering industry filters so cross-industry positions are discovered
-    setIndustry('');
+    requestAnimationFrame(() => {
+      roleDropdownRef.current
+        ?.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')
+        ?.focus();
+    });
     if (isRemoteRole(roleVal) && !remote) {
       setRemote('remote');
     }
@@ -1209,15 +1639,8 @@ export default function Home() {
 
   const handleSelectIndustry = useCallback(
     (selectedInd: string) => {
-      // Find matching canonical industry option
-      const match = INDUSTRY_OPTIONS.find(
-        (opt) =>
-          opt.value === selectedInd ||
-          opt.label.toLowerCase() === selectedInd.toLowerCase() ||
-          opt.label.toLowerCase().includes(selectedInd.toLowerCase())
-      );
-      const indVal = match ? match.value : selectedInd;
-      setIndustry(indVal);
+      const indVal = normalizeIndustryFilter(selectedInd);
+      if (indVal !== null) setIndustry(indVal);
     },
     []
   );
@@ -1238,13 +1661,33 @@ export default function Home() {
     return availableCompanies.filter((c) => c.toLowerCase().includes(q));
   }, [availableCompanies, companySearchQuery]);
 
+  const popularLocationOptions = useMemo(
+    () => POPULAR_LOCATION_GROUPS.flatMap((group) => group.locations.map((item) => item.label)),
+    []
+  );
+  const activeLocationOptions = location.trim() ? locationSuggestions : popularLocationOptions;
+
   const handleWorkplaceCategoryClick = (categoryRemoteParam: string) => {
-    setRemote(categoryRemoteParam);
+    const criteria = { ...appliedSearchCriteria, remote: categoryRemoteParam };
+    updateDraftSearchCriteria(criteria);
+    setActiveView('all');
+    setActiveDiscoveryTab('feed');
+    void executeSearch(criteria);
+    scrollToResults();
   };
 
   const handleQuickPillClick = (pill: QuickPill) => {
-    setQuery(pill.query ?? '');
-    setIndustry('');
+    const criteria: SearchCriteria = {
+      ...appliedSearchCriteria,
+      query: pill.query ?? '',
+      role: '',
+      industry: '',
+    };
+    updateDraftSearchCriteria(criteria);
+    setActiveView('all');
+    setActiveDiscoveryTab('feed');
+    void executeSearch(criteria, { recordPopularity: true });
+    scrollToResults();
   };
 
   const clearAllFilters = () => {
@@ -1262,6 +1705,7 @@ export default function Home() {
     setShowWorkplaceDropdown(false);
     setShowTypeDropdown(false);
     setShowLevelDropdown(false);
+    setShowAdvancedFilters(false);
     setRoleSearchQuery('');
     setCompanySearchQuery('');
     setSortBy('relevance');
@@ -1276,11 +1720,12 @@ export default function Home() {
       level: '',
       remote: '',
       industry: '',
-    });
+    }, { sort: 'relevance' });
   };
 
   const removeAppliedFilter = (filter: keyof SearchCriteria) => {
     const remainingCriteria = { ...appliedSearchCriteria, [filter]: '' };
+    updateDraftSearchCriteria(remainingCriteria);
     setActiveView('all');
     setActiveDiscoveryTab('feed');
     if (filter === 'query' && query === appliedSearchCriteria.query) setQuery('');
@@ -1316,7 +1761,7 @@ export default function Home() {
     }
     setIsLoadingMore(false);
     setVisibleCount(JOBS_BATCH_SIZE);
-  }, [query, company, location, type, level, selectedRole, remote, industry, sortBy, activeView, jobs]);
+  }, [query, company, location, type, level, selectedRole, remote, industry, sortBy, activeView]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -1328,12 +1773,20 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => () => {
+    searchRequestIdRef.current += 1;
+    activeSearchAbortRef.current?.abort();
+    paginationAbortRef.current?.abort();
+  }, []);
+
   // Sliced jobs for progressive chunk lazy loading
   const visibleJobs = useMemo(() => {
     return displayedJobs.slice(0, visibleCount);
   }, [displayedJobs, visibleCount]);
 
-  const hasMore = visibleCount < displayedJobs.length;
+  const hasMore =
+    visibleCount < displayedJobs.length ||
+    (activeView === 'all' && searchTruncated && !searchError);
 
   // Track scroll-through progress and animated elapsed counting across job cards
   const isJobGridActive = (searched && displayedJobs.length > 0) || (activeView === 'saved' && savedJobs.length > 0);
@@ -1350,6 +1803,11 @@ export default function Home() {
 
   const loadMore = useCallback(() => {
     if (isLoadingMore || !hasMore) return;
+    if (visibleCount >= displayedJobs.length) {
+      void loadNextSearchPage();
+      return;
+    }
+
     setIsLoadingMore(true);
 
     if (loadingMoreTimeoutRef.current) {
@@ -1364,7 +1822,7 @@ export default function Home() {
     requestAnimationFrame(() => {
       setIsLoadingMore(false);
     });
-  }, [isLoadingMore, hasMore, displayedJobs.length]);
+  }, [isLoadingMore, hasMore, visibleCount, displayedJobs.length, loadNextSearchPage]);
 
   // Seamless auto-load on scroll via IntersectionObserver with 800px lookahead
   useEffect(() => {
@@ -1497,20 +1955,27 @@ export default function Home() {
               transition={{ duration: 0.2 }}
               className={`site-header-status ${isScrollingCards ? 'is-scrolling-cards' : ''}`}
               title={
-                isScrollingCards
+                pendingSearchCriteria
+                  ? `Refreshing results for ${getSearchCriteriaSummary(pendingSearchCriteria) || 'all industries'}; prior applied results are hidden.`
+                  : isScrollingCards
                   ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches)`
                   : searched
-                    ? `${matchingCount.toLocaleString()} active roles match; ${displayedJobs.length.toLocaleString()} are loaded from ${formattedCount} live verified openings across ${sourcesCount} direct ATS feeds`
+                    ? `${matchingCount.toLocaleString()} matches for the current search; ${displayedJobs.length.toLocaleString()} matching jobs loaded. ${globalInventorySummary}`
                     : activeView === 'saved'
                       ? `${savedJobs.length} bookmarked tech opportunities`
-                      : `Total ${formattedCount} live verified opportunities actively aggregated from ${sourcesCount} direct employer ATS feeds`
+                      : globalInventorySummary
               }
             >
               <span className={`site-header-radar ${isScrollingCards ? (isAllViewed ? 'is-complete' : 'is-scrolling') : ''}`} />
               <span>
                 <span className="desktop-only">
                   {searched ? (
-                    isScrollingCards ? (
+                    pendingSearchCriteria ? (
+                      <span className="elapsed-counter-status">
+                        <span className="elapsed-counter-label">Updating search</span>
+                        <span className="count-secondary">{getSearchCriteriaSummary(pendingSearchCriteria) || 'All Industries'}</span>
+                      </span>
+                    ) : isScrollingCards ? (
                       <span className="elapsed-counter-status">
                         <span className="elapsed-counter-num">{animatedElapsedCount}</span>
                         <span className="elapsed-counter-of">of</span>
@@ -1518,15 +1983,15 @@ export default function Home() {
                         <span className="elapsed-counter-label">Loaded Matches</span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
                         <span className="elapsed-counter-verified count-secondary">
-                          {isAllViewed ? (searchTruncated ? 'All Loaded Roles Viewed' : 'All Roles Viewed') : `${formattedCount} Total Verified`}
+                          {isAllViewed ? (searchTruncated ? 'All Loaded Roles Viewed' : 'All Roles Viewed') : globalInventorySummary}
                         </span>
                       </span>
                     ) : (
                       <span className="elapsed-counter-status">
-                        <span className="elapsed-counter-num">{matchingCount.toLocaleString()}</span>
-                        <span className="elapsed-counter-label">Roles Matched</span>
+                        <span className="elapsed-counter-num">{searchError ? '—' : matchingCount.toLocaleString()}</span>
+                        <span className="elapsed-counter-label">{searchError ? 'Search unavailable' : 'Roles Matched'}</span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
-                        <span className="elapsed-counter-verified count-secondary">{formattedCount} Total Verified</span>
+                        <span className="elapsed-counter-verified count-secondary">{globalInventorySummary}</span>
                       </span>
                     )
                   ) : activeView === 'saved' && savedJobs.length > 0 ? (
@@ -1550,14 +2015,18 @@ export default function Home() {
                   ) : (
                     <span className="elapsed-counter-status">
                       <span className="elapsed-counter-num">{formattedCount}</span>
-                      <span className="elapsed-counter-label">Live</span>
-                      <span className="count-secondary">Verified Roles</span>
+                      <span className="elapsed-counter-label">Global</span>
+                      <span className="count-secondary">Provider Snapshot</span>
                     </span>
                   )}
                 </span>
                 <span className="mobile-only">
                   {searched ? (
-                    isScrollingCards ? (
+                    pendingSearchCriteria ? (
+                      <span className="elapsed-counter-status">
+                        <span className="elapsed-counter-label">Updating</span>
+                      </span>
+                    ) : isScrollingCards ? (
                       <span className="elapsed-counter-status">
                         <span className="elapsed-counter-num">{animatedElapsedCount}</span>
                         <span className="elapsed-counter-of">/</span>
@@ -1566,8 +2035,8 @@ export default function Home() {
                       </span>
                     ) : (
                       <span className="elapsed-counter-status">
-                        <span className="elapsed-counter-num">{matchingCount.toLocaleString()}</span>
-                        <span className="elapsed-counter-label">Matched</span>
+                        <span className="elapsed-counter-num">{searchError ? '—' : matchingCount.toLocaleString()}</span>
+                        <span className="elapsed-counter-label">{searchError ? 'Unavailable' : 'Matched'}</span>
                       </span>
                     )
                   ) : activeView === 'saved' && savedJobs.length > 0 ? (
@@ -1877,11 +2346,19 @@ export default function Home() {
           >
             <Sparkles size={14} className="hero-ats-badge-icon" />
             <span className="hero-ats-badge-accent">
-              {searched ? `${matchingCount.toLocaleString()} Roles Matched` : `${formattedCount} Live Roles`}
+              {pendingSearchCriteria
+                ? `Updating: ${getSearchCriteriaSummary(pendingSearchCriteria) || 'All Industries'}`
+                : searched
+                  ? searchError && failedSearch ? 'Search unavailable' : `${matchingCount.toLocaleString()} Matching Jobs`
+                  : globalInventorySummary}
             </span>
             <span className="hero-ats-badge-bullet">•</span>
             <span className="hero-ats-badge-secondary">
-              {searched ? `${formattedCount} Total Verified` : `${sourcesCount} Verified Public Sources`}
+              {pendingSearchCriteria
+                ? `Last applied: ${getSearchCriteriaSummary(appliedSearchCriteria) || 'All Industries'}`
+                : searched
+                  ? searchError && failedSearch ? 'Search could not be completed' : `${displayedJobs.length.toLocaleString()} Loaded · ${globalInventorySummary}`
+                  : `${sourcesCount || '—'} Configured Public Sources`}
             </span>
           </motion.div>
 
@@ -2149,12 +2626,38 @@ export default function Home() {
                 <Search size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
                 <input
                   type="text"
+                  role="combobox"
+                  aria-label="Search jobs by role, skills, or company"
+                  aria-autocomplete="list"
+                  aria-expanded={showJobDropdown && jobSuggestions.length > 0}
+                  aria-controls="job-suggestions-listbox"
+                  aria-activedescendant={activeJobSuggestionIndex >= 0 ? `job-suggestion-${activeJobSuggestionIndex}` : undefined}
                   placeholder="Search role, skills, or company (e.g. React, Python, Staff)..."
                   value={query}
-                  onFocus={() => setShowJobDropdown(true)}
+                  onFocus={() => {
+                    setShowJobDropdown(true);
+                    setActiveJobSuggestionIndex(-1);
+                  }}
                   onChange={(e) => {
                     setQuery(e.target.value);
                     setShowJobDropdown(true);
+                    setActiveJobSuggestionIndex(-1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setShowJobDropdown(false);
+                      setActiveJobSuggestionIndex(-1);
+                    } else if (jobSuggestions.length > 0 && e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setShowJobDropdown(true);
+                      setActiveJobSuggestionIndex((index) => Math.min(index + 1, jobSuggestions.length - 1));
+                    } else if (jobSuggestions.length > 0 && e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setActiveJobSuggestionIndex((index) => Math.max(index - 1, 0));
+                    } else if (e.key === 'Enter' && activeJobSuggestionIndex >= 0) {
+                      e.preventDefault();
+                      handleJobSuggestionClick(jobSuggestions[activeJobSuggestionIndex]);
+                    }
                   }}
                   style={{
                     width: '100%',
@@ -2172,6 +2675,7 @@ export default function Home() {
                     onClick={() => {
                       setQuery('');
                       setJobSuggestions(getSuggestions(''));
+                      setActiveJobSuggestionIndex(-1);
                     }}
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4 }}
                     title="Clear input"
@@ -2189,6 +2693,9 @@ export default function Home() {
                       exit={{ opacity: 0, y: -6, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
                       className="glass-panel"
+                      id="job-suggestions-listbox"
+                      role="listbox"
+                      aria-label="Suggested roles"
                       style={{
                         position: 'absolute',
                         top: '115%',
@@ -2228,6 +2735,9 @@ export default function Home() {
                       {jobSuggestions.map((suggestion, i) => (
                         <div
                           key={i}
+                          id={`job-suggestion-${i}`}
+                          role="option"
+                          aria-selected={activeJobSuggestionIndex === i}
                           onClick={() => handleJobSuggestionClick(suggestion)}
                           style={{
                             padding: '0.75rem 1rem',
@@ -2239,9 +2749,13 @@ export default function Home() {
                             alignItems: 'center',
                             gap: '0.55rem',
                             transition: 'background 0.15s ease',
+                            background: activeJobSuggestionIndex === i ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
                           }}
                           onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background =
+                              activeJobSuggestionIndex === i ? 'rgba(99, 102, 241, 0.12)' : 'transparent';
+                          }}
                         >
                           <Briefcase size={14} color="var(--primary-start)" />
                           <span>{suggestion}</span>
@@ -2273,12 +2787,40 @@ export default function Home() {
                 <MapPin size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
                 <input
                   type="text"
+                  role="combobox"
+                  aria-label="Search jobs by city, state, or country"
+                  aria-autocomplete="list"
+                  aria-expanded={showLocDropdown && activeLocationOptions.length > 0}
+                  aria-controls="location-suggestions-listbox"
+                  aria-activedescendant={activeLocationSuggestionIndex >= 0 ? `location-suggestion-${activeLocationSuggestionIndex}` : undefined}
                   placeholder="Search by Country or City"
                   value={location}
-                  onFocus={() => setShowLocDropdown(true)}
+                  onFocus={() => {
+                    setShowLocDropdown(true);
+                    setActiveLocationSuggestionIndex(-1);
+                  }}
                   onChange={(e) => {
                     setLocation(e.target.value);
                     setShowLocDropdown(true);
+                    setActiveLocationSuggestionIndex(-1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setShowLocDropdown(false);
+                      setActiveLocationSuggestionIndex(-1);
+                    } else if (activeLocationOptions.length > 0 && e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setShowLocDropdown(true);
+                      setActiveLocationSuggestionIndex((index) =>
+                        Math.min(index + 1, activeLocationOptions.length - 1)
+                      );
+                    } else if (activeLocationOptions.length > 0 && e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setActiveLocationSuggestionIndex((index) => Math.max(index - 1, 0));
+                    } else if (e.key === 'Enter' && activeLocationSuggestionIndex >= 0) {
+                      e.preventDefault();
+                      handleLocSuggestionClick(activeLocationOptions[activeLocationSuggestionIndex]);
+                    }
                   }}
                   style={{
                     width: '100%',
@@ -2296,6 +2838,7 @@ export default function Home() {
                     onClick={() => {
                       setLocation('');
                       setLocationSuggestions(getLocationSuggestions(''));
+                      setActiveLocationSuggestionIndex(-1);
                     }}
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4 }}
                     title="Clear location"
@@ -2313,6 +2856,9 @@ export default function Home() {
                       exit={{ opacity: 0, y: -6, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
                       className="glass-panel"
+                      id="location-suggestions-listbox"
+                      role="listbox"
+                      aria-label="Suggested locations"
                       style={{
                         position: 'absolute',
                         top: '115%',
@@ -2335,7 +2881,7 @@ export default function Home() {
                       {!location.trim() ? (
                         /* Grouped View: Tier 1 Metros, Tier 2 Emerging Tech Hubs, Global & Remote */
                         POPULAR_LOCATION_GROUPS.map((group, gIdx) => (
-                          <div key={gIdx}>
+                          <div key={gIdx} role="group" aria-label={group.group}>
                             <div
                               style={{
                                 padding: '0.55rem 0.95rem',
@@ -2356,6 +2902,9 @@ export default function Home() {
                               <span style={{ fontSize: '0.67rem', opacity: 0.8 }}>{group.badge}</span>
                             </div>
                             {group.locations.map((item, i) => {
+                              const optionIndex = POPULAR_LOCATION_GROUPS
+                                .slice(0, gIdx)
+                                .reduce((count, previousGroup) => count + previousGroup.locations.length, 0) + i;
                               const tierClass = item.tier === 'tier1'
                                 ? 'loc-tier-tier1'
                                 : item.tier === 'tier2'
@@ -2366,9 +2915,13 @@ export default function Home() {
                               return (
                                 <div
                                   key={i}
+                                  id={`location-suggestion-${optionIndex}`}
+                                  role="option"
+                                  aria-selected={activeLocationSuggestionIndex === optionIndex}
                                   onClick={() => handleLocSuggestionClick(item.label)}
                                   style={{
                                     padding: '0.65rem 0.95rem',
+                                    minHeight: roleDropdownIsMobile ? 44 : undefined,
                                     cursor: 'pointer',
                                     borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
                                     color: 'var(--text-primary)',
@@ -2377,9 +2930,15 @@ export default function Home() {
                                     alignItems: 'center',
                                     gap: '0.55rem',
                                     transition: 'background 0.15s ease',
+                                    background: activeLocationSuggestionIndex === optionIndex ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
                                   }}
                                   onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background =
+                                      activeLocationSuggestionIndex === optionIndex
+                                        ? 'rgba(99, 102, 241, 0.12)'
+                                        : 'transparent';
+                                  }}
                                 >
                                   <MapPin size={13} color="var(--primary-start)" style={{ flexShrink: 0 }} />
                                   <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
@@ -2435,6 +2994,9 @@ export default function Home() {
                               return (
                                 <div
                                   key={i}
+                                  id={`location-suggestion-${i}`}
+                                  role="option"
+                                  aria-selected={activeLocationSuggestionIndex === i}
                                   onClick={() => handleLocSuggestionClick(loc)}
                                   style={{
                                     padding: '0.65rem 0.95rem',
@@ -2446,9 +3008,15 @@ export default function Home() {
                                     alignItems: 'center',
                                     gap: '0.55rem',
                                     transition: 'background 0.15s ease',
+                                    background: activeLocationSuggestionIndex === i ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
                                   }}
                                   onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background =
+                                      activeLocationSuggestionIndex === i
+                                        ? 'rgba(99, 102, 241, 0.12)'
+                                        : 'transparent';
+                                  }}
                                 >
                                   <MapPin size={13} color="var(--primary-start)" style={{ flexShrink: 0 }} />
                                   <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{loc}</span>
@@ -2472,6 +3040,8 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 type="submit"
                 onClick={scrollToResults}
+                disabled={loading}
+                aria-busy={loading}
                 className="btn-primary search-submit-btn"
                 style={{
                   height: 48,
@@ -2521,6 +3091,7 @@ export default function Home() {
                         position: 'relative',
                         flex: '1.1',
                         minWidth: 160,
+                        order: 2,
                       }}
                     >
                       <button
@@ -2598,31 +3169,69 @@ export default function Home() {
                         </div>
                       </button>
 
-                      <AnimatePresence>
-                        {showRoleDropdown && (
+                      {showRoleDropdown && roleDropdownPosition && typeof document !== 'undefined' && createPortal(
+                        <>
+                          {roleDropdownIsMobile && (
+                            <motion.button
+                              type="button"
+                              aria-label="Close role and category options"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              onClick={() => setShowRoleDropdown(false)}
+                              style={{
+                                position: 'fixed',
+                                inset: 0,
+                                zIndex: 1000,
+                                border: 0,
+                                background: 'rgba(2, 6, 23, 0.48)',
+                                touchAction: 'none',
+                              }}
+                            />
+                          )}
                           <motion.div
+                            ref={roleDropdownMenuRef}
+                            onKeyDown={(event) => {
+                              const options = roleDropdownMenuRef.current?.querySelectorAll<HTMLElement>('[data-role-option]');
+                              if (!options?.length) return;
+                              const activeOption = (event.target as HTMLElement).closest<HTMLElement>('[data-role-option]');
+                              const activeIndex = activeOption ? Array.from(options).indexOf(activeOption) : -1;
+
+                              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                                event.preventDefault();
+                                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                                const nextIndex = activeIndex < 0
+                                  ? (direction > 0 ? 0 : options.length - 1)
+                                  : (activeIndex + direction + options.length) % options.length;
+                                options[nextIndex]?.focus();
+                              } else if (activeOption && (event.key === 'Enter' || event.key === ' ')) {
+                                event.preventDefault();
+                                activeOption.click();
+                              }
+                            }}
                             initial={{ opacity: 0, y: -6, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -6, scale: 0.98 }}
                             transition={{ duration: 0.18, ease: 'easeOut' }}
-                            className="glass-panel dropdown-popover-left"
+                            className="glass-panel"
                             style={{
                               position: 'absolute',
                               top: 'calc(100% + 6px)',
                               left: 0,
                               width: 'max-content',
-                              minWidth: 'max(100%, 320px)',
+                              minWidth: roleDropdownIsMobile ? 0 : 320,
                               maxWidth: 'min(440px, calc(100vw - 2.5rem))',
                               maxHeight: 380,
                               zIndex: 250,
                               background: 'var(--dropdown-bg)',
-                              borderRadius: 12,
                               border: '1px solid var(--border)',
                               boxShadow: 'var(--shadow-lg)',
                               display: 'flex',
                               flexDirection: 'column',
                               overflow: 'hidden',
                               textAlign: 'left',
+                              borderRadius: roleDropdownIsMobile ? 18 : 12,
+                              ...roleDropdownPosition,
                             }}
                           >
                             {/* Sticky Search Filter */}
@@ -2644,6 +3253,7 @@ export default function Home() {
                                   background: 'var(--input-bg)',
                                   borderRadius: 8,
                                   padding: '0.45rem 0.65rem',
+                                  minHeight: roleDropdownIsMobile ? 44 : undefined,
                                   border: '1px solid var(--input-border)',
                                 }}
                               >
@@ -2654,7 +3264,7 @@ export default function Home() {
                                   value={roleSearchQuery}
                                   onChange={(e) => setRoleSearchQuery(e.target.value)}
                                   onClick={(e) => e.stopPropagation()}
-                                  autoFocus
+                                  autoFocus={!roleDropdownIsMobile}
                                   style={{
                                     width: '100%',
                                     background: 'transparent',
@@ -2677,9 +3287,17 @@ export default function Home() {
                             </div>
 
                             {/* Scrollable Options List */}
-                            <div style={{ overflowY: 'auto', maxHeight: 320, padding: '0.35rem 0' }}>
+                            <div
+                              role="listbox"
+                              aria-label="Job roles and categories"
+                              style={{ overflowY: 'auto', minHeight: 0, flex: '1 1 auto', padding: '0.35rem 0' }}
+                            >
                               {/* Reset / All Roles Option */}
                               <div
+                                role="option"
+                                aria-selected={selectedRole === ''}
+                                tabIndex={0}
+                                data-role-option
                                 onClick={() => handleRoleSelect('')}
                                 style={{
                                   padding: '0.65rem 0.95rem',
@@ -2737,9 +3355,14 @@ export default function Home() {
                                       return (
                                         <div
                                           key={pIdx}
+                                          role="option"
+                                          aria-selected={isSelected}
+                                          tabIndex={0}
+                                          data-role-option
                                           onClick={() => handleRoleSelect(post.value)}
                                           style={{
                                             padding: '0.6rem 0.95rem 0.6rem 1.4rem',
+                                            minHeight: roleDropdownIsMobile ? 44 : undefined,
                                             cursor: 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
@@ -2770,8 +3393,9 @@ export default function Home() {
                               )}
                             </div>
                           </motion.div>
-                        )}
-                      </AnimatePresence>
+                        </>,
+                        document.body
+                      )}
                     </div>
 
                     {/* Company Custom Dropdown */}
@@ -2780,9 +3404,13 @@ export default function Home() {
                       className="search-refinement-company"
                       style={{
                         position: 'relative',
-                        flex: '1.1',
-                        minWidth: 155,
+                        display: showAdvancedFilters ? 'block' : 'none',
+                        flex: showAdvancedFilters ? '1 1 100%' : '0 0 0',
+                        minWidth: showAdvancedFilters ? '100%' : 0,
+                        order: 6,
+                        gridColumn: showAdvancedFilters ? '1 / -1' : undefined,
                       }}
+                      id="advanced-company-filter"
                     >
                       <button
                         type="button"
@@ -3002,6 +3630,7 @@ export default function Home() {
                         position: 'relative',
                         flex: '1.4',
                         minWidth: 190,
+                        order: 1,
                       }}
                     >
                       <button
@@ -3156,7 +3785,9 @@ export default function Home() {
                     <div
                       ref={workplaceDropdownRef}
                       className="search-refinement-workplace"
+                      aria-hidden="true"
                       style={{
+                        display: 'none',
                         position: 'relative',
                         flex: '0.85',
                         minWidth: 140,
@@ -3315,6 +3946,7 @@ export default function Home() {
                         position: 'relative',
                         flex: '0.75',
                         minWidth: 120,
+                        order: 3,
                       }}
                     >
                       <button
@@ -3464,6 +4096,7 @@ export default function Home() {
                         position: 'relative',
                         flex: '0.8',
                         minWidth: 130,
+                        order: 4,
                       }}
                     >
                       <button
@@ -3605,6 +4238,49 @@ export default function Home() {
                       </AnimatePresence>
                     </div>
 
+                    <button
+                      type="button"
+                      aria-expanded={showAdvancedFilters}
+                      aria-controls="advanced-company-filter"
+                      onClick={() => setShowAdvancedFilters((current) => !current)}
+                      style={{
+                        order: 5,
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--input-border)',
+                        color: 'var(--text-secondary)',
+                        borderRadius: 10,
+                        fontSize: '0.82rem',
+                        padding: '0.62rem 0.8rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <SlidersHorizontal size={14} />
+                      <span>Advanced filters</span>
+                      {company && (
+                        <span
+                          aria-label="1 active advanced filter"
+                          style={{
+                            minWidth: 18,
+                            height: 18,
+                            borderRadius: 999,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'rgba(99, 102, 241, 0.18)',
+                            color: 'var(--primary-start)',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          1
+                        </span>
+                      )}
+                    </button>
+
                     {/* Clear Filters CTA if active */}
                     {searched && (appliedSearchCriteria.query || appliedSearchCriteria.company || appliedSearchCriteria.location || appliedSearchCriteria.remote || appliedSearchCriteria.role || appliedSearchCriteria.type || appliedSearchCriteria.level || appliedSearchCriteria.industry) && (
                       <button
@@ -3612,6 +4288,7 @@ export default function Home() {
                         onClick={clearAllFilters}
                         className="search-refinement-reset"
                         style={{
+                          order: 7,
                           background: 'rgba(255, 255, 255, 0.04)',
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                           color: 'var(--text-secondary)',
@@ -3946,29 +4623,81 @@ export default function Home() {
           }}
           aria-label="Search results and opportunities feed"
         >
-          {searched && (pendingSearchCriteria || searchError || searchTruncated) && (
+          {searchError && displayedJobs.length > 0 && (
             <div
-              role={searchError ? 'alert' : 'status'}
-              aria-live={searchError ? 'assertive' : 'polite'}
+              role="alert"
+              aria-live="assertive"
+              style={{
+                marginBottom: '0.85rem',
+                padding: '0.65rem 0.85rem',
+                borderRadius: '0.65rem',
+                border: '1px solid rgba(248, 113, 113, 0.3)',
+                background: 'rgba(127, 29, 29, 0.12)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.84rem',
+              }}
+            >
+              <span>{searchError} Your loaded results remain available.</span>
+              {searchTruncated && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchError('');
+                    void loadNextSearchPage();
+                  }}
+                  disabled={isLoadingMore}
+                  style={{
+                    marginLeft: '0.6rem',
+                    padding: 0,
+                    border: 0,
+                    background: 'transparent',
+                    color: 'var(--primary-start)',
+                    font: 'inherit',
+                    fontWeight: 650,
+                    cursor: isLoadingMore ? 'wait' : 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {isLoadingMore ? 'Retrying…' : 'Retry loading more'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {(pendingSearchCriteria || inventoryStatsError || (hasUnappliedDraft && !searchError) || (searchTruncated && !pendingSearchCriteria && !searchError)) && (
+            <div
+              role="status"
+              aria-live="polite"
               style={{
                 marginBottom: '0.85rem',
                 padding: '0.75rem 1rem',
                 borderRadius: '0.75rem',
-                border: `1px solid ${searchError ? 'rgba(248, 113, 113, 0.35)' : 'rgba(99, 102, 241, 0.25)'}`,
-                background: searchError ? 'rgba(127, 29, 29, 0.16)' : 'rgba(99, 102, 241, 0.08)',
-                color: searchError ? 'var(--text-primary)' : 'var(--text-secondary)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                background: 'rgba(99, 102, 241, 0.08)',
+                color: 'var(--text-secondary)',
                 fontSize: '0.86rem',
               }}
             >
               {pendingSearchCriteria && (
                 <p style={{ margin: 0 }}>
-                  Updating job results. The last completed results remain visible until this search finishes.
+                  Updating results for {getSearchCriteriaSummary(pendingSearchCriteria) || 'all industries'}.
+                  {jobs.length > 0 && ` Previous results for ${getSearchCriteriaSummary(appliedSearchCriteria) || 'all industries'} are hidden until this search finishes.`}
                 </p>
               )}
-              {searchError && <p style={{ margin: 0 }}>{searchError}</p>}
-              {searchTruncated && (
-                <p style={{ margin: searchError ? '0.35rem 0 0' : 0 }}>
-                  {matchingCount.toLocaleString()} jobs match; {displayedJobs.length.toLocaleString()} are loaded. Refine your search to narrow the results.
+              {hasUnappliedDraft && !pendingSearchCriteria && !searchError && (
+                <p style={{ margin: 0 }}>
+                  Draft filters are not applied. The results below still use {getSearchCriteriaSummary(appliedSearchCriteria) || 'all industries'}.
+                  Press Search Jobs to apply the selected controls.
+                </p>
+              )}
+              {searchTruncated && !pendingSearchCriteria && !searchError && (
+                <p style={{ margin: searchError || pendingSearchCriteria ? '0.35rem 0 0' : 0 }}>
+                  {matchingCount.toLocaleString()} matching jobs in this search; {displayedJobs.length.toLocaleString()} are loaded. Scroll or choose “Load more” to continue.
+                </p>
+              )}
+              {inventoryStatsError && (
+                <p style={{ margin: '0.35rem 0 0' }}>
+                  {globalInventorySummary}
                 </p>
               )}
             </div>
@@ -3988,11 +4717,9 @@ export default function Home() {
                     {activeView === 'saved' ? (
                       `${savedJobs.length} Saved Positions`
                     ) : searchTruncated ? (
-                      `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} loaded (${matchingCount.toLocaleString()} matches)`
+                      `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} loaded · ${matchingCount.toLocaleString()} matches`
                     ) : (
-                      displayedJobs.length > JOBS_BATCH_SIZE
-                        ? `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} Verified Positions`
-                        : `${matchingCount.toLocaleString()} Verified Positions`
+                      `Showing ${visibleJobs.length} of ${matchingCount.toLocaleString()} matching jobs`
                     )}
                   </h3>
 
@@ -4022,20 +4749,20 @@ export default function Home() {
                       <span className="desktop-only">
                         {isScrollingCards ? (
                           <>
-                            <span className="count-main">{animatedElapsedCount} of {matchingCount.toLocaleString()} Roles Matched</span>
-                            <span className="count-secondary"> • {formattedCount} Total Verified</span>
+                            <span className="count-main">{animatedElapsedCount} viewed · {matchingCount.toLocaleString()} matches</span>
+                            <span className="count-secondary"> • {globalInventorySummary}</span>
                           </>
                         ) : (
                           <>
-                            <span className="count-main">{matchingCount.toLocaleString()} Roles Matched</span>
-                            <span className="count-secondary"> • {formattedCount} Total Verified</span>
+                            <span className="count-main">{matchingCount.toLocaleString()} matching jobs</span>
+                            <span className="count-secondary"> • {globalInventorySummary}</span>
                           </>
                         )}
                       </span>
                       <span className="mobile-only">
                         {isScrollingCards
-                          ? `${animatedElapsedCount}/${displayedJobs.length.toLocaleString()} Roles`
-                          : `${displayedJobs.length.toLocaleString()} Roles`}
+                          ? `${animatedElapsedCount}/${displayedJobs.length.toLocaleString()} viewed`
+                          : `${matchingCount.toLocaleString()} matches`}
                       </span>
                     </motion.div>
                   )}
@@ -4149,9 +4876,9 @@ export default function Home() {
                     <button
                       type="button"
                       role="radio"
-                      aria-checked={sortBy === 'relevance'}
+                      aria-checked={appliedSortBy === 'relevance'}
                       onClick={() => handleSortSelect('relevance')}
-                      className={`results-sort-btn ${sortBy === 'relevance' ? 'is-active' : ''}`}
+                      className={`results-sort-btn ${appliedSortBy === 'relevance' ? 'is-active' : ''}`}
                     >
                       <TrendingUp size={12} />
                       <span>Best Match</span>
@@ -4159,9 +4886,9 @@ export default function Home() {
                     <button
                       type="button"
                       role="radio"
-                      aria-checked={sortBy === 'date'}
+                      aria-checked={appliedSortBy === 'date'}
                       onClick={() => handleSortSelect('date')}
-                      className={`results-sort-btn ${sortBy === 'date' ? 'is-active' : ''}`}
+                      className={`results-sort-btn ${appliedSortBy === 'date' ? 'is-active' : ''}`}
                     >
                       <Clock size={12} />
                       <span>Freshest First</span>
@@ -4246,7 +4973,7 @@ export default function Home() {
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
                     >
                       <Compass size={15} />
-                      <span>Browse Verified Roles</span>
+                      <span>Browse Jobs</span>
                     </motion.button>
                   </div>
                 ) : (
@@ -4335,7 +5062,7 @@ export default function Home() {
                             >
                               <ArrowDown size={14} />
                               <span>
-                                Load Next {Math.min(JOBS_BATCH_SIZE, displayedJobs.length - visibleJobs.length)} Roles
+                                Load more matching jobs
                               </span>
                             </motion.button>
                           </>
@@ -4345,7 +5072,7 @@ export default function Home() {
                   </>
                 )}
               </div>
-            ) : !searched || activeDiscoveryTab === 'tracks' ? (
+            ) : (!searched || activeDiscoveryTab === 'tracks') && !searchError ? (
               /* Curated Discovery Tracks View */
               <div
                 ref={tracksContentRef}
@@ -4383,17 +5110,20 @@ export default function Home() {
                   </p>
                 </div>
 
-                {/* 12-Card Domain Explorer Grid */}
+                {/* Canonical industry discovery cards */}
                 <div className="discovery-domain-grid">
-                  {DISCOVERY_DOMAINS.map((domain, idx) => {
+                  {DISCOVERY_DOMAINS.map((domain) => {
                     const Icon = domain.icon;
                     return (
-                      <motion.div
-                        key={idx}
+                      <motion.button
+                        key={domain.industry}
+                        type="button"
                         whileHover={{ y: -5, scale: 1.01 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => handleDomainClick(domain)}
                         className="domain-card"
+                        aria-label={`Explore ${INDUSTRY_TAXONOMY[domain.industry].label} jobs`}
+                        style={{ textAlign: 'left', color: 'inherit', font: 'inherit', cursor: 'pointer' }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div className="domain-card-icon">
@@ -4410,13 +5140,13 @@ export default function Home() {
                               border: '1px solid rgba(16, 185, 129, 0.3)',
                             }}
                           >
-                            {domain.count}
+                            Explore jobs
                           </span>
                         </div>
 
                         <div>
                           <div className="domain-card-title">
-                            <span>{domain.title}</span>
+                            <span>{INDUSTRY_TAXONOMY[domain.industry].label}</span>
                             <ChevronRight size={16} color="var(--primary-start)" />
                           </div>
                           <p className="domain-card-desc">{domain.desc}</p>
@@ -4429,7 +5159,7 @@ export default function Home() {
                             </span>
                           ))}
                         </div>
-                      </motion.div>
+                      </motion.button>
                     );
                   })}
                 </div>
@@ -4459,7 +5189,7 @@ export default function Home() {
                       Prefer to explore without filters?
                     </h4>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem' }}>
-                      Access our full aggregated feed of {formattedCount} verified opportunities directly from public boards.
+                      Browse available roles in the current JobNexus feed: {globalInventorySummary}.
                     </p>
                   </div>
 
@@ -4470,7 +5200,7 @@ export default function Home() {
                     className="btn-primary"
                     style={{ padding: '0.85rem 1.8rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.55rem' }}
                   >
-                    <span>Browse All {formattedCount} Positions</span>
+                    <span>Browse All Jobs</span>
                     <ArrowRight size={17} />
                   </motion.button>
                 </motion.div>
@@ -4483,7 +5213,7 @@ export default function Home() {
                   <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
                     {[
                       { label: 'Direct Employer ATS Pipelines', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
-                      { label: '100% Verified Tech Opportunities', icon: <Zap size={13} color="#38bdf8" /> },
+                      { label: 'Technology Opportunities', icon: <Zap size={13} color="#38bdf8" /> },
                       { label: 'Zero Recruiter Spam', icon: <ShieldCheck size={13} color="var(--accent-emerald)" /> },
                       { label: 'Tier 1 & Tier 2 India Tech Hubs', icon: <span style={{ fontSize: '0.85rem' }}>🇮🇳</span> },
                       { label: 'Worldwide Distributed & Remote Roles', icon: <Globe size={13} color="#6366f1" /> },
@@ -4497,6 +5227,43 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
+              </div>
+            ) : searchError ? (
+              <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
+                <div
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    display: 'inline-flex',
+                    padding: '1.25rem',
+                    borderRadius: '50%',
+                    marginBottom: '1.25rem',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                  }}
+                >
+                  <AlertCircle size={36} color="var(--error)" />
+                </div>
+                <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>Search temporarily unavailable</h3>
+                <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
+                  The search could not be completed. Your search criteria have been kept; please try again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (failedSearch) {
+                      void executeSearch(failedSearch.criteria, {
+                        sort: failedSearch.sort,
+                        forceRefresh: true,
+                      });
+                    }
+                  }}
+                  disabled={!failedSearch || loading}
+                  aria-busy={loading}
+                  className="btn-primary"
+                  style={{ marginTop: '1.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                  <span>{loading ? 'Retrying Search…' : 'Retry Search'}</span>
+                </button>
               </div>
             ) : displayedJobs.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '4.5rem 1.5rem' }} className="animate-fade-in">
@@ -4512,9 +5279,9 @@ export default function Home() {
                 >
                   <AlertCircle size={36} color="var(--error)" />
                 </div>
-                <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>No active verified listings found</h3>
+                <h3 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.5rem' }}>No matching jobs found</h3>
                 <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
-                  We couldn&apos;t verify any active public links matching your exact combination. Try broadening your keywords or resetting filters.
+                  No jobs matched {getSearchCriteriaSummary(appliedSearchCriteria) || 'your current search criteria'}. Try broadening your criteria or clearing a filter.
                 </p>
                 <div style={{ marginTop: '2rem', display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                   <motion.button
@@ -4529,8 +5296,10 @@ export default function Home() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
-                      clearAllFilters();
-                      setRemote('remote');
+                      const criteria = { ...appliedSearchCriteria, remote: 'remote' };
+                      updateDraftSearchCriteria(criteria);
+                      setActiveView('all');
+                      void executeSearch(criteria);
                     }}
                     className="btn-secondary"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
@@ -4645,7 +5414,7 @@ export default function Home() {
                         >
                           <ArrowDown size={14} />
                           <span>
-                            Load Next {Math.min(JOBS_BATCH_SIZE, displayedJobs.length - visibleJobs.length)} Roles ({displayedJobs.length - visibleJobs.length} remaining)
+                            Load more matching jobs ({displayedJobs.length - visibleJobs.length} loaded)
                           </span>
                         </motion.button>
                       </>
@@ -4679,7 +5448,7 @@ export default function Home() {
                       }}
                     >
                       <Check size={14} />
-                      <span>All {displayedJobs.length} Verified Roles Loaded</span>
+                      <span>All {displayedJobs.length} Matching Jobs Loaded</span>
                     </div>
                     <button
                       type="button"

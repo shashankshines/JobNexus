@@ -170,12 +170,69 @@ export const INDUSTRY_TAXONOMY: Record<JobIndustry, IndustryDefinition> = {
   },
 };
 
+const INDUSTRY_ALIASES: Record<string, JobIndustry> = {
+  'finance and banking': 'finance_accounting',
+  'healthcare and medical': 'healthcare',
+  'education and training': 'education',
+  'technology and it': 'technology',
+  'fintech payments': 'finance_accounting',
+  'fintech trading': 'finance_accounting',
+  'fintech spend management': 'finance_accounting',
+  'crypto fintech': 'finance_accounting',
+  'travel hospitality': 'hospitality_tourism',
+};
+
+function normalizeIndustryText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export function normalizeIndustryId(value?: string): JobIndustry | null {
+  if (!value?.trim()) return null;
+
+  const normalized = normalizeIndustryText(value);
+  for (const [id, definition] of Object.entries(INDUSTRY_TAXONOMY) as [JobIndustry, IndustryDefinition][]) {
+    if (normalized === normalizeIndustryText(id) || normalized === normalizeIndustryText(definition.label)) {
+      return id;
+    }
+  }
+
+  return INDUSTRY_ALIASES[normalized] || null;
+}
+
+export function normalizeIndustryFilter(value?: string): JobIndustry | '' | null {
+  if (!value?.trim() || normalizeIndustryText(value) === 'all' || normalizeIndustryText(value) === 'all industries') {
+    return '';
+  }
+  return normalizeIndustryId(value);
+}
+
+export function resolveJobIndustry(
+  industry: string | undefined,
+  category: string | undefined,
+  title: string,
+  tags: string[] = [],
+  description?: string
+): JobIndustry {
+  const explicitIndustry = normalizeIndustryId(industry);
+  if (explicitIndustry && explicitIndustry !== 'other') return explicitIndustry;
+
+  const explicitCategory = normalizeIndustryId(category);
+  if (explicitCategory && explicitCategory !== 'other') return explicitCategory;
+
+  return classifyJobIndustry(title, tags, description).industry;
+}
+
 /**
  * Compiled regex map for high-performance deterministic industry classification.
  */
 interface TaxonomyRule {
   industry: JobIndustry;
-  titleRegex: RegExp;
+  titleRegex?: RegExp;
   tagRegex: RegExp;
 }
 
@@ -247,8 +304,7 @@ const TAXONOMY_RULES: TaxonomyRule[] = [
   },
   {
     industry: 'technology',
-    titleRegex: /\b(software|developer|frontend|backend|fullstack|devops|cloud|data engineer|data scientist|machine learning|artificial intelligence|cybersecurity|infosec|qa|automation engineer|sre|sysadmin|systems engineer|programmer|coder|react|node|python|golang|rust|ios engineer|android engineer|web developer)\b/i,
-    tagRegex: /\b(technology|software|engineering|devops|data science|programming|web development)\b/i,
+    tagRegex: /\b(technology|technology industry|information technology|tech industry)\b/i,
   },
 ];
 
@@ -269,18 +325,18 @@ export function classifyJobIndustry(
 
   // 1. Explicit source metadata priority
   if (sourceMetadata?.industry && typeof sourceMetadata.industry === 'string') {
-    const metaInd = sourceMetadata.industry.toLowerCase().trim() as JobIndustry;
-    if (INDUSTRY_TAXONOMY[metaInd]) {
+    const metaInd = normalizeIndustryId(sourceMetadata.industry);
+    if (metaInd) {
       return {
         industry: metaInd,
-        category: (sourceMetadata.category as string) || INDUSTRY_TAXONOMY[metaInd].label,
+        category: INDUSTRY_TAXONOMY[metaInd].label,
       };
     }
   }
 
-  // 2. High-priority title regex matching (Title is most explicit indicator)
+  // 2. Classify distinctive sector-specific occupations; generic software roles are cross-industry.
   for (const rule of TAXONOMY_RULES) {
-    if (rule.titleRegex.test(title)) {
+    if (rule.titleRegex?.test(title)) {
       return {
         industry: rule.industry,
         category: INDUSTRY_TAXONOMY[rule.industry].label,
@@ -288,10 +344,10 @@ export function classifyJobIndustry(
     }
   }
 
-  // 3. Tags matching
-  if (tagsStr) {
+  // 3. Prefer sector evidence in the description or tags for cross-industry occupations.
+  if (desc) {
     for (const rule of TAXONOMY_RULES) {
-      if (rule.tagRegex.test(tagsStr)) {
+      if (rule.industry !== 'technology' && rule.tagRegex.test(desc)) {
         return {
           industry: rule.industry,
           category: INDUSTRY_TAXONOMY[rule.industry].label,
@@ -300,10 +356,10 @@ export function classifyJobIndustry(
     }
   }
 
-  // 4. Description cues (first 500 chars) for strong sector indicators
-  if (desc) {
+  // 4. Technology requires an explicit industry tag, not merely a software skill or job title.
+  if (tagsStr) {
     for (const rule of TAXONOMY_RULES) {
-      if (rule.industry !== 'technology' && rule.tagRegex.test(desc)) {
+      if (rule.tagRegex.test(tagsStr)) {
         return {
           industry: rule.industry,
           category: INDUSTRY_TAXONOMY[rule.industry].label,
@@ -324,6 +380,6 @@ export function classifyJobIndustry(
  */
 export function getIndustryLabel(industry?: string): string {
   if (!industry || industry === 'all') return 'All Industries';
-  const found = INDUSTRY_TAXONOMY[industry as JobIndustry];
-  return found ? found.label : industry;
+  const canonical = normalizeIndustryId(industry);
+  return canonical ? INDUSTRY_TAXONOMY[canonical].label : industry;
 }

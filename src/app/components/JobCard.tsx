@@ -95,6 +95,7 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
   const [resolvedUrl, setResolvedUrl] = useState<string>(job.url || '');
   const [resolvedCompany, setResolvedCompany] = useState<string>(job.company || '');
   const [isResolving, setIsResolving] = useState<boolean>(false);
+  const [isBookmarkPending, setIsBookmarkPending] = useState(false);
   const isSaved = isJobSaved(job.id);
 
   // Keep state synchronized with parent prop updates (e.g., when auth status unmasks or masks jobs)
@@ -289,10 +290,20 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
     }
   };
 
-  const handleBookmarkClick = (e: React.MouseEvent) => {
+  const handleBookmarkClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    toggleSaveJob(job);
+    if (isBookmarkPending) return;
+
+    setIsBookmarkPending(true);
+    try {
+      await toggleSaveJob(job);
+    } catch (error) {
+      console.error('[JobCard] Failed to update saved job:', error);
+      showToast('Unable to update your saved jobs. Please try again.', 'error');
+    } finally {
+      setIsBookmarkPending(false);
+    }
   };
 
   const handleApplyClick = async (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -423,9 +434,11 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
           <button
             type="button"
             onClick={handleBookmarkClick}
+            disabled={isBookmarkPending}
+            aria-busy={isBookmarkPending}
             className={styles.iconBtn}
-            aria-label={isSaved ? `Remove ${job.title} from saved jobs` : `Save ${job.title} to collection`}
-            title={isSaved ? 'Job saved to your collection (Click to remove)' : 'Save job to your collection'}
+            aria-label={isBookmarkPending ? `Updating saved status for ${job.title}` : isSaved ? `Remove ${job.title} from saved jobs` : `Save ${job.title} to collection`}
+            title={isBookmarkPending ? 'Updating saved status…' : isSaved ? 'Job saved to your collection (Click to remove)' : 'Save job to your collection'}
             style={{
               color: isSaved ? '#10b981' : 'var(--text-secondary)',
               borderColor: isSaved ? 'rgba(16, 185, 129, 0.4)' : undefined,
@@ -438,12 +451,16 @@ function JobCardComponent({ job, index, onSelectCompany, onSelectIndustry }: Job
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 400, damping: 15 }}
             >
-              <Bookmark
-                size={16}
-                strokeWidth={2.2}
-                fill={isSaved ? '#10b981' : 'none'}
-                color={isSaved ? '#10b981' : 'currentColor'}
-              />
+              {isBookmarkPending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Bookmark
+                  size={16}
+                  strokeWidth={2.2}
+                  fill={isSaved ? '#10b981' : 'none'}
+                  color={isSaved ? '#10b981' : 'currentColor'}
+                />
+              )}
             </motion.div>
           </button>
         </div>

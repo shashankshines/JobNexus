@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   validatePasswordResetRequest,
   validatePasswordResetExecution,
@@ -130,6 +130,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [entitlement, setEntitlement] = useState<UserEntitlement | null>(null);
   const [isPremiumOfferOpen, setIsPremiumOfferOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const authEpochRef = useRef(0);
+  const authAttemptRef = useRef(0);
 
   const isPremium = useMemo(() => {
     return Boolean(entitlement?.isPremium);
@@ -150,13 +152,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsPremiumOfferOpen(false);
   }, []);
 
-  const refreshEntitlement = useCallback(async (): Promise<UserEntitlement | null> => {
+  const refreshEntitlement = useCallback(async (expectedEpoch = authEpochRef.current): Promise<UserEntitlement | null> => {
     try {
       const res = await fetch('/api/billing/status', {
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (res.ok) {
         const data = await res.json();
+        if (expectedEpoch !== authEpochRef.current) return null;
         if (data.entitlement) {
           setEntitlement(data.entitlement);
           return data.entitlement;
@@ -189,14 +192,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [savedJobIds]);
 
   // Load saved jobs from backend
-  const fetchSavedJobs = useCallback(async () => {
+  const fetchSavedJobs = useCallback(async (expectedEpoch = authEpochRef.current) => {
     try {
       const res = await fetch('/api/saved-jobs', {
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.savedJobs)) {
+        if (expectedEpoch === authEpochRef.current && Array.isArray(data.savedJobs)) {
           setSavedJobs(data.savedJobs);
         }
       }
@@ -208,13 +211,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Restore session from server cookie on mount
   useEffect(() => {
     let isMounted = true;
+    const expectedEpoch = authEpochRef.current;
 
     async function restoreSession() {
       try {
         const res = await fetch('/api/auth/session', {
           headers: { 'Cache-Control': 'no-cache' },
         });
-        if (!isMounted) return;
+        if (!isMounted || expectedEpoch !== authEpochRef.current) return;
 
         if (res.ok) {
           const data = await res.json();
@@ -222,10 +226,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(data.user);
             setStatus('authenticated');
             // Concurrently restore saved jobs and authoritative billing entitlement
-            const [, userEntitlement] = await Promise.all([
-              fetchSavedJobs(),
-              refreshEntitlement(),
+            const [userEntitlement] = await Promise.all([
+              refreshEntitlement(expectedEpoch),
+              fetchSavedJobs(expectedEpoch),
             ]);
+            if (!isMounted || expectedEpoch !== authEpochRef.current) return;
 
             if (typeof window !== 'undefined') {
               const urlParams = new URLSearchParams(window.location.search);
@@ -248,8 +253,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       body: JSON.stringify({ job: savedIntent.job }),
                     }).then(() => fetchSavedJobs());
                     showToast(`"${savedIntent.job.title}" saved automatically to your collection!`, 'success');
-                  } else if (savedIntent.type === 'apply' && savedIntent.url) {
-                    window.open(savedIntent.url, '_blank', 'noopener,noreferrer');
+                  } else if (savedIntent.type === 'apply' && typeof savedIntent.url === 'string') {
+                    setPendingIntent({ type: 'apply', url: savedIntent.url });
                   }
                 } catch (e) {
                   console.error('Failed to restore pending intent:', e);
@@ -269,11 +274,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        setUser(null);
-        setStatus('anonymous');
+        if (expectedEpoch === authEpochRef.current) {
+          setUser(null);
+          setStatus('anonymous');
+        }
       } catch (err) {
         console.warn('[AuthContext] Session check failed, starting in anonymous mode:', err);
-        if (isMounted) {
+        if (isMounted && expectedEpoch === authEpochRef.current) {
           setUser(null);
           setStatus('anonymous');
         }
@@ -322,6 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
+      const requestEpoch = authEpochRef.current;
       try {
         const res = await fetch('/api/saved-jobs', {
           method: 'POST',
@@ -331,9 +339,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (res.ok) {
           const data = await res.json();
-          if (data.savedJobs) {
+          if (requestEpoch === authEpochRef.current && data.savedJobs) {
             setSavedJobs(data.savedJobs);
           }
+          if (requestEpoch !== authEpochRef.current) return false;
           showToast(`Saved "${job.title}" to your collection!`, 'success');
           return true;
         } else {
@@ -355,6 +364,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (jobId: string): Promise<boolean> => {
       if (!user) return false;
 
+      const requestEpoch = authEpochRef.current;
       try {
         const res = await fetch(`/api/saved-jobs?id=${encodeURIComponent(jobId)}`, {
           method: 'DELETE',
@@ -362,9 +372,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (res.ok) {
           const data = await res.json();
-          if (data.savedJobs) {
+          if (requestEpoch === authEpochRef.current && data.savedJobs) {
             setSavedJobs(data.savedJobs);
           }
+          if (requestEpoch !== authEpochRef.current) return false;
           showToast('Job removed from your saved collection.', 'info');
           return true;
         } else {
@@ -395,78 +406,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Execute post-login pending action (e.g. auto-save job without second click)
   const handlePostAuthAction = useCallback(
-    async (loggedInUser: User) => {
+    async (loggedInUser: User, expectedEpoch: number) => {
+      if (expectedEpoch !== authEpochRef.current) return;
       if (loggedInUser) {
         setUser(loggedInUser);
       }
+      setSavedJobs([]);
+      setEntitlement(null);
       closeAuthModal();
 
-      // Refresh saved jobs
-      try {
-        const res = await fetch('/api/saved-jobs');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.savedJobs)) {
-            setSavedJobs(data.savedJobs);
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to refresh saved jobs post auth:', err);
-      }
+      const action = pendingIntent;
+      const [userEntitlement] = await Promise.all([
+        refreshEntitlement(expectedEpoch),
+        action?.type === 'save-job' ? Promise.resolve() : fetchSavedJobs(expectedEpoch),
+      ]);
+      if (expectedEpoch !== authEpochRef.current) return;
 
-      // Check if user had a pending action waiting
-      if (pendingIntent) {
-        const action = pendingIntent;
-
-        if (action.type === 'save-job' && action.job) {
-          setPendingIntent(null);
-          try {
-            const saveRes = await fetch('/api/saved-jobs', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ job: action.job }),
-            });
-            if (saveRes.ok) {
-              const data = await saveRes.json();
-              if (data.savedJobs) {
-                setSavedJobs(data.savedJobs);
-              }
-              showToast(`"${action.job.title}" saved automatically to your collection!`, 'success');
+      if (action?.type === 'save-job' && action.job) {
+        setPendingIntent(null);
+        try {
+          const saveRes = await fetch('/api/saved-jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job: action.job }),
+          });
+          if (saveRes.ok) {
+            const data = await saveRes.json();
+            if (expectedEpoch !== authEpochRef.current) return;
+            if (data.savedJobs) {
+              setSavedJobs(data.savedJobs);
             }
-          } catch (err) {
-            console.error('Failed to auto-save pending job:', err);
+            showToast(`"${action.job.title}" saved automatically to your collection!`, 'success');
+          } else {
+            const data = await saveRes.json();
+            showToast(data.error || 'Failed to save job.', 'error');
           }
-        } else if (action.type === 'apply' && action.url) {
-          setPendingIntent(null);
-          try {
-            if (typeof window !== 'undefined') {
-              window.open(action.url, '_blank', 'noopener,noreferrer');
-              showToast(`Resuming application for ${action.jobTitle || 'job'}!`, 'success');
-            }
-          } catch (err) {
-            console.error('Failed to resume application link:', err);
-          }
+        } catch (err) {
+          console.error('Failed to auto-save pending job:', err);
+          showToast('Unable to save the selected job. Please try again.', 'error');
         }
       }
 
-      // Authoritative Entitlement Check: Non-subscribers immediately see the Premium offer modal
-      try {
-        const ent = await refreshEntitlement();
-        if (!ent?.isPremium) {
+      // The Home page consumes and resumes apply intents so there is only one navigation path.
+      if (expectedEpoch === authEpochRef.current) {
+        if (!userEntitlement?.isPremium) {
           setIsPremiumOfferOpen(true);
         } else {
           setIsPremiumOfferOpen(false);
         }
-      } catch (err) {
-        console.warn('Failed to evaluate entitlement post auth:', err);
       }
     },
-    [pendingIntent, closeAuthModal, refreshEntitlement, showToast]
+    [pendingIntent, closeAuthModal, refreshEntitlement, fetchSavedJobs, showToast]
   );
 
   // Google Sign-In handler
   const loginWithGoogle = useCallback(
     async (credentialOrProfile?: string | Record<string, unknown>): Promise<void> => {
+      const attemptId = ++authAttemptRef.current;
       setStatus('initializing');
       try {
         let payload: Record<string, unknown> = {};
@@ -496,6 +492,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const data = await res.json();
+        if (attemptId !== authAttemptRef.current) return;
+        const authEpoch = ++authEpochRef.current;
         setUser(data.user);
         setStatus('authenticated');
         if (data.isDevDemo) {
@@ -503,9 +501,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           showToast(`Welcome back, ${data.user.name}!`, 'success');
         }
-        await handlePostAuthAction(data.user);
+        await handlePostAuthAction(data.user, authEpoch);
       } catch (err: unknown) {
-        setStatus('anonymous');
+        if (attemptId === authAttemptRef.current) setStatus('anonymous');
         throw err;
       }
     },
@@ -515,6 +513,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Credentials Sign-In handler
   const loginWithCredentials = useCallback(
     async (usernameOrEmail: string, password: string): Promise<void> => {
+      const attemptId = ++authAttemptRef.current;
       const res = await fetch('/api/auth/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -527,6 +526,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await res.json();
+      if (attemptId !== authAttemptRef.current) return;
+      const authEpoch = ++authEpochRef.current;
       setUser(data.user);
       setStatus('authenticated');
       showToast(
@@ -534,7 +535,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         'success',
         'Welcome Back'
       );
-      await handlePostAuthAction(data.user);
+      await handlePostAuthAction(data.user, authEpoch);
     },
     [handlePostAuthAction, showToast]
   );
@@ -548,6 +549,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       confirmPassword?: string;
       role?: string;
     }): Promise<void> => {
+      const attemptId = ++authAttemptRef.current;
       const res = await fetch('/api/auth/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -560,6 +562,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const resData = await res.json();
+      if (attemptId !== authAttemptRef.current) return;
+      const authEpoch = ++authEpochRef.current;
       setUser(resData.user);
       setStatus('authenticated');
       showToast(
@@ -567,7 +571,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         'success',
         'Account Created'
       );
-      await handlePostAuthAction(resData.user);
+      await handlePostAuthAction(resData.user, authEpoch);
     },
     [handlePostAuthAction, showToast]
   );
@@ -647,6 +651,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Sign out handler
   const logout = useCallback(async (): Promise<void> => {
+    authEpochRef.current += 1;
+    authAttemptRef.current += 1;
     try {
       await fetch('/api/auth/session', { method: 'DELETE' });
     } catch (err) {

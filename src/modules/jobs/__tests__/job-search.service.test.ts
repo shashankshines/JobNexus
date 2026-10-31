@@ -106,6 +106,9 @@ describe('JobSearchService Integration & Resilience Tests', () => {
     assert.strictEqual(healthyDiag?.status, 'fulfilled');
     assert.strictEqual(failingDiag?.status, 'rejected');
     assert.strictEqual(timeoutDiag?.status, 'timeout');
+    assert.strictEqual(response.providerCoverage.configured, 3);
+    assert.strictEqual(response.providerCoverage.succeeded, 1);
+    assert.strictEqual(response.providerCoverage.incomplete, true);
   });
 
   it('preserves exact legacy contract structure for frontend consumption', async () => {
@@ -173,5 +176,82 @@ describe('JobSearchService Integration & Resilience Tests', () => {
     assert.strictEqual(response.returnedCount, 250);
     assert.strictEqual(response.jobs.length, 250);
     assert.strictEqual(response.truncated, true);
+    assert.strictEqual((await service.searchJobs({ limit: 500 })).returnedCount, 250);
+
+    const beyondLegacyCap = await service.getJobById('job-259');
+    assert.strictEqual(beyondLegacyCap?.id, 'job-259');
+  });
+
+  it('paginates beyond the legacy 250-job response cap without duplicate records', async () => {
+    const jobs = Array.from({ length: 260 }, (_, index) => ({
+      ...mockHealthyJob,
+      id: `page-job-${String(index).padStart(3, '0')}`,
+      sourceId: `page-${index}`,
+      applicationUrl: `https://innovatecorp.com/jobs/page-${index}`,
+      title: `Software Engineer ${index}`,
+      industry: 'technology',
+    }));
+    const service = new JobSearchService([new StaticProvider(jobs)]);
+    const firstPage = await service.searchJobs({ industry: 'technology', page: 1, pageSize: 100 });
+    const secondPage = await service.searchJobs({ industry: 'technology', page: 2, pageSize: 100 });
+    const thirdPage = await service.searchJobs({ industry: 'technology', page: 3, pageSize: 100 });
+
+    assert.strictEqual(firstPage.count, 260);
+    assert.strictEqual(firstPage.totalAvailable, 260);
+    assert.strictEqual(firstPage.returnedCount, 100);
+    assert.strictEqual(firstPage.hasMore, true);
+    assert.strictEqual(secondPage.returnedCount, 100);
+    assert.strictEqual(secondPage.hasMore, true);
+    assert.strictEqual(thirdPage.returnedCount, 60);
+    assert.strictEqual(thirdPage.hasMore, false);
+    assert.strictEqual(firstPage.snapshotId, secondPage.snapshotId);
+    assert.strictEqual(secondPage.snapshotId, thirdPage.snapshotId);
+
+    const allIds = [
+      ...firstPage.jobs,
+      ...secondPage.jobs,
+      ...thirdPage.jobs,
+    ].map((job) => job.id);
+    assert.strictEqual(new Set(allIds).size, 260);
+  });
+
+  it('sorts freshest-first before slicing pages with deterministic ties', async () => {
+    const jobs = [
+      { ...mockHealthyJob, id: 'old', sourceId: 'old', applicationUrl: 'https://innovatecorp.com/jobs/old', title: 'Role Old', publishedAt: '2025-01-01T00:00:00.000Z' },
+      { ...mockHealthyJob, id: 'newer-b', sourceId: 'newer-b', applicationUrl: 'https://innovatecorp.com/jobs/newer-b', title: 'Role Newer B', publishedAt: '2025-03-01T00:00:00.000Z' },
+      { ...mockHealthyJob, id: 'newer-a', sourceId: 'newer-a', applicationUrl: 'https://innovatecorp.com/jobs/newer-a', title: 'Role Newer A', publishedAt: '2025-03-01T00:00:00.000Z' },
+    ];
+    const service = new JobSearchService([new StaticProvider(jobs)]);
+
+    const firstPage = await service.searchJobs({ sort: 'date', page: 1, pageSize: 2 });
+    const secondPage = await service.searchJobs({ sort: 'date', page: 2, pageSize: 2 });
+
+    assert.deepStrictEqual(firstPage.jobs.map((job) => job.id), ['newer-a', 'newer-b']);
+    assert.deepStrictEqual(secondPage.jobs.map((job) => job.id), ['old']);
+  });
+
+  it('changes the pagination snapshot fingerprint when matching jobs change', async () => {
+    const firstJob = {
+      ...mockHealthyJob,
+      id: 'snapshot-job-a',
+      sourceId: 'snapshot-a',
+      applicationUrl: 'https://innovatecorp.com/jobs/snapshot-a',
+    };
+    const secondJob = {
+      ...mockHealthyJob,
+      id: 'snapshot-job-b',
+      sourceId: 'snapshot-b',
+      applicationUrl: 'https://innovatecorp.com/jobs/snapshot-b',
+    };
+    const firstSnapshot = await new JobSearchService([new StaticProvider([firstJob])]).searchJobs({
+      page: 1,
+      pageSize: 1,
+    });
+    const changedSnapshot = await new JobSearchService([new StaticProvider([secondJob])]).searchJobs({
+      page: 1,
+      pageSize: 1,
+    });
+
+    assert.notStrictEqual(firstSnapshot.snapshotId, changedSnapshot.snapshotId);
   });
 });

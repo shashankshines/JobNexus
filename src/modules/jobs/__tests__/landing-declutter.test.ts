@@ -28,13 +28,15 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
     );
   });
 
-  it('shows all search refinement controls by default without a Filters toggle', () => {
+  it('keeps four primary refinements visible and moves company into Advanced Filters', () => {
     assert.ok(pageContent.includes('className="search-refinements"'), 'page.tsx must render the visible search refinements container');
     assert.ok(cssContent.includes('.search-refinements {'), 'globals.css must style the always-visible search refinements');
     assert.ok(pageContent.includes('className="search-refinement-role"'), 'Role filter must remain available');
     assert.ok(pageContent.includes('className="search-refinement-company"'), 'Company filter must remain available');
     assert.ok(pageContent.includes('className="search-refinement-industry"'), 'Industry filter must remain available');
-    assert.ok(pageContent.includes('className="search-refinement-workplace"'), 'Workplace filter must remain available');
+    assert.ok(pageContent.includes('Advanced filters'), 'Company filtering must be discoverable through Advanced Filters');
+    assert.ok(pageContent.includes("display: showAdvancedFilters ? 'block' : 'none'"), 'Company filtering must be hidden until Advanced Filters is opened');
+    assert.ok(pageContent.includes('className="search-refinement-workplace"') && pageContent.includes('aria-hidden="true"'), 'The duplicate workplace dropdown must not be exposed; workplace filtering stays in the workplace selector');
     assert.ok(pageContent.includes('className="search-refinement-type"'), 'Employment type filter must remain available');
     assert.ok(pageContent.includes('className="search-refinement-level"'), 'Seniority filter must remain available');
     assert.ok(!pageContent.includes('search-filters-toggle-btn'), 'The redundant Filters toggle must be removed');
@@ -71,6 +73,27 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
     assert.ok(pageContent.includes('className="search-refinement-industry"'), 'Industry filtering must remain available in search refinements');
     assert.ok(pageContent.includes('className="quick-pills-container"'), 'Popular search pills must remain available');
     assert.ok(cssContent.includes('.quick-pills-container {'), 'Popular search pills must retain their styles');
+  });
+
+  it('derives every industry option and discovery card from the canonical taxonomy', () => {
+    assert.ok(
+      pageContent.includes('Object.values(INDUSTRY_TAXONOMY).map((industry)'),
+      'Industry dropdown options must use the canonical taxonomy'
+    );
+    assert.ok(
+      pageContent.includes('Object.values(INDUSTRY_TAXONOMY).map(({ id })'),
+      'Industry discovery cards must include every canonical industry ID'
+    );
+    assert.ok(
+      pageContent.includes('INDUSTRY_TAXONOMY[domain.industry].label'),
+      'Discovery card labels must come from the canonical taxonomy'
+    );
+    assert.ok(
+      pageContent.includes('industry: domain.industry') &&
+        pageContent.includes("query: ''") &&
+        pageContent.includes("role: ''"),
+      'Industry navigation must apply its ID and clear conflicting keyword and role criteria'
+    );
   });
 
   it('styles popular search pills with streamlined single-row trending format', () => {

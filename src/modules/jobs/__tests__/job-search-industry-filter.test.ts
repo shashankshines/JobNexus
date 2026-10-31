@@ -6,7 +6,7 @@ import { deduplicateJobs } from '../domain/job.deduplication';
 import { JobSearchService } from '../services/job-search.service';
 import { JobProvider } from '../providers/provider.types';
 import { getIndustryBadge } from '../presentation/job-contextual-styles';
-import { INDUSTRY_TAXONOMY, JobIndustry } from '../domain/job.taxonomy';
+import { JobIndustry } from '../domain/job.taxonomy';
 
 describe('JobNexus — Industry Filtering, Deduplication & Caching Suite', () => {
   const sampleJobs: NormalizedJob[] = [
@@ -119,6 +119,51 @@ describe('JobNexus — Industry Filtering, Deduplication & Caching Suite', () =>
       assert.strictEqual(eduOnly.length, 1);
       assert.strictEqual(eduOnly[0].title, 'Mathematics Secondary Teacher');
     });
+
+    it('does not let a conflicting category override a known canonical industry', () => {
+      const retailJobWithStaleCategory = {
+        ...sampleJobs[0],
+        industry: 'retail_sales',
+        category: 'Healthcare & Medical',
+      };
+
+      assert.strictEqual(matchesIndustry(retailJobWithStaleCategory, 'healthcare'), false);
+      assert.strictEqual(matchesIndustry(retailJobWithStaleCategory, 'Retail & Sales'), true);
+    });
+
+    it('normalizes provider labels and aliases through the canonical taxonomy', () => {
+      const financeJob = {
+        ...sampleJobs[0],
+        industry: 'Fintech / Payments',
+        category: 'Payments',
+      };
+      const unknownJob = {
+        ...sampleJobs[0],
+        industry: 'Unmapped provider segment',
+        category: 'General vacancies',
+        title: 'Customer Support Associate',
+        tags: ['Retail'],
+        description: 'Answer customer questions and process store returns.',
+      };
+
+      assert.strictEqual(matchesIndustry(financeJob, 'Finance & Banking'), true);
+      assert.strictEqual(matchesIndustry(sampleJobs[2], 'Education & Training'), true);
+      assert.strictEqual(matchesIndustry(sampleJobs[3], 'Retail & Sales'), false);
+      assert.strictEqual(matchesIndustry(unknownJob, 'healthcare'), false);
+      assert.strictEqual(matchesIndustry(unknownJob, 'all'), true);
+    });
+
+    it('keeps software roles in the explicitly classified industry instead of inferring from role', () => {
+      const healthcareSoftwareJob = {
+        ...sampleJobs[0],
+        title: 'Software Engineer',
+        industry: 'healthcare',
+        category: 'Healthcare & Medical',
+      };
+
+      assert.strictEqual(matchesIndustry(healthcareSoftwareJob, 'healthcare'), true);
+      assert.strictEqual(matchesIndustry(healthcareSoftwareJob, 'technology'), false);
+    });
   });
 
   describe('Multi-Sector Deduplication Safety', () => {
@@ -207,6 +252,9 @@ describe('JobNexus — Industry Filtering, Deduplication & Caching Suite', () =>
 
       const res2 = await service.searchJobs({ industry: 'healthcare' });
       assert.strictEqual(res2.jobs.length, 1);
+      const normalizedAlias = await service.searchJobs({ industry: 'Healthcare & Medical' });
+      assert.strictEqual(normalizedAlias.jobs.length, 1);
+      assert.strictEqual(fetchCount, 1);
     });
   });
 
@@ -291,4 +339,3 @@ describe('JobNexus — Industry Filtering, Deduplication & Caching Suite', () =>
     });
   });
 });
-

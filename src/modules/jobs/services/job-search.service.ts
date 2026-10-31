@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { JobProvider } from '../providers/provider.types';
 import { ProviderRegistry } from '../providers/provider.registry';
 import {
   NormalizedJob,
+  LegacyJob,
   JobSearchParams,
   JobSearchResponse,
   JobStatsResponse,
@@ -10,7 +12,11 @@ import {
 } from '../domain/job.types';
 import { deduplicateJobs } from '../domain/job.deduplication';
 import { filterAndRankJobs } from '../domain/job.ranking';
-import { classifyJobIndustry } from '../domain/job.taxonomy';
+import {
+  INDUSTRY_TAXONOMY,
+  normalizeIndustryFilter,
+  resolveJobIndustry,
+} from '../domain/job.taxonomy';
 
 interface CachedSearchResult {
   response: JobSearchResponse;
@@ -85,6 +91,20 @@ export class JobSearchService {
     this.isCustom = Boolean(customProviders);
   }
 
+  private toCompactLegacyJob(job: NormalizedJob): LegacyJob {
+    const legacy = toLegacyJob(job);
+    if (legacy.description && legacy.description.length > 250) {
+      legacy.description = legacy.description.slice(0, 250) + '...';
+    }
+    return legacy;
+  }
+
+  async getJobById(id: string): Promise<LegacyJob | null> {
+    const { allJobs } = await this.fetchRawJobs({});
+    const job = deduplicateJobs(allJobs).find((candidate) => candidate.id === id);
+    return job ? this.toCompactLegacyJob(job) : null;
+  }
+
   private async fetchFromProviders(params: JobSearchParams = {}): Promise<{
     allJobs: NormalizedJob[];
     diagnostics: ProviderDiagnostic[];
@@ -151,13 +171,17 @@ export class JobSearchService {
       allJobs.push(...jobBatch);
     }
 
-    // Ensure canonical industry classification on all fetched jobs
+    // Resolve every provider value to the shared taxonomy before filtering.
     for (const job of allJobs) {
-      if (!job.industry) {
-        const classified = classifyJobIndustry(job.title, job.tags, job.description);
-        job.industry = classified.industry;
-        job.category = classified.category;
-      }
+      const industry = resolveJobIndustry(
+        job.industry,
+        job.category,
+        job.title,
+        job.tags,
+        job.description
+      );
+      job.industry = industry;
+      job.category = INDUSTRY_TAXONOMY[industry].label;
     }
 
     return { allJobs, diagnostics };
@@ -176,6 +200,27 @@ export class JobSearchService {
         this.customInFlightPromise = null;
       });
       return this.customInFlightPromise;
+    }
+
+    if (params.forceRefresh) {
+      if (JobSearchService.inFlightFetchPromise) {
+        return JobSearchService.inFlightFetchPromise;
+      }
+
+      JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
+        .then(({ allJobs, diagnostics }) => {
+          JobSearchService.cachedRawJobs = allJobs;
+          JobSearchService.cachedDiagnostics = diagnostics;
+          JobSearchService.cacheTimestamp = Date.now();
+          JobSearchService.searchCache.clear();
+          globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
+          return { allJobs: [...allJobs], diagnostics };
+        })
+        .finally(() => {
+          JobSearchService.inFlightFetchPromise = null;
+        });
+
+      return JobSearchService.inFlightFetchPromise;
     }
 
     const now = Date.now();
@@ -243,6 +288,7 @@ export class JobSearchService {
 
   async searchJobs(params: JobSearchParams): Promise<JobSearchResponse> {
     const normalizeFilter = (value?: string) => value?.trim().toLowerCase() || '';
+    const normalizedIndustry = normalizeIndustryFilter(params.industry);
     const cacheKey = JSON.stringify([
       normalizeFilter(params.query),
       normalizeFilter(params.role),
@@ -251,13 +297,16 @@ export class JobSearchService {
       normalizeFilter(params.type),
       normalizeFilter(params.level),
       normalizeFilter(params.remote),
-      normalizeFilter(params.industry),
+      normalizedIndustry ?? `invalid:${normalizeFilter(params.industry)}`,
+      params.sort || 'relevance',
+      params.page || 1,
+      params.pageSize || '',
       params.limit || '',
     ]);
     const activeCache = this.isCustom ? this.instanceSearchCache : JobSearchService.searchCache;
 
     const cached = activeCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < JobSearchService.CACHE_TTL_MS) {
+    if (!params.forceRefresh && cached && Date.now() - cached.timestamp < JobSearchService.CACHE_TTL_MS) {
       return cached.response;
     }
 
@@ -268,25 +317,54 @@ export class JobSearchService {
 
     // Step 2: Multi-factor search, location, and seniority filtering & ranking
     const rankedJobs = filterAndRankJobs(uniqueJobs, params);
+    if (params.sort === 'date') {
+      rankedJobs.sort((a, b) => {
+        const publishedA = new Date(a.publishedAt).getTime() || 0;
+        const publishedB = new Date(b.publishedAt).getTime() || 0;
+        return publishedB - publishedA || a.id.localeCompare(b.id);
+      });
+    }
 
-    // Step 3: Cap results to max 250 top-ranked items (or custom limit if provided in unit tests)
-    const maxResults = params.limit ? Math.max(params.limit, 50) : 250;
-    const limitedJobs = rankedJobs.length > maxResults ? rankedJobs.slice(0, maxResults) : rankedJobs;
+    // Keep legacy callers capped at 250; interactive searches page through the full snapshot.
+    const requestedPage = params.page;
+    const page = Number.isSafeInteger(requestedPage) && requestedPage !== undefined && requestedPage > 0
+      ? requestedPage
+      : 1;
+    const requestedLimit = Number.isSafeInteger(params.limit) && params.limit !== undefined
+      ? params.limit
+      : 250;
+    const requestedPageSize = params.pageSize;
+    const pageSize = requestedPageSize === undefined
+      ? Math.min(250, Math.max(1, requestedLimit))
+      : Number.isSafeInteger(requestedPageSize)
+        ? Math.min(100, Math.max(1, requestedPageSize))
+        : 250;
+    const offset = (page - 1) * pageSize;
+    const limitedJobs = rankedJobs.slice(offset, offset + pageSize);
+    const hasMore = offset + limitedJobs.length < rankedJobs.length;
+    const snapshotHash = createHash('sha256');
+    for (const job of rankedJobs) {
+      snapshotHash.update(job.id).update('\0');
+    }
 
     // Step 4: Map to backward-compatible legacy shape with compact description for fast payload transfer
-    const legacyJobs = limitedJobs.map((job) => {
-      const legacy = toLegacyJob(job);
-      if (legacy.description && legacy.description.length > 250) {
-        legacy.description = legacy.description.slice(0, 250) + '...';
-      }
-      return legacy;
-    });
+    const legacyJobs = limitedJobs.map((job) => this.toCompactLegacyJob(job));
 
     const response: JobSearchResponse = {
       jobs: legacyJobs,
       count: rankedJobs.length,
+      totalAvailable: uniqueJobs.length,
+      snapshotId: snapshotHash.digest('hex'),
       returnedCount: limitedJobs.length,
-      truncated: rankedJobs.length > limitedJobs.length,
+      page,
+      pageSize,
+      hasMore,
+      truncated: hasMore,
+      providerCoverage: {
+        configured: this.providers.length,
+        succeeded: diagnostics.filter((diagnostic) => diagnostic.status === 'fulfilled').length,
+        incomplete: diagnostics.some((diagnostic) => diagnostic.status !== 'fulfilled'),
+      },
       sources: this.providers.map((p) => p.name),
       diagnostics,
     };
@@ -322,12 +400,17 @@ export class JobSearchService {
     const totalJobs = uniqueJobs.length;
     const remoteJobs = uniqueJobs.filter((j) => j.isRemote).length;
     const indiaEligibleJobs = uniqueJobs.filter((j) => j.isIndiaEligible).length;
-    const formattedCount = totalJobs > 0 ? `${totalJobs.toLocaleString()}+` : '0';
+    const formattedCount = totalJobs.toLocaleString();
 
     const result: JobStatsResponse = {
       totalJobs,
       formattedCount,
       exactCount: totalJobs,
+      providerCoverage: {
+        configured: this.providers.length,
+        succeeded: diagnostics.filter((diagnostic) => diagnostic.status === 'fulfilled').length,
+        incomplete: diagnostics.some((diagnostic) => diagnostic.status !== 'fulfilled'),
+      },
       remoteJobs,
       indiaEligibleJobs,
       sources: this.providers.map((p) => p.name),

@@ -8,7 +8,7 @@ let globalClientStats: JobStatsResponse | null = null;
 let globalCacheTimestamp = 0;
 const CLIENT_CACHE_TTL_MS = 60 * 1000; // 1 minute
 
-export function useJobStats(fallbackCount = 1350) {
+export function useJobStats() {
   const [stats, setStats] = useState<JobStatsResponse | null>(globalClientStats);
   const [loading, setLoading] = useState<boolean>(!globalClientStats);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function useJobStats(fallbackCount = 1350) {
       setStats(data);
       setError(null);
     } catch (err) {
-      console.warn('[useJobStats] Failed to fetch live job stats, falling back:', err);
+      console.warn('[useJobStats] Failed to fetch live job stats:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -51,34 +51,14 @@ export function useJobStats(fallbackCount = 1350) {
     return () => clearInterval(intervalId);
   }, [fetchStats]);
 
-  const syncFromJobsCount = useCallback((liveCount: number) => {
-    if (liveCount > 0) {
-      setStats((prev) => {
-        const updated: JobStatsResponse = {
-          totalJobs: liveCount,
-          exactCount: liveCount,
-          formattedCount: `${liveCount.toLocaleString()}+`,
-          remoteJobs: prev?.remoteJobs ?? 0,
-          indiaEligibleJobs: prev?.indiaEligibleJobs ?? 0,
-          sources: prev?.sources ?? [],
-          sourcesCount: prev?.sourcesCount ?? 8,
-          providerBreakdown: prev?.providerBreakdown ?? {},
-          lastUpdated: new Date().toISOString(),
-        };
-        globalClientStats = updated;
-        globalCacheTimestamp = Date.now();
-        return updated;
-      });
-    }
-  }, []);
-
-  const totalCount = stats?.totalJobs ?? fallbackCount;
-  const exactCount = stats?.exactCount ?? stats?.totalJobs ?? fallbackCount;
-  const formattedCount = stats?.formattedCount ?? `${fallbackCount.toLocaleString()}+`;
+  const totalCount = stats?.totalJobs ?? null;
+  const exactCount = stats?.exactCount ?? null;
+  const formattedCount = stats?.formattedCount ?? (loading ? 'Loading' : 'Unavailable');
   const remoteCount = stats?.remoteJobs ?? 0;
   const indiaEligibleCount = stats?.indiaEligibleJobs ?? 0;
-  const sourcesCount = stats?.sourcesCount ?? 8;
+  const sourcesCount = stats?.sourcesCount ?? 0;
   const sources = stats?.sources ?? [];
+  const inventoryCoverageIncomplete = stats?.providerCoverage.incomplete ?? false;
 
   return {
     stats,
@@ -91,7 +71,7 @@ export function useJobStats(fallbackCount = 1350) {
     indiaEligibleCount,
     sourcesCount,
     sources,
+    inventoryCoverageIncomplete,
     refresh: () => fetchStats(true),
-    syncFromJobsCount,
   };
 }

@@ -188,6 +188,7 @@ export default function AdminConsolePage() {
   const [user360Loading, setUser360Loading] = useState<boolean>(false);
   const [user360Dossier, setUser360Dossier] = useState<User360Dossier | null>(null);
   const [user360Error, setUser360Error] = useState<string | null>(null);
+  const user360RequestIdRef = useRef(0);
 
   // Consolidated Payment Ledger state
   const [ledgerRecords, setLedgerRecords] = useState<PaymentLedgerItem[]>([]);
@@ -346,6 +347,7 @@ export default function AdminConsolePage() {
   // Open User 360° Profile Dossier
   const openUser360 = async (userIdOrEmail: string) => {
     if (!userIdOrEmail) return;
+    const requestId = ++user360RequestIdRef.current;
     setUser360TargetUserId(userIdOrEmail);
     setUser360ModalOpen(true);
     setUser360Loading(true);
@@ -355,16 +357,25 @@ export default function AdminConsolePage() {
     try {
       const res = await fetch(`/api/admin/users/${encodeURIComponent(userIdOrEmail)}`);
       const data = await res.json();
+      if (requestId !== user360RequestIdRef.current) return;
       if (res.ok && data.success && data.dossier) {
         setUser360Dossier(data.dossier);
       } else {
         setUser360Error(data.error || 'Failed to retrieve User 360 profile.');
       }
     } catch (err) {
-      setUser360Error(err instanceof Error ? err.message : 'Network error loading User 360 profile.');
+      if (requestId === user360RequestIdRef.current) {
+        setUser360Error(err instanceof Error ? err.message : 'Network error loading User 360 profile.');
+      }
     } finally {
-      setUser360Loading(false);
+      if (requestId === user360RequestIdRef.current) setUser360Loading(false);
     }
+  };
+
+  const closeUser360 = () => {
+    user360RequestIdRef.current += 1;
+    setUser360ModalOpen(false);
+    setUser360Loading(false);
   };
 
   // Load Consolidated Payment Ledger
@@ -2534,7 +2545,7 @@ export default function AdminConsolePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setUser360ModalOpen(false)}
+                  onClick={closeUser360}
                   style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #94a3b8)', cursor: 'pointer', padding: '0.35rem' }}
                 >
                   <X size={20} />
@@ -2894,7 +2905,7 @@ export default function AdminConsolePage() {
             <div style={{ padding: '1rem 1.5rem', background: 'rgba(255, 255, 255, 0.02)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 type="button"
-                onClick={() => setUser360ModalOpen(false)}
+                onClick={closeUser360}
                 className="admin-btn-secondary"
                 style={{ padding: '0.5rem 1.25rem', fontSize: '0.82rem' }}
               >

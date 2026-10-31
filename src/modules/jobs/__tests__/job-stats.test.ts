@@ -61,10 +61,15 @@ describe('JobSearchService.getJobStats Suite', () => {
     const stats = await service.getJobStats();
     assert.strictEqual(stats.totalJobs, 2);
     assert.strictEqual(stats.exactCount, 2);
-    assert.strictEqual(stats.formattedCount, '2+');
+    assert.strictEqual(stats.formattedCount, '2');
     assert.strictEqual(stats.remoteJobs, 1);
     assert.strictEqual(stats.indiaEligibleJobs, 1);
     assert.strictEqual(stats.sourcesCount, 1);
+    assert.deepStrictEqual(stats.providerCoverage, {
+      configured: 1,
+      succeeded: 1,
+      incomplete: false,
+    });
     assert.deepStrictEqual(stats.sources, ['Provider 1']);
     assert.strictEqual(stats.providerBreakdown['Provider 1'], 2);
     assert.ok(stats.lastUpdated);
@@ -97,7 +102,7 @@ describe('JobSearchService.getJobStats Suite', () => {
     const stats = await service.getJobStats();
     // After deduplication, jobA and jobB are unified, resulting in 2 unique jobs
     assert.strictEqual(stats.totalJobs, 2);
-    assert.strictEqual(stats.formattedCount, '2+');
+    assert.strictEqual(stats.formattedCount, '2');
     assert.strictEqual(stats.sourcesCount, 2);
     assert.strictEqual(stats.providerBreakdown['Provider Alpha'], 1);
     assert.strictEqual(stats.providerBreakdown['Provider Beta'], 2);
@@ -124,13 +129,23 @@ describe('JobSearchService.getJobStats Suite', () => {
     const stats = await service.getJobStats();
     // Healthy source jobs must still be aggregated
     assert.strictEqual(stats.totalJobs, 1);
-    assert.strictEqual(stats.formattedCount, '1+');
+    assert.strictEqual(stats.formattedCount, '1');
+    assert.strictEqual(stats.providerCoverage.incomplete, true);
     assert.strictEqual(stats.providerBreakdown['Healthy Source'], 1);
     assert.strictEqual(stats.providerBreakdown['Failing Source'], 0);
   });
 });
 
 describe('Live Job Stats API Routes', () => {
+  it('rejects unknown industry filters instead of silently broadening the search', async () => {
+    const request = new Request('http://localhost:3000/api/jobs?industry=unknown-provider-sector');
+    const response = await jobsRouteHandler(request);
+    const payload = await response.json();
+
+    assert.strictEqual(response.status, 400);
+    assert.strictEqual(payload.error, 'Invalid industry filter');
+  });
+
   it('GET /api/jobs?stats=true returns valid real-time stats', async () => {
     const req = new Request('http://localhost:3000/api/jobs?stats=true');
     const res = await jobsRouteHandler(req);
@@ -141,7 +156,9 @@ describe('Live Job Stats API Routes', () => {
     assert.ok(typeof data.totalJobs === 'number');
     assert.ok(data.totalJobs > 0);
     assert.ok(typeof data.formattedCount === 'string');
-    assert.ok(data.formattedCount.endsWith('+'));
+    assert.strictEqual(data.formattedCount, data.totalJobs.toLocaleString());
+    assert.ok(data.providerCoverage.configured >= data.providerCoverage.succeeded);
+    assert.ok(typeof data.providerCoverage.incomplete === 'boolean');
     assert.ok(Array.isArray(data.sources));
     assert.strictEqual(data.sourcesCount, data.sources.length);
     assert.ok(data.providerBreakdown);
