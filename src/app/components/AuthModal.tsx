@@ -7,7 +7,6 @@ import {
   ShieldCheck,
   ArrowLeft,
   Loader2,
-  Lock,
   Eye,
   EyeOff,
   AlertCircle,
@@ -469,28 +468,7 @@ export default function AuthModal() {
               </p>
             </div>
 
-            {/* Context Prompt Alert if triggered from gated action (e.g. Save Job) */}
-            {authPromptMessage && activeTab !== 'forgot-password' && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                style={{
-                  background: 'rgba(99, 102, 241, 0.14)',
-                  border: '1px solid rgba(99, 102, 241, 0.35)',
-                  borderRadius: 12,
-                  padding: '0.72rem 0.95rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.65rem',
-                  marginBottom: '1.25rem',
-                }}
-              >
-                <Lock size={16} color="#818cf8" style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-primary, #ffffff)', fontWeight: 500, lineHeight: 1.35 }}>
-                  {authPromptMessage}
-                </span>
-              </motion.div>
-            )}
+
 
             {/* Error Message Alert */}
             {error && (

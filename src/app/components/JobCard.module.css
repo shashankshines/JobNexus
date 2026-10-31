@@ -64,139 +64,115 @@
 }
 
 /* ==========================================================================
-   Contextual Role & Industry Card Themes (Unique Backgrounds & Light Beams)
+   Contextual Role & Industry Card Themes (Accent Colours Only — No BG tints)
    ========================================================================== */
 .cardThemeIndigo {
   --card-accent: #818cf8;
   --card-accent-glow: rgba(99, 102, 241, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 27, 75, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(99, 102, 241, 0.18);
 }
 
 .cardThemeCyan {
   --card-accent: #38bdf8;
   --card-accent-glow: rgba(56, 189, 248, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(8, 47, 73, 0.38) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(56, 189, 248, 0.18);
 }
 
 .cardThemePurple {
   --card-accent: #c084fc;
   --card-accent-glow: rgba(168, 85, 247, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(59, 7, 100, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(168, 85, 247, 0.18);
 }
 
 .cardThemeRose {
   --card-accent: #fb7185;
   --card-accent-glow: rgba(244, 63, 94, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(76, 5, 25, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(244, 63, 94, 0.18);
 }
 
 .cardThemeEmerald {
   --card-accent: #34d399;
   --card-accent-glow: rgba(16, 185, 129, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(6, 78, 59, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(16, 185, 129, 0.18);
 }
 
 .cardThemeAmber {
   --card-accent: #fbbf24;
   --card-accent-glow: rgba(245, 158, 11, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(69, 26, 3, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(245, 158, 11, 0.18);
 }
 
 .cardThemeSky {
   --card-accent: #38bdf8;
   --card-accent-glow: rgba(14, 165, 233, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(12, 74, 110, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(14, 165, 233, 0.18);
 }
 
 .cardThemeTeal {
   --card-accent: #2dd4bf;
   --card-accent-glow: rgba(20, 184, 166, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(19, 78, 74, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(20, 184, 166, 0.18);
 }
 
 .cardThemeCrimson {
   --card-accent: #f87171;
   --card-accent-glow: rgba(239, 68, 68, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(69, 10, 10, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(239, 68, 68, 0.18);
 }
 
 .cardThemeGold {
   --card-accent: #eab308;
   --card-accent-glow: rgba(234, 179, 8, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(66, 32, 6, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(234, 179, 8, 0.18);
 }
 
 .cardThemeLime {
   --card-accent: #a3e635;
   --card-accent-glow: rgba(163, 230, 53, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(20, 83, 45, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(163, 230, 53, 0.18);
 }
 
 .cardThemeIndia {
   --card-accent: #f97316;
   --card-accent-glow: rgba(249, 115, 22, 0.28);
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(67, 20, 7, 0.35) 55%, rgba(15, 23, 42, 0.96) 100%);
   border-color: rgba(249, 115, 22, 0.18);
 }
 
-/* Light Theme Contextual Tint */
+/* Light Theme — accent border only, no tinted BG */
 :root[data-theme="light"] .cardThemeIndigo {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(238, 242, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(99, 102, 241, 0.25);
 }
 :root[data-theme="light"] .cardThemeCyan {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(56, 189, 248, 0.25);
 }
 :root[data-theme="light"] .cardThemePurple {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 245, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(168, 85, 247, 0.25);
 }
 :root[data-theme="light"] .cardThemeRose {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 241, 242, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(244, 63, 94, 0.25);
 }
 :root[data-theme="light"] .cardThemeEmerald {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(236, 253, 245, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(16, 185, 129, 0.25);
 }
 :root[data-theme="light"] .cardThemeAmber {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 243, 199, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(245, 158, 11, 0.25);
 }
 :root[data-theme="light"] .cardThemeSky {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(14, 165, 233, 0.25);
 }
 :root[data-theme="light"] .cardThemeTeal {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(204, 251, 241, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(20, 184, 166, 0.25);
 }
 :root[data-theme="light"] .cardThemeCrimson {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 242, 242, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(239, 68, 68, 0.25);
 }
 :root[data-theme="light"] .cardThemeGold {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 252, 232, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(234, 179, 8, 0.25);
 }
 :root[data-theme="light"] .cardThemeLime {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(247, 254, 231, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(163, 230, 53, 0.25);
 }
 :root[data-theme="light"] .cardThemeIndia {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 237, 213, 0.78) 55%, rgba(255, 255, 255, 0.98) 100%);
   border-color: rgba(249, 115, 22, 0.25);
 }
 
