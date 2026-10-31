@@ -1197,10 +1197,11 @@ export async function adminSuspendSubscriptionInTransaction(params: {
 
 /**
  * Admin Reinstate Subscription:
- * Restores a suspended or halted subscription to 'active' status.
+ * Restores a suspended (halted) or reversibly terminated subscription to 'active' status.
  * PRESERVES the existing period end without automatically granting an extra 30 days.
  * An optional extendDays can be provided if an extension is explicitly authorized.
- * Strict protection: CANNOT reinstate a revoked or cancelled subscription.
+ * Strict protection: CANNOT reinstate a permanently revoked or cancelled subscription.
+ * Expired terminations (original period already lapsed) CANNOT be ordinarily reinstated.
  */
 export async function adminReinstateSubscriptionInTransaction(params: {
   targetUserId: string;
@@ -1229,10 +1230,10 @@ export async function adminReinstateSubscriptionInTransaction(params: {
 
     const existingSub = subSnap.data() as SubscriptionDocument;
 
-    // Safety Invariant: Revoked subscriptions cannot be restored via generic reinstatement
+    // Safety Invariant: Permanently revoked subscriptions cannot be restored via generic reinstatement
     if (existingSub.status === 'cancelled' || existingSub.metadata?.revoked === true) {
       throw new Error(
-        `Cannot reinstate revoked subscription for user "${targetUserId}". A revoked subscription requires an explicit manual grant.`
+        `Cannot reinstate permanently revoked subscription for user "${targetUserId}". A revoked subscription requires an explicit manual grant.`
       );
     }
 
@@ -1241,13 +1242,24 @@ export async function adminReinstateSubscriptionInTransaction(params: {
       return existingSub;
     }
 
-    if (existingSub.status !== 'halted') {
+    // Accept both 'halted' (suspended) and 'terminated' statuses for reinstatement
+    if (existingSub.status !== 'halted' && existingSub.status !== 'terminated') {
       throw new Error(
-        `Cannot reinstate subscription in status "${existingSub.status}". Only halted subscriptions can be reinstated.`
+        `Cannot reinstate subscription in status "${existingSub.status}". Only suspended or terminated subscriptions can be reinstated.`
       );
     }
 
+    // If the original period has expired, reinstatement via this route is not permitted.
+    // Administrator must use manual grant or extend instead.
     const now = Date.now();
+    const periodEndMs = existingSub.currentPeriodEnd ? new Date(existingSub.currentPeriodEnd).getTime() : 0;
+    if (!isNaN(periodEndMs) && periodEndMs <= now && (!extendDays || extendDays <= 0)) {
+      throw new Error(
+        `Cannot reinstate: the original subscription period expired on ${new Date(existingSub.currentPeriodEnd).toLocaleDateString('en-IN')}. ` +
+        `Use 'Grant Premium' or 'Extend Subscription' to restore access with new days.`
+      );
+    }
+
     const nowIso = new Date(now).toISOString();
 
     // Financial Integrity Invariant: Preserve existing currentPeriodEnd; do NOT auto-grant 30 free days!
@@ -1415,6 +1427,127 @@ export async function adminRevokeSubscriptionInTransaction(params: {
   try {
     await bumpBillingSyncVersion({
       mutationType: 'subscription_revoked',
+      targetUserId,
+      targetEntityId: res.id,
+    });
+  } catch {
+    // ignore
+  }
+  return res;
+}
+
+/**
+ * Admin Terminate Subscription (Reversible):
+ * Sets status to 'terminated' — immediately disabling Premium access while preserving
+ * the original subscription document, payment history, currentPeriodEnd, and UTR records.
+ * Unlike permanent revocation, termination can be reversed by an administrator via reinstatement,
+ * provided the original subscription period has not expired.
+ *
+ * Invariants:
+ * - status → 'terminated'
+ * - currentPeriodEnd is PRESERVED (not zeroed like revocation)
+ * - cancelAtPeriodEnd → false
+ * - metadata.terminatedAt, terminationReason, preTerminationStatus, preTerminationPeriodEnd recorded
+ * - Audit event 'subscription_terminated' appended immutably
+ * - Billing sync version incremented atomically
+ * - Cannot terminate an already permanently revoked subscription
+ */
+export async function adminTerminateSubscriptionInTransaction(params: {
+  targetUserId: string;
+  adminEmail: string;
+  adminUserId: string;
+  reason: string;
+}): Promise<SubscriptionDocument> {
+  const { targetUserId, adminEmail, adminUserId, reason } = params;
+  if (!targetUserId) throw new Error('targetUserId is required.');
+  const trimmedReason = (reason || '').trim();
+  if (!trimmedReason) throw new MandatoryReasonMissingError('Subscription Termination');
+
+  const db = getFirestoreDb();
+  const subscriptionsCol = getSubscriptionsCollection();
+  const auditLogsCol = getAuditLogsCollection();
+
+  const res = await db.runTransaction(async (transaction) => {
+    const subRef = subscriptionsCol.doc(targetUserId);
+    const subSnap = await transaction.get(subRef);
+    if (!subSnap.exists) {
+      throw new Error(`No subscription record found for user "${targetUserId}".`);
+    }
+
+    const syncCtx = await readBillingSyncVersionInTransaction(transaction);
+    const existingSub = subSnap.data() as SubscriptionDocument;
+
+    // Permanent revocations cannot be re-terminated
+    if (existingSub.status === 'cancelled' && existingSub.metadata?.revoked === true) {
+      throw new Error(
+        `Cannot terminate: subscription for user "${targetUserId}" has already been permanently revoked. This action is irreversible.`
+      );
+    }
+
+    // Idempotency: already terminated
+    if (existingSub.status === 'terminated') {
+      return existingSub;
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // Preserve original currentPeriodEnd so reinstatement knows the valid window
+    const updatedSub: SubscriptionDocument = {
+      ...existingSub,
+      status: 'terminated',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: existingSub.currentPeriodEnd, // PRESERVED
+      updatedAt: nowIso,
+      lastUpdatedFrom: 'admin_manual',
+      metadata: {
+        ...(existingSub.metadata || {}),
+        terminatedAt: nowIso,
+        terminationReason: trimmedReason,
+        preTerminationPeriodEnd: existingSub.currentPeriodEnd,
+        preTerminationStatus: existingSub.status,
+      },
+    };
+
+    transaction.set(subRef, updatedSub, { merge: true });
+
+    // Append immutable audit log
+    const resolvedUserEmail = existingSub.userEmail || getUserById(targetUserId)?.email;
+    const auditId = `audit_terminate_${targetUserId}_${nowIso.slice(0, 19).replace(/[:]/g, '-')}`;
+    const auditRef = auditLogsCol.doc(auditId);
+    const auditEntry: AdminAuditLogDocument = {
+      id: auditId,
+      actorId: adminUserId,
+      actorEmail: adminEmail,
+      action: 'subscription_terminated',
+      targetUserId,
+      ...(resolvedUserEmail ? { targetUserEmail: resolvedUserEmail } : {}),
+      targetEntityId: existingSub.id,
+      previousState: { status: existingSub.status, currentPeriodEnd: existingSub.currentPeriodEnd },
+      newState: {
+        status: 'terminated',
+        currentPeriodEnd: existingSub.currentPeriodEnd,
+        preTerminationPeriodEnd: existingSub.currentPeriodEnd,
+      },
+      reason: trimmedReason,
+      timestamp: nowIso,
+    };
+    transaction.set(auditRef, auditEntry);
+
+    writeBillingSyncVersionInTransaction(transaction, syncCtx, {
+      mutationType: 'subscription_terminated',
+      targetUserId,
+      targetEntityId: existingSub.id,
+    });
+
+    return updatedSub;
+  });
+
+  invalidateAdminStoresCache();
+  invalidateAuditLogsCache();
+  invalidateUserEntitlementCache(targetUserId);
+  try {
+    await bumpBillingSyncVersion({
+      mutationType: 'subscription_terminated',
       targetUserId,
       targetEntityId: res.id,
     });

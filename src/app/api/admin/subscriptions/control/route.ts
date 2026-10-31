@@ -6,6 +6,7 @@ import {
   adminSuspendSubscriptionInTransaction,
   adminReinstateSubscriptionInTransaction,
   adminRevokeSubscriptionInTransaction,
+  adminTerminateSubscriptionInTransaction,
   MandatoryReasonMissingError,
 } from '@/modules/storage/firestore/admin-billing.store';
 import { getUserByEmail } from '@/modules/auth/server/session.store';
@@ -13,7 +14,7 @@ import { getUserByEmail } from '@/modules/auth/server/session.store';
 /**
  * POST /api/admin/subscriptions/control
  * Unified manual entitlement management endpoint:
- * - action: 'grant' | 'extend' | 'suspend' | 'reinstate' | 'revoke'
+ * - action: 'grant' | 'extend' | 'suspend' | 'reinstate' | 'terminate' | 'revoke'
  * - targetUserId: string
  * - reason: string (MANDATORY)
  * - days?: number (for grant or extend, default 30)
@@ -114,6 +115,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         });
         break;
 
+      case 'terminate':
+        result = await adminTerminateSubscriptionInTransaction({
+          targetUserId,
+          adminEmail: auth.adminEmail,
+          adminUserId: auth.adminUserId,
+          reason,
+        });
+        break;
+
       case 'revoke':
         result = await adminRevokeSubscriptionInTransaction({
           targetUserId,
@@ -127,7 +137,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json(
           {
             success: false,
-            error: `Invalid action "${action}". Allowed: grant, extend, suspend, reinstate, revoke.`,
+            error: `Invalid action "${action}". Allowed: grant, extend, suspend, reinstate, terminate, revoke.`,
           },
           { status: 400 }
         );

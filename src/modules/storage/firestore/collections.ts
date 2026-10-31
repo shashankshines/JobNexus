@@ -116,6 +116,7 @@ export interface AdminAuditLogDocument {
     | 'subscription_extended'
     | 'subscription_suspended'
     | 'subscription_reinstated'
+    | 'subscription_terminated'
     | 'subscription_revoked';
   targetUserId: string;
   targetUserEmail?: string;

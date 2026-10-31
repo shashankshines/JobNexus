@@ -28,8 +28,9 @@ export type SubscriptionStatus =
   | 'authenticated'
   | 'active'
   | 'pending'
-  | 'halted'
-  | 'cancelled'
+  | 'halted'      // Reversible administrative suspension (access blocked, period preserved)
+  | 'terminated'  // Reversible administrative termination (access blocked, history preserved)
+  | 'cancelled'   // Permanent revocation (metadata.revoked === true) OR user-initiated cancel
   | 'completed'
   | 'expired';
 

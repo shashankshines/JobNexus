@@ -139,6 +139,26 @@ export function evaluateSubscriptionEntitlement(
     };
   }
 
+  // 3b. Reversible Administrative Termination ('terminated'): NEVER receives grace period, immediately revoked
+  // Subscription history preserved; eligible for reinstatement within original period.
+  if (sub.status === 'terminated') {
+    return {
+      userId,
+      isPremium: false,
+      tier: 'free',
+      status: 'expired',
+      subscription: {
+        id: sub.id,
+        planId: sub.planId,
+        status: 'terminated',
+        currentPeriodEnd: sub.currentPeriodEnd,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+        provider: sub.provider,
+      },
+      reason: 'Subscription terminated by administrator — reinstatement may be available',
+    };
+  }
+
   // 4. Cancelled subscription: check if still within paid-through cycle
   if (sub.status === 'cancelled') {
     if (sub.cancelAtPeriodEnd && isPeriodValid) {
