@@ -120,7 +120,7 @@ function formatAverageSearches(dailyAverage: number): string {
   if (dailyAverage >= 1000) {
     return `${(dailyAverage / 1000).toFixed(1)}k/day`;
   }
-  return `${dailyAverage}/day`;
+  return `${dailyAverage < 1 ? dailyAverage.toFixed(2) : Math.round(dailyAverage)}/day`;
 }
 
 function resolveEmojiIcon(query: string): string {
@@ -149,7 +149,7 @@ function normalizeKey(str: string): string {
 }
 
 export class PopularSearchesService {
-  private static store = new DurableStore<PopularSearchPill>('popular_searches');
+  private static store = new DurableStore<PopularSearchPill & { dailySearches?: Record<string, number> }>('popular_searches');
   private static initialized = false;
 
   private static initDefaults(): void {
@@ -177,17 +177,60 @@ export class PopularSearchesService {
 
   static getPopularPills(limit = 8): PopularSearchPill[] {
     this.initDefaults();
-    const items = this.store.getAll();
+    const storedItems = this.store.getAll();
+    const now = new Date();
+    const hasRecentSearches = storedItems.some((item) => this.getRecentSearchCount(item, now) > 0);
+    const items = storedItems.map((item) => {
+      const recentSearchCount = this.getRecentSearchCount(item, now);
+      const recentAverage = recentSearchCount / WINDOW_DAYS;
+      const baseline = BASELINE_POPULAR_PILLS.find((pill) => pill.id === item.id);
+      return {
+        ...item,
+        recentSearchCount,
+        avgSearches: hasRecentSearches ? recentAverage : baseline?.avgSearches ?? 0,
+        formattedAverage: hasRecentSearches
+          ? formatAverageSearches(recentAverage)
+          : baseline?.formattedAverage ?? '0/day',
+        trend: hasRecentSearches
+          ? recentAverage >= 100 ? 'hot' as const : recentSearchCount > 0 ? 'rising' as const : 'steady' as const
+          : baseline?.trend ?? 'steady',
+      };
+    });
 
-    // Sort dynamically by average searches descending, then count descending
     items.sort((a, b) => {
-      if (b.avgSearches !== a.avgSearches) {
-        return b.avgSearches - a.avgSearches;
+      if (hasRecentSearches && b.recentSearchCount !== a.recentSearchCount) {
+        return b.recentSearchCount - a.recentSearchCount;
       }
+      if (b.avgSearches !== a.avgSearches) return b.avgSearches - a.avgSearches;
       return b.searchCount - a.searchCount;
     });
 
-    return items.slice(0, limit);
+    return items.slice(0, limit).map((item) => ({
+      id: item.id,
+      label: item.label,
+      query: item.query,
+      searchCount: item.searchCount,
+      avgSearches: item.avgSearches,
+      formattedAverage: item.formattedAverage,
+      trend: item.trend,
+      category: item.category,
+      updatedAt: item.updatedAt,
+    }));
+  }
+
+  private static getRecentSearchCount(
+    item: PopularSearchPill & { dailySearches?: Record<string, number> },
+    now: Date
+  ): number {
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const windowStart = today - (WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000;
+
+    return Object.entries(item.dailySearches || {}).reduce((total, [day, count]) => {
+      const dayTimestamp = Date.parse(`${day}T00:00:00.000Z`);
+      return Number.isFinite(dayTimestamp) && dayTimestamp >= windowStart && dayTimestamp <= today
+        ? total + count
+        : total;
+    }, 0);
   }
 
   static getPopularSearchesResponse(limit = 8): PopularSearchesResponse {
@@ -204,72 +247,72 @@ export class PopularSearchesService {
     };
   }
 
-  static recordSearch(rawQuery: string, location?: string): PopularSearchPill[] {
+  static recordSearch(rawQuery: string, limit = 8): PopularSearchPill[] {
     this.initDefaults();
     const clean = (rawQuery || '').trim();
     if (!clean || clean.length < 2) {
-      return this.getPopularPills();
+      return this.getPopularPills(limit);
     }
 
     const normQuery = normalizeKey(clean);
     // Ignore pure symbols or numeric noise
     if (normQuery.length < 2) {
-      return this.getPopularPills();
+      return this.getPopularPills(limit);
     }
 
     const allItems = this.store.getAll();
-    let matchedItem: PopularSearchPill | undefined;
+    let matchedItem: (PopularSearchPill & { dailySearches?: Record<string, number> }) | undefined;
 
     // Check for existing query match
     for (const item of allItems) {
       const itemNormQuery = normalizeKey(item.query);
       const itemNormLabel = normalizeKey(item.label);
-      if (
-        itemNormQuery === normQuery ||
-        itemNormLabel === normQuery ||
-        normQuery.includes(itemNormQuery) ||
-        itemNormQuery.includes(normQuery)
-      ) {
+      if (itemNormQuery === normQuery || itemNormLabel === normQuery) {
         matchedItem = item;
         break;
       }
     }
 
-    const now = new Date().toISOString();
+    const nowDate = new Date();
+    const now = nowDate.toISOString();
+    const today = now.slice(0, 10);
 
     if (matchedItem) {
       matchedItem.searchCount += 1;
-      matchedItem.avgSearches = Math.round(matchedItem.searchCount / WINDOW_DAYS);
+      const firstDay = new Date(nowDate.getTime() - (WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      matchedItem.dailySearches = Object.fromEntries(
+        Object.entries(matchedItem.dailySearches || {}).filter(([day]) => day >= firstDay)
+      );
+      matchedItem.dailySearches[today] = (matchedItem.dailySearches[today] || 0) + 1;
+      const recentSearchCount = this.getRecentSearchCount(matchedItem, nowDate);
+      matchedItem.avgSearches = recentSearchCount / WINDOW_DAYS;
       matchedItem.formattedAverage = formatAverageSearches(matchedItem.avgSearches);
-      matchedItem.trend = matchedItem.avgSearches > 100 ? 'hot' : 'rising';
+      matchedItem.trend = matchedItem.avgSearches >= 100 ? 'hot' : 'rising';
       matchedItem.updatedAt = now;
-      if (location && !matchedItem.location) {
-        matchedItem.location = location;
-      }
       this.store.set(matchedItem.id, matchedItem);
     } else {
       // Create new dynamic pill for rising search
       const id = normQuery.replace(/\s+/g, '-');
       const icon = resolveEmojiIcon(clean);
-      const initialCount = 1200;
-      const initialAvg = Math.round(initialCount / WINDOW_DAYS);
 
-      const newPill: PopularSearchPill = {
+      const newPill: PopularSearchPill & { dailySearches?: Record<string, number> } = {
         id: `custom-${id}`,
         label: `${icon} ${clean}`,
         query: clean,
-        location,
-        searchCount: initialCount + 1,
-        avgSearches: Math.round((initialCount + 1) / WINDOW_DAYS),
-        formattedAverage: formatAverageSearches(initialAvg),
+        searchCount: 1,
+        avgSearches: 1 / WINDOW_DAYS,
+        formattedAverage: formatAverageSearches(1 / WINDOW_DAYS),
         trend: 'rising',
         updatedAt: now,
+        dailySearches: { [today]: 1 },
       };
 
       this.store.set(newPill.id, newPill);
     }
 
-    return this.getPopularPills();
+    return this.getPopularPills(limit);
   }
 
   static resetToDefault(): void {
@@ -278,4 +321,3 @@ export class PopularSearchesService {
     this.initDefaults();
   }
 }
-

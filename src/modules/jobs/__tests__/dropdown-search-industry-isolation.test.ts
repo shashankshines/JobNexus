@@ -104,7 +104,7 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
     assert.ok(!staleResults.some((j) => j.id === 'job-design-1'), 'Genuine design job was blocked by stale industry');
   });
 
-  it('verifies that page.tsx clears industry and selectedRole in handleJobSuggestionClick', () => {
+  it('updates role suggestions without searching until the form is submitted', () => {
     const pagePath = path.resolve(process.cwd(), 'src/app/page.tsx');
     const content = fs.readFileSync(pagePath, 'utf8');
 
@@ -115,10 +115,12 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
 
     assert.ok(handlerBody.includes("setIndustry('')"), 'handleJobSuggestionClick must setIndustry to empty string');
     assert.ok(handlerBody.includes("setSelectedRole('')"), 'handleJobSuggestionClick must setSelectedRole to empty string');
-    assert.ok(
-      handlerBody.includes("executeSearch(suggestion, location, type, level, '', remote, '', company)"),
-      'handleJobSuggestionClick must pass empty industry to executeSearch'
-    );
+    assert.ok(!handlerBody.includes('executeSearch('), 'Selecting a suggestion must not execute a search');
+    const submitHandlerMatch = content.match(/const handleSearchSubmit = \(e\?: React\.FormEvent\) => \{([\s\S]*?)\n  \};/);
+    assert.ok(submitHandlerMatch, 'handleSearchSubmit must be defined in page.tsx');
+    assert.ok(submitHandlerMatch[1].includes('executeSearch('), 'Form submission must execute the search');
+    assert.ok(content.includes('onSubmit={handleSearchSubmit}'), 'The search form must submit through handleSearchSubmit');
+    assert.ok(content.includes('Your selected criteria apply only after you click Search Jobs.'), 'The UI must explain that edits are applied on submit');
   });
 
   it('verifies that page.tsx clears industry in handleRoleSelect', () => {
@@ -130,10 +132,7 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
     const handlerBody = roleSelectMatch[1];
 
     assert.ok(handlerBody.includes("setIndustry('')"), 'handleRoleSelect must setIndustry to empty string');
-    assert.ok(
-      handlerBody.includes("executeSearch(query, location, type, level, roleVal, nextRemote, '', company)"),
-      'handleRoleSelect must pass empty industry to executeSearch'
-    );
+    assert.ok(!handlerBody.includes('executeSearch('), 'Selecting a role must not execute a search');
   });
 
   it('verifies that page.tsx resets industry when clicking a role quick pill', () => {
@@ -144,8 +143,9 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
     assert.ok(quickPillMatch, 'handleQuickPillClick must be defined in page.tsx');
     const handlerBody = quickPillMatch[1];
 
-    assert.ok(handlerBody.includes("const nextIndustry = pill.industry || ''"), 'handleQuickPillClick must reset industry if pill lacks one');
-    assert.ok(handlerBody.includes('setIndustry(nextIndustry)'), 'handleQuickPillClick must update industry state');
+    assert.ok(handlerBody.includes("setIndustry('')"), 'handleQuickPillClick must reset a stale industry filter');
+    assert.ok(handlerBody.includes('setQuery(pill.query ?? \'\')'), 'handleQuickPillClick must set the role query');
+    assert.ok(!handlerBody.includes('executeSearch('), 'Clicking a role pill must not execute a search');
   });
 
   it('verifies results header toolbar styling and responsive structure in globals.css', () => {
@@ -160,4 +160,3 @@ describe('Dropdown Search & Industry Isolation Fix', () => {
     assert.ok(cssContent.includes('@media (max-width: 640px)'), 'globals.css must provide mobile adaptation rules');
   });
 });
-

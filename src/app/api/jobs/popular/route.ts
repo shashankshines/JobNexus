@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data, {
       headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        'Cache-Control': 'private, no-store, max-age=0',
       },
     });
   } catch (error) {
@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const query = typeof body?.query === 'string' ? body.query.trim() : '';
-    const location = typeof body?.location === 'string' ? body.location.trim() : undefined;
 
     if (!query) {
       return NextResponse.json(
@@ -38,11 +37,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updatedPills = PopularSearchesService.recordSearch(query, location);
+    const updatedPills = PopularSearchesService.recordSearch(query, 10);
 
     return NextResponse.json({
       success: true,
       pills: updatedPills,
+      lastUpdated: new Date().toISOString(),
+    }, {
+      headers: {
+        'Cache-Control': 'private, no-store, max-age=0',
+      },
     });
   } catch (error) {
     console.error('[Popular Searches API Record Error]:', error);
@@ -52,4 +56,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

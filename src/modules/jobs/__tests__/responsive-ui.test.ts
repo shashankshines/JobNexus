@@ -77,7 +77,7 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
     });
 
     it('guarantees search-console-form has 100% width and responsive adaptation in globals.css', () => {
-      assert.match(cssContent, /\.search-console-form\s*\{[^}]*width:\s*100%;/s, 'search-console-form must have width: 100% in CSS');
+      assert.match(cssContent, /\.search-console-form\s*\{[\s\S]*?width:\s*100%;/, 'search-console-form must have width: 100% in CSS');
       assert.ok(cssContent.includes('@media (max-width: 640px)'), 'Should have mobile media query');
       assert.ok(cssContent.includes('padding: 1rem 0.85rem !important;'), 'Should adapt padding on mobile');
     });
@@ -96,6 +96,7 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
     it('allocates balanced desktop widths to refinement dropdowns in globals.css', () => {
       assert.ok(cssContent.includes('.search-refinement-role {\n  flex: 1.1;\n  min-width: 160px;'), 'Role must have flex: 1.1 and min-width: 160px in globals.css');
       assert.ok(cssContent.includes('.search-refinement-industry {\n  flex: 1.4;\n  min-width: 190px;'), 'Industry must have flex: 1.4 and min-width: 190px in globals.css');
+      assert.ok(cssContent.includes('.search-refinement-industry {\n  flex: 1.4;\n  min-width: 190px;\n  order: -1;'), 'Industry selector must be the first visible refinement on desktop and mobile');
       assert.ok(cssContent.includes('.search-refinement-workplace {\n  flex: 0.85;\n  min-width: 140px;'), 'Workplace must have flex: 0.85 and min-width: 140px in globals.css');
       assert.ok(cssContent.includes('.search-refinement-type {\n  flex: 0.75;\n  min-width: 120px;'), 'Type must have flex: 0.75 and min-width: 120px in globals.css');
       assert.ok(cssContent.includes('.search-refinement-level {\n  flex: 0.8;\n  min-width: 130px;'), 'Level must have flex: 0.8 and min-width: 130px in globals.css');

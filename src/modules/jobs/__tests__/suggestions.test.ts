@@ -17,6 +17,28 @@ describe('Job Post & Location Dropdowns Suggestions Tests', () => {
     const suggestions = getSuggestions('');
     assert.ok(suggestions.length > 0);
     assert.strictEqual(suggestions[0], POPULAR_JOB_POSTS[0]);
+    assert.ok(suggestions.some((role) => role.includes('Nurse')));
+    assert.ok(suggestions.some((role) => role.includes('Accountant')));
+    assert.ok(suggestions.some((role) => role.includes('Teacher')));
+  });
+
+  it('includes discoverable roles across non-IT sectors', () => {
+    const allRoles = JOB_POST_GROUPS.flatMap((group) => group.posts.map((post) => post.label));
+    for (const role of [
+      'Registered Nurse',
+      'Corporate Lawyer',
+      'Executive Chef',
+      'Agricultural',
+      'Public Administration',
+      'Automotive Technician',
+      'Journalist',
+      'Research Scientist',
+      'Security Guard',
+      'Social Worker',
+      'Insurance Claims Adjuster',
+    ]) {
+      assert.ok(allRoles.some((label) => label.includes(role)), `Missing non-IT role: ${role}`);
+    }
   });
 
   it('matches relevant job posts when user queries for specific roles', () => {
@@ -167,7 +189,7 @@ describe('Job Post & Location Dropdowns Suggestions Tests', () => {
     const remoteGroup = JOB_POST_GROUPS.find((g) => g.group.includes('Fully Remote'));
     assert.ok(remoteGroup, 'Dedicated Remote group should exist');
     assert.ok(remoteGroup.posts.length >= 10, 'Should contain extensive remote roles');
-    assert.ok(remoteGroup.posts.some((p) => p.label.includes('All Remote Tech Roles')));
+    assert.ok(remoteGroup.posts.some((p) => p.label.includes('All Remote Roles')));
     assert.ok(remoteGroup.posts.some((p) => p.label.includes('Remote Software Engineer')));
     assert.ok(remoteGroup.posts.some((p) => p.label.includes('Remote Full Stack Developer')));
   });
@@ -207,4 +229,3 @@ describe('Job Post & Location Dropdowns Suggestions Tests', () => {
     assert.strictEqual(nonMatching.length, 0);
   });
 });
-

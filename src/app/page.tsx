@@ -210,9 +210,6 @@ interface QuickPill {
   id?: string;
   label: string;
   query?: string;
-  location?: string;
-  remote?: string;
-  industry?: string;
   searchCount?: number;
   avgSearches?: number;
   formattedAverage?: string;
@@ -220,17 +217,17 @@ interface QuickPill {
 }
 
 const DEFAULT_POPULAR_PILLS: QuickPill[] = [
-  { id: 'healthcare-nursing', label: '🏥 Healthcare', industry: 'healthcare', avgSearches: 135, formattedAverage: '135/day', trend: 'hot' },
-  { id: 'full-stack-developer', label: '⚡ Full Stack', query: 'Full Stack Developer', industry: 'technology', avgSearches: 130, formattedAverage: '130/day', trend: 'hot' },
-  { id: 'finance-accounting', label: '📊 Finance & Accounts', industry: 'finance_accounting', avgSearches: 110, formattedAverage: '110/day', trend: 'rising' },
-  { id: 'education-teaching', label: '🎓 Education & Teaching', industry: 'education', avgSearches: 105, formattedAverage: '105/day', trend: 'rising' },
-  { id: 'construction-trades', label: '🏗️ Construction & Trades', industry: 'construction_trades', avgSearches: 90, formattedAverage: '90/day', trend: 'steady' },
-  { id: 'logistics-supply', label: '🚚 Logistics & Supply', industry: 'logistics_transport', avgSearches: 85, formattedAverage: '85/day', trend: 'steady' },
-  { id: 'manufacturing-industrial', label: '⚙️ Manufacturing', industry: 'manufacturing', avgSearches: 80, formattedAverage: '80/day', trend: 'steady' },
-  { id: 'retail-sales', label: '🛍️ Retail & Sales', industry: 'retail_sales', avgSearches: 75, formattedAverage: '75/day', trend: 'rising' },
-  { id: 'ai-machine-learning', label: '🤖 AI & ML', query: 'AI Machine Learning', industry: 'technology', avgSearches: 70, formattedAverage: '70/day', trend: 'rising' },
-  { id: 'admin-hr', label: '📋 Admin & HR', industry: 'administration_hr', avgSearches: 65, formattedAverage: '65/day', trend: 'steady' },
-  { id: 'customer-support', label: '🎧 Customer Support', industry: 'customer_service', avgSearches: 60, formattedAverage: '60/day', trend: 'steady' },
+  { id: 'full-stack-developer', label: '⚡ Full Stack Developer', query: 'Full Stack Developer', avgSearches: 140, formattedAverage: '140/day', trend: 'hot' },
+  { id: 'react-developer', label: '⚛️ React Developer', query: 'React Developer', avgSearches: 125, formattedAverage: '125/day', trend: 'hot' },
+  { id: 'ai-machine-learning', label: '🤖 AI / Machine Learning Engineer', query: 'AI Machine Learning Engineer', avgSearches: 115, formattedAverage: '115/day', trend: 'rising' },
+  { id: 'registered-nurse', label: '🏥 Registered Nurse', query: 'Registered Nurse', avgSearches: 100, formattedAverage: '100/day', trend: 'rising' },
+  { id: 'accountant', label: '💰 Accountant', query: 'Accountant', avgSearches: 95, formattedAverage: '95/day', trend: 'rising' },
+  { id: 'teacher', label: '🎓 Teacher', query: 'Teacher', avgSearches: 90, formattedAverage: '90/day', trend: 'rising' },
+  { id: 'financial-analyst', label: '📊 Financial Analyst', query: 'Financial Analyst', avgSearches: 85, formattedAverage: '85/day', trend: 'steady' },
+  { id: 'project-manager', label: '📋 Project Manager', query: 'Project Manager', avgSearches: 80, formattedAverage: '80/day', trend: 'steady' },
+  { id: 'civil-engineer', label: '🏗️ Civil Engineer', query: 'Civil Engineer', avgSearches: 75, formattedAverage: '75/day', trend: 'rising' },
+  { id: 'customer-support', label: '🎧 Customer Support Representative', query: 'Customer Support Representative', avgSearches: 70, formattedAverage: '70/day', trend: 'steady' },
+  { id: 'marketing-specialist', label: '📣 Marketing Specialist', query: 'Marketing Specialist', avgSearches: 65, formattedAverage: '65/day', trend: 'steady' },
 ];
 
 
@@ -503,6 +500,7 @@ export default function Home() {
 
   // Dynamic Popular Search Pills state (ranked by average searches)
   const [popularPills, setPopularPills] = useState<QuickPill[]>(DEFAULT_POPULAR_PILLS);
+  const popularPillsUpdatedAtRef = useRef(0);
 
   // Suggestions state
   const [jobSuggestions, setJobSuggestions] = useState<string[]>([]);
@@ -522,12 +520,6 @@ export default function Home() {
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
 
   // Advanced Refinements Drawer state
-  const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
-
-  const activeRefinementsCount = useMemo(() => {
-    return (selectedRole ? 1 : 0) + (company ? 1 : 0) + (industry ? 1 : 0) + (type ? 1 : 0) + (level ? 1 : 0);
-  }, [selectedRole, company, industry, type, level]);
-
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const locBoxRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -540,6 +532,16 @@ export default function Home() {
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const levelDropdownRef = useRef<HTMLDivElement>(null);
   const intentProcessedRef = useRef(false);
+  const lastSubmittedSearchRef = useRef<{
+    query: string;
+    location: string;
+    type: string;
+    level: string;
+    selectedRole: string;
+    remote: string;
+    industry: string;
+    company: string;
+  } | null>(null);
   const jobGridRef = useRef<HTMLDivElement>(null);
   const resultsSectionRef = useRef<HTMLDivElement>(null);
   const tracksContentRef = useRef<HTMLDivElement>(null);
@@ -567,6 +569,24 @@ export default function Home() {
 
   const currentHeroWord = HERO_ROTATING_WORDS[heroWordIndex];
 
+  const applyPopularPills = useCallback((data: { pills?: QuickPill[]; lastUpdated?: string }) => {
+    const rolePills = data.pills?.filter(
+      (pill) => typeof pill.query === 'string' && pill.query.trim().length > 0
+    );
+    if (!rolePills?.length) return;
+
+    const updatedAt = data.lastUpdated ? Date.parse(data.lastUpdated) : Date.now();
+    if (Number.isFinite(updatedAt) && updatedAt < popularPillsUpdatedAtRef.current) return;
+    if (Number.isFinite(updatedAt)) popularPillsUpdatedAtRef.current = updatedAt;
+
+    setPopularPills(rolePills);
+    try {
+      localStorage.setItem('jobnexus_popular_role_searches', JSON.stringify(rolePills));
+    } catch {
+      // Ignore storage quota errors; live server results remain available.
+    }
+  }, []);
+
   const executeSearch = useCallback(
     async (
       searchQuery = query,
@@ -576,7 +596,8 @@ export default function Home() {
       roleCategory = selectedRole,
       searchRemote = remote,
       searchIndustry = industry,
-      searchCompany = company
+      searchCompany = company,
+      recordPopularity = false
     ) => {
       setSearched(true);
       setShowJobDropdown(false);
@@ -599,6 +620,23 @@ export default function Home() {
       if (searchIndustry && searchIndustry !== 'all') params.append('industry', searchIndustry);
 
       const cacheKey = params.toString();
+      const popularityQuery = effectiveQuery;
+      if (recordPopularity && popularityQuery.trim().length >= 2) {
+        fetch('/api/jobs/popular', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: popularityQuery }),
+        })
+          .then(async (response) => {
+            if (!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
+            const data = await response.json();
+            if (data?.success) applyPopularPills(data);
+          })
+          .catch((error: unknown) => {
+            console.warn('[Popular Searches] Unable to record search:', error);
+          });
+      }
+
       const isUnconstrained =
         !effectiveQuery &&
         !searchLoc &&
@@ -685,59 +723,6 @@ export default function Home() {
           setJobs([]);
         }
 
-        // Dynamically increment average searches and update popular search pills
-        if (effectiveQuery && effectiveQuery.trim().length >= 2) {
-          const q = effectiveQuery.trim();
-          setPopularPills((prev) => {
-            const copy = prev.map((p) => ({ ...p }));
-            const normQ = q.toLowerCase();
-            let matched = false;
-
-            for (const pill of copy) {
-              const pillQ = (pill.query || '').toLowerCase();
-              const pillL = (pill.label || '').toLowerCase();
-              if (pillQ === normQ || pillL.includes(normQ) || normQ.includes(pillQ)) {
-                pill.avgSearches = (pill.avgSearches || 50) + 1;
-                pill.searchCount = (pill.searchCount || 1500) + 1;
-                pill.formattedAverage = `${pill.avgSearches}/day`;
-                pill.trend = pill.avgSearches > 100 ? 'hot' : 'rising';
-                matched = true;
-                break;
-              }
-            }
-
-            if (!matched) {
-              copy.push({
-                id: `custom-${normQ.replace(/[^a-z0-9]+/g, '-')}`,
-                label: `🔍 ${q}`,
-                query: q,
-                location: searchLoc,
-                avgSearches: 45,
-                searchCount: 1350,
-                formattedAverage: '45/day',
-                trend: 'rising',
-              });
-            }
-
-            copy.sort((a, b) => (b.avgSearches || 0) - (a.avgSearches || 0));
-            const updated = copy.slice(0, 10);
-            if (typeof window !== 'undefined') {
-              try {
-                localStorage.setItem('jobnexus_popular_searches', JSON.stringify(updated));
-              } catch {
-                // Ignore quota
-              }
-            }
-            return updated;
-          });
-
-          // Background sync to server
-          fetch('/api/jobs/popular', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: q, location: searchLoc }),
-          }).catch(() => { });
-        }
       } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') {
           return;
@@ -753,7 +738,7 @@ export default function Home() {
         }
       }
     },
-    [query, company, location, type, level, selectedRole, remote, industry, syncFromJobsCount]
+    [query, company, location, type, level, selectedRole, remote, industry, syncFromJobsCount, applyPopularPills]
   );
 
   const resetToDiscovery = useCallback(() => {
@@ -808,7 +793,20 @@ export default function Home() {
         resetToDiscovery();
       } else if (!wasAuthenticated && isAuthenticated) {
         if (searched || jobs.length > 0) {
-          executeSearch();
+          const submittedSearch = lastSubmittedSearchRef.current;
+          if (submittedSearch) {
+            executeSearch(
+              submittedSearch.query,
+              submittedSearch.location,
+              submittedSearch.type,
+              submittedSearch.level,
+              submittedSearch.selectedRole,
+              submittedSearch.remote,
+              submittedSearch.industry,
+              submittedSearch.company,
+              true
+            );
+          }
         }
       }
     }
@@ -856,9 +854,6 @@ export default function Home() {
               window.open(fallback, '_blank', 'noopener,noreferrer');
               showToast(`Opened verified portal for "${intent.jobTitle || 'selected job'}"!`, 'info');
             }
-
-            // Refresh current results so real company names are visible
-            executeSearch();
           };
 
           resumeApplyAction();
@@ -867,11 +862,9 @@ export default function Home() {
           const loc = intent.location || '';
           setQuery(q);
           if (loc) setLocation(loc);
-          executeSearch(q, loc, '', '', '', '');
         } else if (intent.type === 'pill') {
           const q = intent.query || '';
           setQuery(q);
-          executeSearch(q, '', '', '', '', '');
         } else if (intent.type === 'domain') {
           const q = intent.query || '';
           const loc = intent.location || '';
@@ -879,11 +872,9 @@ export default function Home() {
           setQuery(q);
           setLocation(loc);
           setRemote(rem);
-          executeSearch(q, loc, '', '', '', rem);
         } else if (intent.type === 'workplace') {
           const rem = intent.remote || '';
           setRemote(rem);
-          executeSearch('', '', '', '', '', rem);
         }
       }
     } else if (!isAuthenticated) {
@@ -903,45 +894,54 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Synchronize dynamic popular search pills based on average search volume
+  // Keep the search trend strip synchronized without polling hidden tabs.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('jobnexus_popular_searches');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setPopularPills(parsed);
-          }
+    try {
+      const stored = localStorage.getItem('jobnexus_popular_role_searches');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const rolePills = parsed.filter(
+            (pill: QuickPill) => typeof pill.query === 'string' && pill.query.trim().length > 0
+          );
+          if (rolePills.length > 0) setPopularPills(rolePills);
         }
-      } catch {
-        // Fall back gracefully
       }
+    } catch {
+      // Fall back to the server response.
     }
 
-    // Defer non-critical popular search fetch to idle time to prioritize initial job catalog rendering
-    const popularTimer = setTimeout(() => {
-      fetch('/api/jobs/popular')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && Array.isArray(data.pills) && data.pills.length > 0) {
-            setPopularPills(data.pills);
-            if (typeof window !== 'undefined') {
-              try {
-                localStorage.setItem('jobnexus_popular_searches', JSON.stringify(data.pills));
-              } catch {
-                // Ignore quota
-              }
-            }
-          }
-        })
-        .catch(() => {
-          // Offline / fallback to defaults
-        });
-    }, 800);
+    let active = true;
+    let requestInFlight = false;
+    const refreshPopularPills = async () => {
+      if (!active || requestInFlight || document.visibilityState === 'hidden') return;
+      requestInFlight = true;
+      try {
+        const response = await fetch('/api/jobs/popular?limit=10', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
+        const data = await response.json();
+        if (active) applyPopularPills(data);
+      } catch (error: unknown) {
+        console.warn('[Popular Searches] Unable to refresh live searches:', error);
+      } finally {
+        requestInFlight = false;
+      }
+    };
 
-    return () => clearTimeout(popularTimer);
-  }, []);
+    const initialTimer = window.setTimeout(() => void refreshPopularPills(), 800);
+    const pollTimer = window.setInterval(() => void refreshPopularPills(), 15_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refreshPopularPills();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      active = false;
+      window.clearTimeout(initialTimer);
+      window.clearInterval(pollTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [applyPopularPills]);
 
   // Pre-load raw catalog on mount from sessionStorage and background fetch for instant 0ms pill clicking
   useEffect(() => {
@@ -1059,11 +1059,6 @@ export default function Home() {
   const handleDiscoveryTabSelect = useCallback((targetTab: 'feed' | 'tracks') => {
     setActiveDiscoveryTab(targetTab);
 
-    // If switching to live roles feed but jobs haven't been fetched yet, trigger browse all
-    if (targetTab === 'feed' && !searched && jobs.length === 0) {
-      executeSearch('', '', '', '', '', '', '', '');
-    }
-
     setTabFocusBadge(targetTab === 'tracks' ? 'Curated Tracks (12) in Focus' : 'Live Roles Feed in Focus');
     setIsResultsFocused(true);
 
@@ -1098,7 +1093,7 @@ export default function Home() {
         }
       }
     }, 45);
-  }, [searched, jobs.length, executeSearch]);
+  }, []);
 
   const handleSortSelect = useCallback((newSort: 'relevance' | 'date') => {
     setSortBy(newSort);
@@ -1167,8 +1162,6 @@ export default function Home() {
     setIndustry(nextIndustry);
     setSelectedRole('');
     setActiveDiscoveryTab('feed');
-    executeSearch(nextQuery, nextLoc, type, level, '', nextRemote, nextIndustry);
-    scrollToResults();
   };
 
   const handleBrowseAllClick = () => {
@@ -1181,13 +1174,22 @@ export default function Home() {
     setRemote('');
     setIndustry('');
     setActiveDiscoveryTab('feed');
-    executeSearch('', '', '', '', '', '', '', '');
-    scrollToResults();
   };
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    executeSearch();
+    const submittedSearch = { query, location, type, level, selectedRole, remote, industry, company };
+    lastSubmittedSearchRef.current = submittedSearch;
+    executeSearch(
+      submittedSearch.query,
+      submittedSearch.location,
+      submittedSearch.type,
+      submittedSearch.level,
+      submittedSearch.selectedRole,
+      submittedSearch.remote,
+      submittedSearch.industry,
+      submittedSearch.company
+    );
     scrollToResults();
   };
 
@@ -1198,15 +1200,11 @@ export default function Home() {
     // explores across all verified sectors and doesn't get constrained by earlier navigation
     setIndustry('');
     setSelectedRole('');
-    executeSearch(suggestion, location, type, level, '', remote, '', company);
-    scrollToResults();
   };
 
   const handleLocSuggestionClick = (loc: string) => {
     setLocation(loc);
     setShowLocDropdown(false);
-    executeSearch(query, loc, type, level, selectedRole, remote, industry, company);
-    scrollToResults();
   };
 
   const handleRoleSelect = (roleVal: string) => {
@@ -1215,13 +1213,9 @@ export default function Home() {
     setRoleSearchQuery('');
     // Selecting a role category clears lingering industry filters so cross-industry positions are discovered
     setIndustry('');
-    let nextRemote = remote;
     if (isRemoteRole(roleVal) && !remote) {
-      nextRemote = 'remote';
       setRemote('remote');
     }
-    executeSearch(query, location, type, level, roleVal, nextRemote, '', company);
-    scrollToResults();
   };
 
   const handleClearRole = (e?: React.SyntheticEvent) => {
@@ -1229,7 +1223,6 @@ export default function Home() {
     setSelectedRole('');
     setShowRoleDropdown(false);
     setRoleSearchQuery('');
-    executeSearch(query, location, type, level, '', remote, industry, company);
   };
 
   const selectedRoleLabel = useMemo(() => {
@@ -1283,10 +1276,8 @@ export default function Home() {
     (selectedComp: string) => {
       setCompany(selectedComp);
       setShowCompanyDropdown(false);
-      executeSearch(query, location, type, level, selectedRole, remote, industry, selectedComp);
-      scrollToResults();
     },
-    [query, location, type, level, selectedRole, remote, industry, executeSearch, scrollToResults]
+    []
   );
 
   const handleSelectIndustry = useCallback(
@@ -1300,10 +1291,8 @@ export default function Home() {
       );
       const indVal = match ? match.value : selectedInd;
       setIndustry(indVal);
-      executeSearch(query, location, type, level, selectedRole, remote, indVal, company);
-      scrollToResults();
     },
-    [query, location, type, level, selectedRole, remote, company, executeSearch, scrollToResults]
+    []
   );
 
   const availableCompanies = useMemo(() => {
@@ -1324,23 +1313,11 @@ export default function Home() {
 
   const handleWorkplaceCategoryClick = (categoryRemoteParam: string) => {
     setRemote(categoryRemoteParam);
-    executeSearch(query, location, type, level, selectedRole, categoryRemoteParam);
   };
 
   const handleQuickPillClick = (pill: QuickPill) => {
-    // When clicking a role query pill without explicit industry, clear stale industry filter
-    const nextIndustry = pill.industry || '';
-    const nextQuery = pill.query ?? (pill.industry ? '' : query);
-    const nextLoc = pill.location ?? location;
-    const nextRemote = pill.remote ?? remote;
-
-    setQuery(nextQuery);
-    setIndustry(nextIndustry);
-    if (pill.location !== undefined) setLocation(nextLoc);
-    if (pill.remote !== undefined) setRemote(nextRemote);
-
-    executeSearch(nextQuery, nextLoc, type, level, selectedRole, nextRemote, nextIndustry, company);
-    scrollToResults();
+    setQuery(pill.query ?? '');
+    setIndustry('');
   };
 
   const clearAllFilters = () => {
@@ -1360,7 +1337,6 @@ export default function Home() {
     setShowLevelDropdown(false);
     setRoleSearchQuery('');
     setCompanySearchQuery('');
-    executeSearch('', '', '', '', '', '', '', '');
   };
 
   // Client-side instant sorting & activeView filtering
@@ -1509,16 +1485,12 @@ export default function Home() {
     setActiveView('all');
     setQuery(categoryQuery);
     setSelectedRole('');
-    executeSearch(categoryQuery, location, type, level, '', remote);
-    scrollToResults();
   };
 
   const handleFooterLocationClick = (locQuery: string, remoteVal = '') => {
     setActiveView('all');
     setLocation(locQuery);
     if (remoteVal) setRemote(remoteVal);
-    executeSearch(query, locQuery, type, level, selectedRole, remoteVal || remote);
-    scrollToResults();
   };
 
   return (
@@ -2539,24 +2511,6 @@ export default function Home() {
                 </AnimatePresence>
               </div>
 
-              {/* Refinement Filters Toggle Button */}
-              <button
-                type="button"
-                onClick={() => setShowFiltersDrawer((prev) => !prev)}
-                className={`search-filters-toggle-btn ${showFiltersDrawer || activeRefinementsCount > 0 ? 'is-active' : ''}`}
-                aria-expanded={showFiltersDrawer}
-                aria-label="Toggle advanced job filters"
-                title="Toggle advanced filters"
-              >
-                <SlidersHorizontal size={16} />
-                <span>Filters</span>
-                {activeRefinementsCount > 0 && (
-                  <span className="search-filters-badge" aria-label={`${activeRefinementsCount} active filters`}>
-                    {activeRefinementsCount}
-                  </span>
-                )}
-              </button>
-
               {/* Primary Search CTA */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -2587,16 +2541,12 @@ export default function Home() {
               </motion.button>
             </div>
 
-            {/* Advanced Refinements Collapsible Drawer */}
-            <AnimatePresence>
-              {(showFiltersDrawer || activeRefinementsCount > 0) && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  className="search-refinements-drawer"
-                >
+            <p style={{ margin: '-0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+              Your selected criteria apply only after you click Search Jobs.
+            </p>
+
+            {/* Search refinements remain visible without an extra filter-toggle step. */}
+            <div className="search-refinements">
                   <div
                     className="search-refinements-bar"
                     style={{
@@ -2608,10 +2558,6 @@ export default function Home() {
                       borderTop: '1px solid var(--border)',
                     }}
                   >
-                    <span className="search-refinements-label" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '0.15rem' }}>
-                      Filters:
-                    </span>
-
                     {/* Role & Category Custom Dropdown */}
                     <div
                       ref={roleDropdownRef}
@@ -2930,14 +2876,12 @@ export default function Home() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setCompany('');
-                                executeSearch(query, location, type, level, selectedRole, remote, industry, '');
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setCompany('');
-                                  executeSearch(query, location, type, level, selectedRole, remote, industry, '');
                                 }
                               }}
                               style={{
@@ -3018,7 +2962,6 @@ export default function Home() {
                                 setCompany('');
                                 setShowCompanyDropdown(false);
                                 setCompanySearchQuery('');
-                                executeSearch(query, location, type, level, selectedRole, remote, industry, '');
                               }}
                               style={{
                                 padding: '0.62rem 0.95rem',
@@ -3152,14 +3095,12 @@ export default function Home() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setIndustry('');
-                                executeSearch(query, location, type, level, selectedRole, remote, '');
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setIndustry('');
-                                  executeSearch(query, location, type, level, selectedRole, remote, '');
                                 }
                               }}
                               style={{
@@ -3220,7 +3161,6 @@ export default function Home() {
                                   onClick={() => {
                                     setIndustry(opt.value);
                                     setShowIndustryDropdown(false);
-                                    executeSearch(query, location, type, level, selectedRole, remote, opt.value);
                                   }}
                                   style={{
                                     padding: '0.62rem 0.95rem',
@@ -3313,14 +3253,12 @@ export default function Home() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setRemote('');
-                                executeSearch(query, location, type, level, selectedRole, '');
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setRemote('');
-                                  executeSearch(query, location, type, level, selectedRole, '');
                                 }
                               }}
                               style={{
@@ -3380,7 +3318,6 @@ export default function Home() {
                                   onClick={() => {
                                     setRemote(opt.value);
                                     setShowWorkplaceDropdown(false);
-                                    executeSearch(query, location, type, level, selectedRole, opt.value);
                                   }}
                                   style={{
                                     padding: '0.62rem 0.95rem',
@@ -3468,14 +3405,12 @@ export default function Home() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setType('');
-                                executeSearch(query, location, '', level, selectedRole, remote);
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setType('');
-                                  executeSearch(query, location, '', level, selectedRole, remote);
                                 }
                               }}
                               style={{
@@ -3535,7 +3470,6 @@ export default function Home() {
                                   onClick={() => {
                                     setType(opt.value);
                                     setShowTypeDropdown(false);
-                                    executeSearch(query, location, opt.value, level, selectedRole, remote);
                                   }}
                                   style={{
                                     padding: '0.62rem 0.95rem',
@@ -3620,14 +3554,12 @@ export default function Home() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setLevel('');
-                                executeSearch(query, location, type, '', selectedRole, remote);
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setLevel('');
-                                  executeSearch(query, location, type, '', selectedRole, remote);
                                 }
                               }}
                               style={{
@@ -3687,7 +3619,6 @@ export default function Home() {
                                   onClick={() => {
                                     setLevel(opt.value);
                                     setShowLevelDropdown(false);
-                                    executeSearch(query, location, type, opt.value, selectedRole, remote);
                                   }}
                                   style={{
                                     padding: '0.62rem 0.95rem',
@@ -3744,9 +3675,7 @@ export default function Home() {
                       </button>
                     )}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            </div>
 
             {/* Active Filter Chips Bar */}
             {(query || company || location || remote || selectedRole || type || level || industry) && (
@@ -3786,7 +3715,6 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setQuery('');
-                        executeSearch('', location, type, level, selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove keyword filter"
@@ -3817,7 +3745,6 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setCompany('');
-                        executeSearch(query, location, type, level, selectedRole, remote, industry, '');
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove company filter"
@@ -3848,7 +3775,6 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setLocation('');
-                        executeSearch(query, '', type, level, selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove location filter"
@@ -3907,7 +3833,6 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setRemote('');
-                        executeSearch(query, location, type, level, selectedRole, '', industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove workplace filter"
@@ -3937,7 +3862,6 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setType('');
-                        executeSearch(query, location, '', level, selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove employment type filter"
@@ -3967,7 +3891,6 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setLevel('');
-                        executeSearch(query, location, type, '', selectedRole, remote, industry, company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove seniority filter"
@@ -3998,7 +3921,6 @@ export default function Home() {
                       type="button"
                       onClick={() => {
                         setIndustry('');
-                        executeSearch(query, location, type, level, selectedRole, remote, '', company);
                       }}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}
                       title="Remove industry filter"
@@ -4624,7 +4546,6 @@ export default function Home() {
                     onClick={() => {
                       clearAllFilters();
                       setRemote('remote');
-                      executeSearch('', '', '', '', '', 'remote');
                     }}
                     className="btn-secondary"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}

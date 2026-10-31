@@ -28,38 +28,23 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
     );
   });
 
-  it('implements Filters drawer toggle with active count badge in search inputs row', () => {
-    assert.ok(
-      pageContent.includes('search-filters-toggle-btn'),
-      'page.tsx must define search-filters-toggle-btn'
-    );
-    assert.ok(
-      cssContent.includes('.search-filters-toggle-btn {'),
-      'globals.css must style search-filters-toggle-btn'
-    );
-    assert.ok(
-      pageContent.includes('search-filters-badge'),
-      'page.tsx must render search-filters-badge when active filters exist'
-    );
-    assert.ok(
-      cssContent.includes('.search-filters-badge {'),
-      'globals.css must define search-filters-badge'
-    );
+  it('shows all search refinement controls by default without a Filters toggle', () => {
+    assert.ok(pageContent.includes('className="search-refinements"'), 'page.tsx must render the visible search refinements container');
+    assert.ok(cssContent.includes('.search-refinements {'), 'globals.css must style the always-visible search refinements');
+    assert.ok(pageContent.includes('className="search-refinement-role"'), 'Role filter must remain available');
+    assert.ok(pageContent.includes('className="search-refinement-company"'), 'Company filter must remain available');
+    assert.ok(pageContent.includes('className="search-refinement-industry"'), 'Industry filter must remain available');
+    assert.ok(pageContent.includes('className="search-refinement-workplace"'), 'Workplace filter must remain available');
+    assert.ok(pageContent.includes('className="search-refinement-type"'), 'Employment type filter must remain available');
+    assert.ok(pageContent.includes('className="search-refinement-level"'), 'Seniority filter must remain available');
+    assert.ok(!pageContent.includes('search-filters-toggle-btn'), 'The redundant Filters toggle must be removed');
+    assert.ok(!pageContent.includes('showFiltersDrawer'), 'The refinements must not be hidden behind drawer state');
   });
 
-  it('wraps 6 bulky refinement dropdowns in an animated collapsible drawer', () => {
-    assert.ok(
-      pageContent.includes('className="search-refinements-drawer"'),
-      'page.tsx must wrap refinements in search-refinements-drawer'
-    );
-    assert.ok(
-      cssContent.includes('.search-refinements-drawer {'),
-      'globals.css must define search-refinements-drawer'
-    );
-    assert.ok(
-      pageContent.includes('showFiltersDrawer || activeRefinementsCount > 0'),
-      'Refinements drawer must expand when toggled or when active filters exist'
-    );
+  it('keeps visible search refinements in the search form without drawer behavior', () => {
+    assert.ok(pageContent.includes('className="search-refinements-bar"'), 'Refinements must render directly in the search form');
+    assert.ok(!pageContent.includes('search-refinements-drawer'), 'Search refinements must not use a collapsible drawer');
+    assert.ok(!pageContent.includes('search-refinements-label'), 'Remove the redundant Filters label');
   });
 
   it('removes the Explore by Industry slider while retaining search filters and popular pills', () => {
@@ -300,24 +285,7 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
     );
   });
 
-  it('guarantees high-contrast visibility for filter buttons and pills in light mode', () => {
-    // 1. Filters toggle button active & inactive light theme overrides
-    assert.ok(
-      cssContent.includes(':root[data-theme="light"] .search-filters-toggle-btn.is-active') &&
-      cssContent.includes('color: #1e1b4b !important;'),
-      'globals.css must provide high-contrast deep indigo text for active filters button in light mode'
-    );
-    assert.ok(
-      cssContent.includes(':root[data-theme="light"] .search-filters-toggle-btn.is-active svg') &&
-      cssContent.includes('color: #4338ca !important;'),
-      'globals.css must provide high-contrast deep indigo icon for active filters button in light mode'
-    );
-    assert.ok(
-      cssContent.includes(':root[data-theme="light"] .search-filters-badge'),
-      'globals.css must define search-filters-badge override for light mode'
-    );
-
-    // 2. Quick search pills light theme visibility
+  it('guarantees high-contrast visibility for quick search pills in light mode', () => {
     assert.ok(
       cssContent.includes(':root[data-theme="light"] .quick-pill-btn.is-active') &&
       cssContent.includes('color: #1e1b4b !important;'),
