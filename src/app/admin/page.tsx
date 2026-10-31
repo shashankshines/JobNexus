@@ -914,13 +914,13 @@ export default function AdminConsolePage() {
                         setSubmissionPage(1);
                         fetchSubmissions({ query: '', page: 1 });
                       }}
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}
                     >
                       <X size={13} />
                     </button>
                   )}
                 </div>
-                <span style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                   {submissionTotal} total
                 </span>
               </div>
@@ -928,7 +928,7 @@ export default function AdminConsolePage() {
 
             {/* Submissions List */}
             {submissionsLoading ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem auto' }} />
                 <p style={{ margin: 0 }}>Loading submissions...</p>
               </div>
@@ -1005,7 +1005,7 @@ export default function AdminConsolePage() {
                             <strong className="admin-text-value" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', wordBreak: 'break-all' }}>
                               <Mail size={13} style={{ color: 'var(--primary-start, #818cf8)', flexShrink: 0 }} />
                               <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => openUser360(sub.userEmail || sub.userId)}>
-                                {sub.userEmail || <span style={{ color: 'var(--text-secondary, #94a3b8)', fontStyle: 'italic', fontWeight: 400 }}>Not recorded</span>}
+                                {sub.userEmail || <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic', fontWeight: 400 }}>Not recorded</span>}
                               </span>
                             </strong>
                           </div>
@@ -1253,7 +1253,7 @@ export default function AdminConsolePage() {
                         setLedgerPage(1);
                         fetchLedger({ query: '', page: 1 });
                       }}
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}
                     >
                       <X size={13} />
                     </button>
@@ -1267,7 +1267,7 @@ export default function AdminConsolePage() {
 
             {/* Ledger Table */}
             {ledgerLoading ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem auto' }} />
                 <p style={{ margin: 0 }}>Loading financial ledger records...</p>
               </div>
@@ -1395,7 +1395,7 @@ export default function AdminConsolePage() {
                               )}
                               <div><strong className="admin-text-label" style={{ display: 'inline', marginRight: 4 }}>Order:</strong> <span className="admin-text-value">{new Date(item.orderCreatedAt).toLocaleDateString('en-IN')}</span></div>
                             </td>
-                            <td style={{ padding: '0.65rem 0.6rem', fontSize: '0.74rem', color: 'var(--text-secondary, #94a3b8)', wordBreak: 'break-word' }}>
+                            <td style={{ padding: '0.65rem 0.6rem', fontSize: '0.74rem', color: 'var(--text-secondary)', wordBreak: 'break-word' }}>
                               {item.reviewedBy ? (
                                 <div>
                                   <div>by <strong className="admin-text-value">{item.reviewedBy}</strong></div>
@@ -1605,16 +1605,7 @@ export default function AdminConsolePage() {
                         setSubPage(1);
                         fetchSubscriptions({ status: f.id, page: 1 });
                       }}
-                      style={{
-                        padding: '0.4rem 0.75rem',
-                        borderRadius: 8,
-                        fontSize: '0.76rem',
-                        fontWeight: 600,
-                        background: subStatusFilter === f.id ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                        border: subStatusFilter === f.id ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
-                        color: subStatusFilter === f.id ? '#ffffff' : '#94a3b8',
-                        cursor: 'pointer',
-                      }}
+                      className={`admin-status-filter-btn ${subStatusFilter === f.id ? 'is-active' : ''}`}
                     >
                       {f.label}
                     </button>
@@ -1628,19 +1619,7 @@ export default function AdminConsolePage() {
                       setSubPage(1);
                       fetchSubscriptions({ expiringSoon: next, page: 1 });
                     }}
-                    style={{
-                      padding: '0.4rem 0.75rem',
-                      borderRadius: 8,
-                      fontSize: '0.76rem',
-                      fontWeight: 600,
-                      background: subExpiringSoon ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255, 255, 255, 0.04)',
-                      border: subExpiringSoon ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
-                      color: subExpiringSoon ? '#fde68a' : '#94a3b8',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                    }}
+                    className={`admin-expiring-filter-btn ${subExpiringSoon ? 'is-active' : ''}`}
                   >
                     <Clock size={12} />
                     Expiring Soon (&le;7d)
@@ -1734,7 +1713,7 @@ export default function AdminConsolePage() {
             </div>
 
             {subscriptionsLoading ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem auto' }} />
                 <p style={{ margin: 0 }}>Loading subscription records...</p>
               </div>
@@ -1798,7 +1777,7 @@ export default function AdminConsolePage() {
                           <strong className="admin-text-value" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', wordBreak: 'break-all' }}>
                             <Mail size={13} style={{ color: 'var(--primary-start, #818cf8)', flexShrink: 0 }} />
                             <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => openUser360(sub.userEmail || sub.userId)}>
-                              {sub.userEmail || <span style={{ color: 'var(--text-secondary, #94a3b8)', fontStyle: 'italic', fontWeight: 400 }}>Not recorded</span>}
+                              {sub.userEmail || <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic', fontWeight: 400 }}>Not recorded</span>}
                             </span>
                           </strong>
                         </div>
@@ -1925,7 +1904,7 @@ export default function AdminConsolePage() {
                 <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>
                   Append-Only Administrative Governance Audit Trail
                 </h3>
-                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                   Showing {auditTotal} audit records
                 </span>
               </div>
@@ -1994,7 +1973,7 @@ export default function AdminConsolePage() {
             )}
 
             {auditLoading ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem auto' }} />
                 <p style={{ margin: 0 }}>Loading audit logs...</p>
               </div>
@@ -2309,7 +2288,7 @@ export default function AdminConsolePage() {
                 type="button"
                 onClick={() => setControlModalOpen(false)}
                 disabled={actionInProgress}
-                style={{ padding: '0.55rem 1rem', borderRadius: 10, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#94a3b8', fontSize: '0.82rem', cursor: 'pointer' }}
+                style={{ padding: '0.55rem 1rem', borderRadius: 10, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.12)', color: 'var(--text-secondary)', fontSize: '0.82rem', cursor: 'pointer' }}
               >
                 Cancel
               </button>
@@ -2369,7 +2348,7 @@ export default function AdminConsolePage() {
             {/* Modal Body */}
             <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {user360Loading ? (
-                <div style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>
+                <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   <RefreshCw size={32} className="animate-spin" style={{ margin: '0 auto 0.75rem auto', color: '#6366f1' }} />
                   <p className="admin-text-value" style={{ margin: 0, fontSize: '0.9rem' }}>Retrieving User 360° chronological dossier...</p>
                   <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)' }}>Cross-referencing Firestore identities, orders, claims, and audit logs.</p>
@@ -2420,7 +2399,7 @@ export default function AdminConsolePage() {
                                 <BadgeCheck size={14} />
                               </span>
                             ) : (
-                              <span title="Unverified" style={{ fontSize: '0.68rem', color: '#94a3b8' }}>(unverified)</span>
+                              <span title="Unverified" style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>(unverified)</span>
                             )}
                           </div>
                         </div>
@@ -2451,7 +2430,7 @@ export default function AdminConsolePage() {
                     {/* Authoritative Entitlement Card */}
                     <div className="admin-card" style={{ padding: '1.25rem', border: `1.5px solid ${user360Dossier.subscription?.isPremium ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.08)'}`, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: user360Dossier.subscription?.isPremium ? '#10b981' : 'var(--text-secondary, #94a3b8)' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: user360Dossier.subscription?.isPremium ? '#10b981' : 'var(--text-secondary)' }}>
                           Authoritative Entitlement (entitlement.service.ts)
                         </span>
                         <span className={user360Dossier.subscription?.isPremium ? 'admin-badge-approved' : 'admin-badge-info'}>
