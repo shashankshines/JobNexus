@@ -8,6 +8,7 @@ import {
   getSubmissionsCollection,
   getUtrReservationsCollection,
   getAuditLogsCollection,
+  getSubscriptionsCollection,
   PaymentOrderDocument,
   PaymentSubmissionDocument,
   UtrReservationDocument,
@@ -18,7 +19,11 @@ import {
   adminSuspendSubscriptionInTransaction,
   adminReinstateSubscriptionInTransaction,
   adminRevokeSubscriptionInTransaction,
+  adminTerminateSubscriptionInTransaction,
   adminManualGrantSubscriptionInTransaction,
+  adminExtendSubscriptionInTransaction,
+  getAdminSubscriptions,
+  getUser360Profile,
 } from '@/modules/storage/firestore/admin-billing.store';
 import {
   reserveUtrInTransaction,
@@ -29,6 +34,7 @@ import {
   createSession,
   findOrCreateGoogleUser,
   resetAuthStore,
+  SESSION_COOKIE_NAME,
 } from '@/modules/auth/server/session.store';
 
 // API Routes
@@ -424,6 +430,113 @@ describe('JobNexus — Financial Integrity, UTR Protection & Admin Authorization
       assert.strictEqual(Math.abs(newPeriodEndMs - expectedEndMs) < 1000, true);
     });
 
+    it('reversible termination preserves expiry and payment history, then keeps each lifecycle event', async () => {
+      const { orderDoc, reservationDoc, submissionDoc } = await seedTestOrderAndSubmission();
+      const initialSub = await adminManualGrantSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_1',
+        days: 30,
+        reason: 'Seed a valid subscription before termination',
+      });
+
+      const terminated = await adminTerminateSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_1',
+        reason: 'Temporary support review',
+      });
+
+      assert.strictEqual(terminated.status, 'terminated');
+      assert.strictEqual(terminated.currentPeriodStart, initialSub.currentPeriodStart);
+      assert.strictEqual(terminated.currentPeriodEnd, initialSub.currentPeriodEnd);
+      assert.strictEqual(terminated.metadata?.terminatedBy, designatedAdminEmail);
+      assert.strictEqual(terminated.metadata?.terminationReason, 'Temporary support review');
+      assert.strictEqual(evaluateSubscriptionEntitlement(testUserId, terminated).isPremium, false);
+      const terminatedList = await getAdminSubscriptions({ entitlementStatus: 'terminated', query: testUserId });
+      assert.strictEqual(terminatedList.some((sub) => sub.userId === testUserId), true);
+      const dossier = await getUser360Profile(testUserId);
+      assert.strictEqual(dossier.subscription?.status, 'terminated');
+      assert.strictEqual(dossier.subscription?.terminatedBy, designatedAdminEmail);
+      assert.strictEqual(dossier.subscription?.terminationReason, 'Temporary support review');
+      assert.strictEqual(dossier.timeline.some((event) => event.action === 'subscription_terminated'), true);
+      assert.deepStrictEqual((await getOrdersCollection().doc(orderDoc.orderId).get()).data(), orderDoc);
+      assert.deepStrictEqual((await getUtrReservationsCollection().doc(reservationDoc.utrNumber).get()).data(), reservationDoc);
+      assert.deepStrictEqual((await getSubmissionsCollection().doc(submissionDoc.submissionId).get()).data(), submissionDoc);
+
+      const reinstated = await adminReinstateSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_2',
+        reason: 'Review completed',
+      });
+      assert.strictEqual(reinstated.status, 'active');
+      assert.strictEqual(reinstated.currentPeriodEnd, initialSub.currentPeriodEnd);
+      assert.strictEqual(evaluateSubscriptionEntitlement(testUserId, reinstated).isPremium, true);
+
+      await adminTerminateSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_1',
+        reason: 'Second administrative review',
+      });
+      await adminReinstateSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_2',
+        reason: 'Second review completed',
+      });
+
+      const lifecycleAudit = (await getAuditLogsCollection().get()).docs
+        .map((doc) => doc.data())
+        .filter((entry) => entry.targetUserId === testUserId);
+      const terminations = lifecycleAudit.filter((entry) => entry.action === 'subscription_terminated');
+      const reinstatements = lifecycleAudit.filter((entry) => entry.action === 'subscription_reinstated');
+      assert.strictEqual(terminations.length, 2);
+      assert.strictEqual(reinstatements.length, 2);
+      assert.strictEqual(new Set([...terminations, ...reinstatements].map((entry) => entry.id)).size, 4);
+    });
+
+    it('does not convert historical cancelled subscriptions or reinstate an expired termination', async () => {
+      const initialSub = await adminManualGrantSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_1',
+        days: 30,
+        reason: 'Seed subscription',
+      });
+      const expiredTerminated = {
+        ...initialSub,
+        status: 'terminated' as const,
+        currentPeriodEnd: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      };
+      await getSubscriptionsCollection().doc(testUserId).set(expiredTerminated);
+      await assert.rejects(
+        () => adminReinstateSubscriptionInTransaction({
+          targetUserId: testUserId,
+          adminEmail: designatedAdminEmail,
+          adminUserId: 'admin_1',
+          reason: 'Attempt to restore expired membership',
+        }),
+        /original subscription period expired/i
+      );
+
+      await getSubscriptionsCollection().doc(testUserId).set({
+        ...expiredTerminated,
+        status: 'cancelled',
+        metadata: {},
+      });
+      await assert.rejects(
+        () => adminTerminateSubscriptionInTransaction({
+          targetUserId: testUserId,
+          adminEmail: designatedAdminEmail,
+          adminUserId: 'admin_1',
+          reason: 'Must not convert historical cancellation',
+        }),
+        /Historical cancellation is not reversible termination/i
+      );
+    });
+
     it('revoking permanently terminates validity and CANNOT be reinstated', async () => {
       // 1. Initial active subscription
       await adminManualGrantSubscriptionInTransaction({
@@ -444,6 +557,10 @@ describe('JobNexus — Financial Integrity, UTR Protection & Admin Authorization
 
       assert.strictEqual(revoked.status, 'cancelled');
       assert.strictEqual(revoked.metadata?.revoked, true);
+      const revokeAudit = (await getAuditLogsCollection().get()).docs
+        .map((doc) => doc.data())
+        .find((entry) => entry.targetUserId === testUserId && entry.action === 'subscription_permanently_revoked');
+      assert.ok(revokeAudit);
 
       // Entitlement must be completely expired
       const entitlement = evaluateSubscriptionEntitlement(testUserId, revoked);
@@ -462,6 +579,26 @@ describe('JobNexus — Financial Integrity, UTR Protection & Admin Authorization
         },
         /Cannot reinstate revoked subscription/
       );
+
+      await assert.rejects(
+        () => adminExtendSubscriptionInTransaction({
+          targetUserId: testUserId,
+          adminEmail: designatedAdminEmail,
+          adminUserId: 'admin_1',
+          reason: 'Must not reverse permanent revocation through extension',
+        }),
+        /Cannot extend permanently revoked subscription/
+      );
+
+      const explicitlyGranted = await adminManualGrantSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_1',
+        reason: 'Explicit new grant approved',
+      });
+      assert.strictEqual(explicitlyGranted.status, 'active');
+      assert.strictEqual(explicitlyGranted.metadata?.revoked, false);
+      assert.strictEqual(evaluateSubscriptionEntitlement(testUserId, explicitlyGranted).isPremium, true);
     });
   });
 
@@ -503,6 +640,41 @@ describe('JobNexus — Financial Integrity, UTR Protection & Admin Authorization
       assert.strictEqual(data.success, true);
       assert.strictEqual(data.subscription.status, 'cancelled');
       assert.strictEqual(data.subscription.metadata?.revoked, true);
+    });
+
+    it('executes reversible termination through the authorized subscription control route', async () => {
+      await adminManualGrantSubscriptionInTransaction({
+        targetUserId: testUserId,
+        adminEmail: designatedAdminEmail,
+        adminUserId: 'admin_1',
+        days: 30,
+        reason: 'Seed subscription',
+      });
+      const adminUser = findOrCreateGoogleUser({
+        sub: 'google_adm_terminate',
+        email: designatedAdminEmail,
+        name: 'Admin User',
+        email_verified: true,
+      });
+      const { sessionId } = createSession(adminUser.id);
+      const request = new NextRequest('http://localhost:3000/api/admin/subscriptions/control', {
+        method: 'POST',
+        headers: {
+          cookie: `${SESSION_COOKIE_NAME}=${sessionId}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'terminate',
+          targetUserId: testUserId,
+          reason: 'Authorized reversible termination',
+        }),
+      });
+
+      const response = await controlRoute(request);
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.subscription.status, 'terminated');
     });
 
     it('rejects subscription control requests without mandatory reason', async () => {

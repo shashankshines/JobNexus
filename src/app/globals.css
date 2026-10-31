@@ -2861,7 +2861,7 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
 /* ==========================================================================
    Responsive Search Console Architecture
    ========================================================================== */
-/* Keep the complete search console above its following industry rail.
+/* Keep the complete search console above adjacent landing content.
    Framer Motion transforms create stacking contexts; z-index on a nested
    dropdown cannot escape the search console's ancestor stacking context. */
 .search-console-form {
@@ -3063,145 +3063,6 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
   overflow: visible;
 }
 
-/* Multi-Industry Horizontal Rail (Streamlined & Clean) */
-/* This section follows the search console in the DOM and must remain
-   below its dropdown layer, even while its entrance animation is active. */
-.industry-showcase-container {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 100%;
-  margin: 0.5rem auto 0.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  box-sizing: border-box;
-}
-
-.industry-showcase-wrapper {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  gap: 0.45rem;
-}
-
-.industry-showcase-pills {
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  gap: 0.45rem;
-  padding: 4px 2px;
-  width: 100%;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.industry-showcase-pills::-webkit-scrollbar {
-  display: none;
-}
-
-.industry-showcase-pills>* {
-  flex-shrink: 0;
-}
-
-.industry-rail-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.38rem 0.8rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  white-space: nowrap;
-  outline: none;
-  background: var(--surface-card, rgba(255, 255, 255, 0.04));
-  color: var(--text-secondary, #94a3b8);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-}
-
-.industry-rail-pill:hover:not(.is-active) {
-  background: rgba(99, 102, 241, 0.09);
-  border-color: rgba(99, 102, 241, 0.3);
-  color: var(--text-primary, #ffffff);
-  transform: translateY(-1px);
-}
-
-.industry-rail-pill.is-active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.24), rgba(139, 92, 246, 0.24));
-  color: var(--text-primary, #ffffff);
-  border: 1px solid rgba(129, 140, 248, 0.65);
-  font-weight: 700;
-  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.28);
-}
-
-:root[data-theme="light"] .industry-rail-pill {
-  background: #ffffff;
-  border: 1.5px solid rgba(15, 23, 42, 0.14);
-  color: #334155;
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-}
-
-:root[data-theme="light"] .industry-rail-pill:hover:not(.is-active) {
-  background: #eef2ff;
-  border-color: #6366f1;
-  color: #1e1b4b;
-}
-
-:root[data-theme="light"] .industry-rail-pill.is-active {
-  background: #e0e7ff !important;
-  border: 2px solid #4f46e5 !important;
-  color: #1e1b4b !important;
-  font-weight: 750 !important;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.18) !important;
-}
-
-:root[data-theme="light"] .industry-rail-nav-btn {
-  background: #ffffff;
-  border: 1.5px solid rgba(15, 23, 42, 0.16);
-  color: #334155;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-:root[data-theme="light"] .industry-rail-nav-btn:hover {
-  background: #4f46e5;
-  color: #ffffff;
-  border-color: #4338ca;
-}
-
-.industry-rail-nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--surface, rgba(15, 23, 42, 0.85));
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-  color: var(--text-secondary, #94a3b8);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 10;
-}
-
-.industry-rail-nav-btn:hover {
-  background: #6366f1;
-  color: #ffffff;
-  border-color: #818cf8;
-  transform: scale(1.08);
-}
-
-@media (max-width: 640px) {
-  .industry-rail-nav-btn {
-    display: none !important;
-  }
-}
-
 /* Results Section & Card Area Focus Styling (Strictly No Border / No Outline on Click) */
 .search-results-section,
 .search-results-section:focus,
@@ -3267,10 +3128,6 @@ html[data-theme="light"] .tab-panel-focused-glow {
 button:focus:not(:focus-visible),
 a:focus:not(:focus-visible),
 [tabindex]:focus:not(:focus-visible),
-.industry-rail-pill:focus,
-.industry-rail-pill:active,
-.industry-rail-nav-btn:focus,
-.industry-rail-nav-btn:active,
 .quick-pill-btn:focus,
 .quick-pill-btn:active,
 .workplace-pill-btn:focus,
@@ -4088,6 +3945,161 @@ html[data-theme="light"] .admin-expiring-filter-btn.is-active {
   background: #fef3c7;
   border-color: #d97706;
   color: #78350f;
+}
+
+.admin-action-select {
+  position: relative;
+}
+
+.admin-action-select-trigger {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  background: #111a2b;
+  color: #f8fafc;
+  text-align: left;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-action-select-trigger:focus-visible,
+.admin-action-option:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
+}
+
+.admin-action-option-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  max-height: min(16rem, 45vh);
+  overflow-y: auto;
+  padding: 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: #0d1424;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+.admin-action-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #f8fafc;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-action-option:hover,
+.admin-action-option.is-selected {
+  border-color: rgba(129, 140, 248, 0.45);
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.admin-action-option-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-action-option-description {
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.admin-action-context,
+.admin-action-target-summary {
+  margin: 0.45rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.admin-action-target-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.admin-action-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 9px;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.admin-action-confirmation input {
+  margin-top: 0.15rem;
+  accent-color: #4f46e5;
+  flex: 0 0 auto;
+}
+
+:root[data-theme="light"] .admin-action-select-trigger,
+[data-theme="light"] .admin-action-select-trigger,
+html[data-theme="light"] .admin-action-select-trigger {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+:root[data-theme="light"] .admin-action-option-list,
+[data-theme="light"] .admin-action-option-list,
+html[data-theme="light"] .admin-action-option-list {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+}
+
+:root[data-theme="light"] .admin-action-option,
+[data-theme="light"] .admin-action-option,
+html[data-theme="light"] .admin-action-option {
+  color: #0f172a;
+}
+
+:root[data-theme="light"] .admin-action-option:hover,
+[data-theme="light"] .admin-action-option:hover,
+html[data-theme="light"] .admin-action-option:hover,
+:root[data-theme="light"] .admin-action-option.is-selected,
+[data-theme="light"] .admin-action-option.is-selected,
+html[data-theme="light"] .admin-action-option.is-selected {
+  border-color: #818cf8;
+  background: #eef2ff;
+}
+
+:root[data-theme="light"] .admin-action-option-description,
+[data-theme="light"] .admin-action-option-description,
+html[data-theme="light"] .admin-action-option-description {
+  color: #475569;
+}
+
+:root[data-theme="light"] .admin-action-confirmation,
+[data-theme="light"] .admin-action-confirmation,
+html[data-theme="light"] .admin-action-confirmation {
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #422006;
 }
 
 :root[data-theme="light"] .admin-filter-btn,

@@ -77,7 +77,7 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
     });
 
     it('guarantees search-console-form has 100% width and responsive adaptation in globals.css', () => {
-      assert.ok(cssContent.includes('.search-console-form {\n  width: 100%;'), 'search-console-form must have width: 100% in CSS');
+      assert.match(cssContent, /\.search-console-form\s*\{[^}]*width:\s*100%;/s, 'search-console-form must have width: 100% in CSS');
       assert.ok(cssContent.includes('@media (max-width: 640px)'), 'Should have mobile media query');
       assert.ok(cssContent.includes('padding: 1rem 0.85rem !important;'), 'Should adapt padding on mobile');
     });
@@ -142,8 +142,11 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
 
   describe('Horizontal Swipe & Touch Scroll Targets', () => {
     it('prevents flex shrinking of pill items during horizontal touch swipe on mobile', () => {
-      assert.ok(cssContent.includes('.quick-pills-container > *'), 'Should style quick-pills children');
-      assert.ok(cssContent.includes('flex-shrink: 0;'), 'Pills must have flex-shrink: 0 for smooth swipe scrolling');
+      assert.match(
+        cssContent,
+        /\.quick-pills-container\s*>\s*\*\s*\{\s*flex-shrink:\s*0;/,
+        'Pills must have flex-shrink: 0 to prevent child items from shrinking'
+      );
     });
 
     it('provides responsive desktop and mobile text variants for roles matched pill', () => {
@@ -339,10 +342,9 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
       assert.ok(adminSettingsContent.includes("width: '85%',\n            maxWidth: '85vw'"), 'admin/billing/settings/page.tsx header must use 85% width');
     });
 
-    it('allows industry showcase and quick search pills to span the expanded 85% container without 1000px cap', () => {
-      assert.ok(cssContent.includes('.industry-showcase-container {\n  width: 100%;\n  max-width: 100%;'), '.industry-showcase-container must use 100% max-width');
+    it('allows quick search pills to span the expanded 85% container without 1000px cap', () => {
       assert.ok(cssContent.includes('.quick-pills-container {\n  display: flex;\n  gap: 0.5rem;\n  align-items: center;\n  justify-content: center;\n  flex-wrap: wrap;\n  width: 100%;\n  max-width: 100%;'), '.quick-pills-container must use 100% max-width');
+      assert.ok(!cssContent.includes('.industry-showcase-container'), 'Removed industry slider must not retain layout styles');
     });
   });
 });
-

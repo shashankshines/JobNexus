@@ -22,10 +22,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const query = searchParams.get('userId') || searchParams.get('query') || undefined;
   const rawStatus = searchParams.get('status') || searchParams.get('entitlementStatus');
   const entitlementStatus = (
-    rawStatus === 'active' || rawStatus === 'free' || rawStatus === 'expired' || rawStatus === 'suspended' || rawStatus === 'cancelled'
+    rawStatus === 'active' || rawStatus === 'free' || rawStatus === 'expired' || rawStatus === 'suspended' || rawStatus === 'terminated' || rawStatus === 'cancelled'
       ? rawStatus
       : 'all'
-  ) as 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled';
+  ) as 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'terminated' | 'cancelled';
 
   const rawSource = searchParams.get('source');
   const source = (
@@ -102,4 +102,3 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
-

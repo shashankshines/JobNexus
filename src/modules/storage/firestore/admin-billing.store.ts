@@ -77,6 +77,9 @@ export interface User360Subscription {
   remainingDays: number;
   gracePeriod: boolean;
   notes?: string;
+  terminatedAt?: string;
+  terminationReason?: string;
+  terminatedBy?: string;
 }
 
 export interface User360TimelineEvent {
@@ -947,6 +950,11 @@ export async function adminManualGrantSubscriptionInTransaction(params: {
       createdAt: existingSub?.createdAt || nowIso,
       updatedAt: nowIso,
       lastUpdatedFrom: 'admin_grant',
+      metadata: {
+        ...(existingSub?.metadata || {}),
+        revoked: false,
+        grantReason: trimmedReason,
+      },
     };
 
     transaction.set(subRef, newSub, { merge: true });
@@ -1024,6 +1032,12 @@ export async function adminExtendSubscriptionInTransaction(params: {
     const syncCtx = await readBillingSyncVersionInTransaction(transaction);
 
     const existingSub = subSnap.data() as SubscriptionDocument;
+    if (existingSub.metadata?.revoked === true) {
+      throw new Error(
+        `Cannot extend permanently revoked subscription for user "${targetUserId}". Use an explicit Premium grant if restoration is authorized.`
+      );
+    }
+
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
     const durationMs = safeDays * 24 * 60 * 60 * 1000;
@@ -1147,14 +1161,16 @@ export async function adminSuspendSubscriptionInTransaction(params: {
         preSuspensionStatus: existingSub.status,
         suspendedAt: nowIso,
         suspensionReason: trimmedReason,
+        suspendedBy: adminEmail,
+        suspendedByUserId: adminUserId,
       },
     };
 
     transaction.set(subRef, updatedSub, { merge: true });
 
-    // Append audit log with deterministic event ID
+    // Use a unique event ID so rapid repeated lifecycle changes retain every audit entry.
     const resolvedUserEmail = existingSub.userEmail || getUserById(targetUserId)?.email;
-    const auditId = `audit_suspend_${targetUserId}_${nowIso.slice(0, 19).replace(/[:]/g, '-')}`;
+    const auditId = `audit_suspend_${crypto.randomBytes(12).toString('hex')}`;
     const auditRef = auditLogsCol.doc(auditId);
     const auditEntry: AdminAuditLogDocument = {
       id: auditId,
@@ -1233,7 +1249,7 @@ export async function adminReinstateSubscriptionInTransaction(params: {
     // Safety Invariant: Permanently revoked subscriptions cannot be restored via generic reinstatement
     if (existingSub.status === 'cancelled' || existingSub.metadata?.revoked === true) {
       throw new Error(
-        `Cannot reinstate permanently revoked subscription for user "${targetUserId}". A revoked subscription requires an explicit manual grant.`
+        `Cannot reinstate revoked subscription for user "${targetUserId}". Permanently revoked or cancelled subscriptions require an explicit manual grant.`
       );
     }
 
@@ -1287,14 +1303,16 @@ export async function adminReinstateSubscriptionInTransaction(params: {
         ...(existingSub.metadata || {}),
         reinstatedAt: nowIso,
         reinstatementReason: trimmedReason,
+        reinstatedBy: adminEmail,
+        reinstatedByUserId: adminUserId,
       },
     };
 
     transaction.set(subRef, updatedSub, { merge: true });
 
-    // Append audit log with deterministic event ID
+    // Use a unique event ID so rapid repeated lifecycle changes retain every audit entry.
     const resolvedUserEmail = existingSub.userEmail || getUserById(targetUserId)?.email;
-    const auditId = `audit_reinstate_${targetUserId}_${nowIso.slice(0, 19).replace(/[:]/g, '-')}`;
+    const auditId = `audit_reinstate_${crypto.randomBytes(12).toString('hex')}`;
     const auditRef = auditLogsCol.doc(auditId);
     const auditEntry: AdminAuditLogDocument = {
       id: auditId,
@@ -1386,6 +1404,8 @@ export async function adminRevokeSubscriptionInTransaction(params: {
         revoked: true,
         revokedAt: nowIso,
         revocationReason: trimmedReason,
+        revokedBy: adminEmail,
+        revokedByUserId: adminUserId,
         preRevocationPeriodEnd: existingSub.currentPeriodEnd,
         preRevocationStatus: existingSub.status,
       },
@@ -1393,15 +1413,15 @@ export async function adminRevokeSubscriptionInTransaction(params: {
 
     transaction.set(subRef, updatedSub, { merge: true });
 
-    // Append audit log with deterministic event ID
+    // Use a unique event ID so rapid repeated lifecycle changes retain every audit entry.
     const resolvedUserEmail = existingSub.userEmail || getUserById(targetUserId)?.email;
-    const auditId = `audit_revoke_${targetUserId}_${nowIso.slice(0, 19).replace(/[:]/g, '-')}`;
+    const auditId = `audit_permanent_revoke_${crypto.randomBytes(12).toString('hex')}`;
     const auditRef = auditLogsCol.doc(auditId);
     const auditEntry: AdminAuditLogDocument = {
       id: auditId,
       actorId: adminUserId,
       actorEmail: adminEmail,
-      action: 'subscription_revoked',
+      action: 'subscription_permanently_revoked',
       targetUserId,
       ...(resolvedUserEmail ? { targetUserEmail: resolvedUserEmail } : {}),
       targetEntityId: existingSub.id,
@@ -1413,7 +1433,7 @@ export async function adminRevokeSubscriptionInTransaction(params: {
     transaction.set(auditRef, auditEntry);
 
     writeBillingSyncVersionInTransaction(transaction, syncCtx, {
-      mutationType: 'subscription_revoked',
+      mutationType: 'subscription_permanently_revoked',
       targetUserId,
       targetEntityId: existingSub.id,
     });
@@ -1426,7 +1446,7 @@ export async function adminRevokeSubscriptionInTransaction(params: {
   invalidateUserEntitlementCache(targetUserId);
   try {
     await bumpBillingSyncVersion({
-      mutationType: 'subscription_revoked',
+      mutationType: 'subscription_permanently_revoked',
       targetUserId,
       targetEntityId: res.id,
     });
@@ -1477,16 +1497,24 @@ export async function adminTerminateSubscriptionInTransaction(params: {
     const syncCtx = await readBillingSyncVersionInTransaction(transaction);
     const existingSub = subSnap.data() as SubscriptionDocument;
 
-    // Permanent revocations cannot be re-terminated
-    if (existingSub.status === 'cancelled' && existingSub.metadata?.revoked === true) {
+    // Historical cancellations and permanent revocations are never reinterpreted as reversible termination.
+    if (existingSub.status === 'cancelled') {
       throw new Error(
-        `Cannot terminate: subscription for user "${targetUserId}" has already been permanently revoked. This action is irreversible.`
+        existingSub.metadata?.revoked === true
+          ? `Cannot terminate: subscription for user "${targetUserId}" has already been permanently revoked. This action is irreversible.`
+          : `Cannot terminate: subscription for user "${targetUserId}" is already cancelled. Historical cancellation is not reversible termination.`
       );
     }
 
     // Idempotency: already terminated
     if (existingSub.status === 'terminated') {
       return existingSub;
+    }
+
+    if (existingSub.status !== 'active' && existingSub.status !== 'halted') {
+      throw new Error(
+        `Cannot terminate subscription in status "${existingSub.status}". Only active or suspended subscriptions can be terminated.`
+      );
     }
 
     const nowIso = new Date().toISOString();
@@ -1503,6 +1531,8 @@ export async function adminTerminateSubscriptionInTransaction(params: {
         ...(existingSub.metadata || {}),
         terminatedAt: nowIso,
         terminationReason: trimmedReason,
+        terminatedBy: adminEmail,
+        terminatedByUserId: adminUserId,
         preTerminationPeriodEnd: existingSub.currentPeriodEnd,
         preTerminationStatus: existingSub.status,
       },
@@ -1512,7 +1542,7 @@ export async function adminTerminateSubscriptionInTransaction(params: {
 
     // Append immutable audit log
     const resolvedUserEmail = existingSub.userEmail || getUserById(targetUserId)?.email;
-    const auditId = `audit_terminate_${targetUserId}_${nowIso.slice(0, 19).replace(/[:]/g, '-')}`;
+    const auditId = `audit_terminate_${crypto.randomBytes(12).toString('hex')}`;
     const auditRef = auditLogsCol.doc(auditId);
     const auditEntry: AdminAuditLogDocument = {
       id: auditId,
@@ -1601,6 +1631,9 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
 
   // Evaluate authoritative entitlement
   const entitlement = evaluateSubscriptionEntitlement(resolvedUserId, subscriptionDoc);
+  const auditLogs: AdminAuditLogDocument[] = auditSnap?.docs.map((d) => d.data()) || [];
+  auditLogs.sort((a, b) => (a.timestamp > b.timestamp ? -1 : 1));
+  const latestTermination = auditLogs.find((log) => log.action === 'subscription_terminated');
 
   let remainingDays = 0;
   if (subscriptionDoc?.currentPeriodEnd) {
@@ -1636,20 +1669,35 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
         source: subSource,
         updateOrigin: subscriptionDoc.lastUpdatedFrom,
         currentPeriodStart: subscriptionDoc.currentPeriodStart || null,
-        currentPeriodEnd: subscriptionDoc.currentPeriodEnd || null,
+        currentPeriodEnd:
+          (subscriptionDoc.metadata?.revoked === true &&
+            typeof subscriptionDoc.metadata.preRevocationPeriodEnd === 'string'
+            ? subscriptionDoc.metadata.preRevocationPeriodEnd
+            : subscriptionDoc.currentPeriodEnd) || null,
         isPremium: entitlement.isPremium,
         isEntitled: entitlement.isPremium,
         entitlementStatus:
           subscriptionDoc.status === 'halted'
             ? 'suspended'
-            : subscriptionDoc.status === 'cancelled'
-              ? 'cancelled'
-              : entitlement.status,
+            : subscriptionDoc.status === 'terminated'
+              ? 'terminated'
+              : subscriptionDoc.status === 'cancelled'
+                ? (subscriptionDoc.metadata?.revoked === true ? 'permanently revoked' : 'cancelled')
+                : entitlement.status,
         remainingDays,
         gracePeriod: entitlement.status === 'cancelled_grace',
         notes: typeof subscriptionDoc.metadata?.grantReason === 'string'
           ? (subscriptionDoc.metadata.grantReason as string)
           : undefined,
+        terminatedAt: typeof subscriptionDoc.metadata?.terminatedAt === 'string'
+          ? subscriptionDoc.metadata.terminatedAt
+          : latestTermination?.timestamp,
+        terminationReason: typeof subscriptionDoc.metadata?.terminationReason === 'string'
+          ? subscriptionDoc.metadata.terminationReason
+          : latestTermination?.reason,
+        terminatedBy: typeof subscriptionDoc.metadata?.terminatedBy === 'string'
+          ? subscriptionDoc.metadata.terminatedBy
+          : latestTermination?.actorEmail,
       }
     : null;
 
@@ -1670,9 +1718,6 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
   submissionsWithOrders.sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));
 
   // Process Audit Logs
-  const auditLogs: AdminAuditLogDocument[] = auditSnap.docs.map((d) => d.data());
-  auditLogs.sort((a, b) => (a.timestamp > b.timestamp ? -1 : 1));
-
   // 6. Build Chronological Timeline Events
   const timeline: User360TimelineEvent[] = [];
 
@@ -1748,7 +1793,7 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
         badgeColor:
           log.action.includes('grant') || log.action.includes('extend') || log.action.includes('reinstate')
             ? 'emerald'
-            : log.action.includes('suspend') || log.action.includes('revoke')
+            :             log.action.includes('suspend') || log.action.includes('revoke') || log.action.includes('terminat')
               ? 'rose'
               : 'indigo',
         details: {
@@ -2076,7 +2121,7 @@ export async function getAdminSubscriptions(
     cursor?: string;
     userId?: string;
     query?: string;
-    entitlementStatus?: 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled';
+    entitlementStatus?: 'all' | 'active' | 'free' | 'expired' | 'suspended' | 'terminated' | 'cancelled';
     source?: 'all' | 'payment_backed' | 'manual_grant';
     expiringSoon?: boolean;
     sortBy?: 'currentPeriodEnd' | 'userId' | 'status' | 'updatedAt';
@@ -2133,6 +2178,7 @@ export async function getAdminSubscriptions(
       if (params.entitlementStatus === 'free') return !ent.isPremium && ent.status === 'free';
       if (params.entitlementStatus === 'expired') return ent.status === 'expired';
       if (params.entitlementStatus === 'suspended') return s.status === 'halted';
+      if (params.entitlementStatus === 'terminated') return s.status === 'terminated';
       if (params.entitlementStatus === 'cancelled') return s.status === 'cancelled';
       return true;
     });

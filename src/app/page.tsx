@@ -23,7 +23,6 @@ import {
   ArrowLeft,
   RotateCcw,
   ChevronRight,
-  ChevronLeft,
   Compass,
   Bookmark,
   User as UserIcon,
@@ -524,14 +523,6 @@ export default function Home() {
 
   // Advanced Refinements Drawer state
   const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
-  const industryRailRef = useRef<HTMLDivElement>(null);
-
-  const scrollIndustryRail = useCallback((direction: 'left' | 'right') => {
-    if (industryRailRef.current) {
-      const scrollAmount = direction === 'left' ? -320 : 320;
-      industryRailRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    }
-  }, []);
 
   const activeRefinementsCount = useMemo(() => {
     return (selectedRole ? 1 : 0) + (company ? 1 : 0) + (industry ? 1 : 0) + (type ? 1 : 0) + (level ? 1 : 0);
@@ -4036,112 +4027,6 @@ export default function Home() {
               </motion.div>
             )}
           </motion.form>
-
-          {/* Multi-Industry Quick Selection Bar */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.22 }}
-            className="industry-showcase-container"
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.5rem',
-                padding: '0 0.25rem',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '0.8rem',
-                  color: 'var(--text-muted)',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  letterSpacing: '0.01em',
-                }}
-              >
-                <Building2 size={13} style={{ color: 'var(--primary-start)' }} />
-                <span>Explore by Industry:</span>
-              </span>
-
-              {industry && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIndustry('');
-                    executeSearch(query, location, type, level, selectedRole, remote, '', company);
-                    scrollToResults();
-                  }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--primary-start)',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  <X size={12} />
-                  <span>Show All Industries</span>
-                </button>
-              )}
-            </div>
-
-            <div className="industry-showcase-wrapper">
-              <button
-                type="button"
-                onClick={() => scrollIndustryRail('left')}
-                className="industry-rail-nav-btn industry-rail-nav-btn-left"
-                aria-label="Scroll industries left"
-                title="Scroll left"
-              >
-                <ChevronLeft size={16} />
-              </button>
-
-              <div ref={industryRailRef} className="industry-showcase-pills">
-                {INDUSTRY_OPTIONS.map((opt) => {
-                  const isSelected = industry === opt.value;
-                  return (
-                    <button
-                      key={opt.value || 'all'}
-                      type="button"
-                      onClick={() => {
-                        const nextInd = isSelected ? '' : opt.value;
-                        setIndustry(nextInd);
-                        executeSearch(query, location, type, level, selectedRole, remote, nextInd, company);
-                        scrollToResults();
-                      }}
-                      title={opt.value ? `Filter opportunities in ${opt.label}` : 'Show all industries'}
-                      className={`industry-rail-pill ${isSelected ? 'is-active' : ''}`}
-                    >
-                      <span className="industry-rail-pill-icon">{opt.icon}</span>
-                      <span>{opt.label}</span>
-                      {isSelected && <Check size={12} color="var(--primary-start)" style={{ strokeWidth: 2.5 }} />}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => scrollIndustryRail('right')}
-                className="industry-rail-nav-btn industry-rail-nav-btn-right"
-                aria-label="Scroll industries right"
-                title="Scroll right"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </motion.div>
 
           {/* Dynamic Popular Search Pills (Ranked by Average Daily Searches) */}
           <motion.div

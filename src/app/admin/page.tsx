@@ -44,6 +44,77 @@ import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
 const ADMIN_PAGE_SIZE = 5;
 
 type AdminTab = 'overview' | 'verifications' | 'ledger' | 'subscriptions' | 'settings_preview' | 'audit_logs';
+type AdminSubscriptionAction = 'grant' | 'extend' | 'suspend' | 'reinstate' | 'terminate' | 'revoke';
+
+const ADMIN_SUBSCRIPTION_ACTIONS: Array<{
+  value: AdminSubscriptionAction;
+  label: string;
+  description: string;
+  explanation: string;
+}> = [
+  {
+    value: 'grant',
+    label: 'Grant Premium',
+    description: 'Give 30 days of complimentary access.',
+    explanation: 'The user receives a new complimentary 30-day Premium subscription. This is not recorded as payment revenue.',
+  },
+  {
+    value: 'extend',
+    label: 'Extend Premium',
+    description: 'Add days to the existing subscription.',
+    explanation: 'Additional days will be added to the subscription expiry date.',
+  },
+  {
+    value: 'suspend',
+    label: 'Temporarily Suspend',
+    description: 'Block access while keeping remaining days.',
+    explanation: 'Premium access stops immediately. The existing subscription expiry date is preserved.',
+  },
+  {
+    value: 'reinstate',
+    label: 'Reinstate Premium',
+    description: 'Restore eligible suspended or terminated access.',
+    explanation: 'Premium access will be restored if the original subscription period is still valid. No additional days will be granted.',
+  },
+  {
+    value: 'terminate',
+    label: 'Terminate Premium',
+    description: 'Stop access now; allow restoration later.',
+    explanation: 'Premium access stops immediately. Subscription and payment history remain intact, and an administrator can reinstate access before the original expiry.',
+  },
+  {
+    value: 'revoke',
+    label: 'Permanently Revoke',
+    description: 'Stop access permanently; cannot be restored.',
+    explanation: 'Premium access will be permanently disabled. This action cannot be reversed through the reinstatement workflow.',
+  },
+];
+
+function getSubscriptionControlContext(
+  subscription: {
+    status: string;
+    currentPeriodEnd: string | null;
+    metadata?: Record<string, unknown>;
+  } | null
+): { status: string; currentPeriodEnd: string } | undefined {
+  if (!subscription) return undefined;
+  const preservedEnd = subscription.metadata?.revoked === true &&
+    typeof subscription.metadata.preRevocationPeriodEnd === 'string'
+    ? subscription.metadata.preRevocationPeriodEnd
+    : subscription.currentPeriodEnd;
+  return {
+    status: getSubscriptionStatusLabel(subscription.status, subscription.metadata?.revoked === true),
+    currentPeriodEnd: preservedEnd || '',
+  };
+}
+
+function getSubscriptionStatusLabel(status: string, isPermanentlyRevoked = false): string {
+  if (status === 'active') return 'Active Premium';
+  if (status === 'halted') return 'Suspended';
+  if (status === 'terminated') return 'Terminated';
+  if (status === 'cancelled' && isPermanentlyRevoked) return 'Permanently revoked';
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function AdminConsolePage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -132,7 +203,7 @@ export default function AdminConsolePage() {
   // Subscriptions state
   const [subscriptions, setSubscriptions] = useState<Array<SubscriptionDocument & { entitlement?: { isPremium: boolean; status: string; reason?: string }; source?: string }>>([]);
   const [subSearchQuery, setSubSearchQuery] = useState<string>('');
-  const [subStatusFilter, setSubStatusFilter] = useState<'all' | 'active' | 'free' | 'expired' | 'suspended' | 'cancelled'>('all');
+  const [subStatusFilter, setSubStatusFilter] = useState<'all' | 'active' | 'free' | 'expired' | 'suspended' | 'terminated' | 'cancelled'>('all');
   const [subSourceFilter, setSubSourceFilter] = useState<'all' | 'payment_backed' | 'manual_grant'>('all');
   const [subExpiringSoon, setSubExpiringSoon] = useState<boolean>(false);
   const [subSortBy, setSubSortBy] = useState<'currentPeriodEnd' | 'userId' | 'status' | 'updatedAt'>('currentPeriodEnd');
@@ -143,11 +214,17 @@ export default function AdminConsolePage() {
 
   // Subscription Control Modal state
   const [controlModalOpen, setControlModalOpen] = useState<boolean>(false);
-  const [controlAction, setControlAction] = useState<'grant' | 'extend' | 'suspend' | 'reinstate' | 'revoke'>('grant');
+  const [controlAction, setControlAction] = useState<AdminSubscriptionAction>('grant');
+  const [controlActionMenuOpen, setControlActionMenuOpen] = useState<boolean>(false);
+  const [controlActionConfirmed, setControlActionConfirmed] = useState<boolean>(false);
   const [controlTargetUserId, setControlTargetUserId] = useState<string>('');
   const [controlTargetUserEmail, setControlTargetUserEmail] = useState<string>('');
+  const [controlTargetSubscription, setControlTargetSubscription] = useState<{ status: string; currentPeriodEnd: string } | null>(null);
   const [controlDays, setControlDays] = useState<number>(30);
   const [controlReason, setControlReason] = useState<string>('');
+  const controlActionButtonRef = useRef<HTMLButtonElement>(null);
+  const controlActionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const controlActionDropdownRef = useRef<HTMLDivElement>(null);
 
   // Audit Logs state
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogDocument[]>([]);
@@ -158,6 +235,50 @@ export default function AdminConsolePage() {
   const [auditTotal, setAuditTotal] = useState<number>(0);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [auditLoading, setAuditLoading] = useState<boolean>(false);
+
+  const openSubscriptionControl = (
+    action: AdminSubscriptionAction,
+    userId: string,
+    email = '',
+    subscription?: { status: string; currentPeriodEnd: string }
+  ) => {
+    setControlAction(action);
+    setControlActionMenuOpen(false);
+    setControlActionConfirmed(false);
+    setControlTargetUserId(userId);
+    setControlTargetUserEmail(email);
+    setControlTargetSubscription(subscription || null);
+    setControlDays(30);
+    setControlReason('');
+    setControlModalOpen(true);
+  };
+
+  const selectSubscriptionAction = (action: AdminSubscriptionAction) => {
+    setControlAction(action);
+    setControlActionConfirmed(false);
+    setControlActionMenuOpen(false);
+    controlActionButtonRef.current?.focus();
+  };
+
+  const handleSubscriptionActionKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowDown') nextIndex = (index + 1) % ADMIN_SUBSCRIPTION_ACTIONS.length;
+    if (event.key === 'ArrowUp') nextIndex = (index - 1 + ADMIN_SUBSCRIPTION_ACTIONS.length) % ADMIN_SUBSCRIPTION_ACTIONS.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = ADMIN_SUBSCRIPTION_ACTIONS.length - 1;
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      controlActionOptionRefs.current[nextIndex]?.focus();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setControlActionMenuOpen(false);
+      controlActionButtonRef.current?.focus();
+    }
+  };
 
   // Load Overview Data
   const fetchOverview = async () => {
@@ -809,7 +930,7 @@ export default function AdminConsolePage() {
                     Mandatory Decision Reasons
                   </strong>
                   <span style={{ color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.5 }}>
-                    Every rejection, manual grant, extension, suspension, or reinstatement requires a non-empty administrative reason, permanently audited in <code>admin_audit_logs</code>.
+                    Every rejection, grant, extension, suspension, reinstatement, termination, or revocation requires a non-empty administrative reason, permanently audited in <code>admin_audit_logs</code>.
                   </span>
                 </div>
               </div>
@@ -828,17 +949,11 @@ export default function AdminConsolePage() {
                 <ArrowRight size={16} />
               </button>
               <button
-                onClick={() => {
-                  setControlAction('grant');
-                  setControlTargetUserId('');
-                  setControlDays(30);
-                  setControlReason('');
-                  setControlModalOpen(true);
-                }}
+                onClick={() => openSubscriptionControl('grant', '')}
                 className="admin-btn-secondary"
               >
                 <UserCheck size={16} />
-                Manual Premium Grant
+                Grant Premium
               </button>
               <Link
                 href="/admin/billing/settings"
@@ -1170,7 +1285,7 @@ export default function AdminConsolePage() {
 
               <div className="admin-kpi-card" style={{ border: '1px solid rgba(168, 85, 247, 0.35)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#a855f7', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Manual Grants (Excluded)</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Admin Grants (Excluded)</span>
                   <UserCheck size={18} />
                 </div>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#a855f7' }}>
@@ -1596,6 +1711,7 @@ export default function AdminConsolePage() {
                     { id: 'free', label: 'Free Tier' },
                     { id: 'expired', label: 'Expired' },
                     { id: 'suspended', label: 'Suspended' },
+                    { id: 'terminated', label: 'Terminated' },
                     { id: 'cancelled', label: 'Cancelled' },
                   ].map((f) => (
                     <button
@@ -1627,17 +1743,11 @@ export default function AdminConsolePage() {
                 </div>
 
                 <button
-                  onClick={() => {
-                    setControlAction('grant');
-                    setControlTargetUserId(subSearchQuery || '');
-                    setControlDays(30);
-                    setControlReason('');
-                    setControlModalOpen(true);
-                  }}
+                  onClick={() => openSubscriptionControl('grant', subSearchQuery || '')}
                   style={{ padding: '0.55rem 1rem', borderRadius: 10, background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#ffffff', fontWeight: 700, fontSize: '0.82rem', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                 >
                   <UserCheck size={15} />
-                  Manual Entitlement Action
+                  Manage Premium Access
                 </button>
               </div>
 
@@ -1721,7 +1831,7 @@ export default function AdminConsolePage() {
               <div className="admin-empty-card">
                 <Users size={32} style={{ color: '#6366f1', margin: '0 auto 0.75rem auto' }} />
                 <p className="admin-text-value" style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>No subscriptions found.</p>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #64748b)', margin: '0.25rem 0 0 0' }}>Search for another user or grant manual Premium access.</p>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #64748b)', margin: '0.25rem 0 0 0' }}>Search for another user or                 grant Premium access.</p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -1745,10 +1855,10 @@ export default function AdminConsolePage() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
                           <span className={isPremiumActive ? 'admin-badge-approved' : 'admin-badge-rejected'}>
-                            {sub.status.toUpperCase()}
+                            {getSubscriptionStatusLabel(sub.status, sub.metadata?.revoked === true)}
                           </span>
                           <span className={isPayment ? 'admin-badge-approved' : 'admin-badge-purple'}>
-                            {isPayment ? 'PAYMENT-BACKED' : 'MANUAL GRANT'}
+                            {isPayment ? 'PAYMENT-BACKED' : 'ADMIN GRANT'}
                           </span>
                           <div className="admin-email-badge">
                             <Mail size={12} style={{ color: 'var(--primary-start, #818cf8)', flexShrink: 0 }} />
@@ -1811,14 +1921,7 @@ export default function AdminConsolePage() {
                           Full Dossier
                         </button>
                         <button
-                          onClick={() => {
-                            setControlAction('extend');
-                            setControlTargetUserId(sub.userId);
-                            setControlTargetUserEmail(sub.userEmail || '');
-                            setControlDays(30);
-                            setControlReason('');
-                            setControlModalOpen(true);
-                          }}
+                          onClick={() => openSubscriptionControl('extend', sub.userId, sub.userEmail || '', getSubscriptionControlContext(sub))}
                           className="admin-action-btn-secondary"
                           style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
                         >
@@ -1826,46 +1929,37 @@ export default function AdminConsolePage() {
                         </button>
                         {sub.status === 'active' ? (
                           <button
-                            onClick={() => {
-                              setControlAction('suspend');
-                              setControlTargetUserId(sub.userId);
-                              setControlTargetUserEmail(sub.userEmail || '');
-                              setControlReason('');
-                              setControlModalOpen(true);
-                            }}
+                            onClick={() => openSubscriptionControl('suspend', sub.userId, sub.userEmail || '', getSubscriptionControlContext(sub))}
                             className="admin-btn-reject"
                             style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
                           >
                             Suspend Access
                           </button>
-                        ) : sub.status === 'halted' ? (
+                        ) : sub.status === 'halted' || sub.status === 'terminated' ? (
                           <button
-                            onClick={() => {
-                              setControlAction('reinstate');
-                              setControlTargetUserId(sub.userId);
-                              setControlTargetUserEmail(sub.userEmail || '');
-                              setControlReason('');
-                              setControlModalOpen(true);
-                            }}
+                            onClick={() => openSubscriptionControl('reinstate', sub.userId, sub.userEmail || '', getSubscriptionControlContext(sub))}
                             className="admin-badge-approved"
                             style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', cursor: 'pointer' }}
                           >
-                            Reinstate Access
+                            Reinstate Premium
                           </button>
                         ) : null}
+                        {(sub.status === 'active' || sub.status === 'halted') && (
+                          <button
+                            onClick={() => openSubscriptionControl('terminate', sub.userId, sub.userEmail || '', getSubscriptionControlContext(sub))}
+                            className="admin-btn-reject"
+                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
+                          >
+                            Terminate Premium
+                          </button>
+                        )}
                         {sub.status !== 'cancelled' && (
                           <button
-                            onClick={() => {
-                              setControlAction('revoke');
-                              setControlTargetUserId(sub.userId);
-                              setControlTargetUserEmail(sub.userEmail || '');
-                              setControlReason('');
-                              setControlModalOpen(true);
-                            }}
+                            onClick={() => openSubscriptionControl('revoke', sub.userId, sub.userEmail || '', getSubscriptionControlContext(sub))}
                             className="admin-badge-rejected"
                             style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', cursor: 'pointer' }}
                           >
-                            Revoke Permanently
+                            Permanently Revoke
                           </button>
                         )}
                       </div>
@@ -1928,6 +2022,8 @@ export default function AdminConsolePage() {
                   <option value="subscription_extended">subscription_extended</option>
                   <option value="subscription_suspended">subscription_suspended</option>
                   <option value="subscription_reinstated">subscription_reinstated</option>
+                  <option value="subscription_terminated">subscription_terminated</option>
+                  <option value="subscription_permanently_revoked">subscription_permanently_revoked</option>
                   <option value="subscription_revoked">subscription_revoked</option>
                 </select>
 
@@ -2198,31 +2294,85 @@ export default function AdminConsolePage() {
       {/* SUBSCRIPTION CONTROL MODAL */}
       {controlModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(3, 7, 18, 0.8)', backdropFilter: 'blur(8px)' }}>
-          <div className="admin-modal-card" style={{ maxWidth: 500, width: '100%', border: '1.5px solid rgba(99, 102, 241, 0.4)', padding: '1.75rem' }}>
+          <div className="admin-modal-card" style={{ maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto', border: '1.5px solid rgba(99, 102, 241, 0.4)', padding: '1.75rem' }}>
             <h3 className="admin-text-value" style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-              Administrative Entitlement Action
+              Manage Premium Access
             </h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #94a3b8)', marginBottom: '1rem', lineHeight: 1.45 }}>
-              Manual grants and extensions are tracked in the audit trail. They never fabricate payment records.
+              Every action requires an administrative reason and is recorded in the audit trail. Grants and extensions never create payment records.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginBottom: '1.25rem' }}>
               <div>
-                <label className="admin-text-label" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                  Action Type:
+                <label id="admin-action-type-label" className="admin-text-label" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                  Choose an action:
                 </label>
-                <select
-                  value={controlAction}
-                  onChange={(e) => setControlAction(e.target.value as typeof controlAction)}
-                  className="admin-form-input"
-                  style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: 8, fontSize: '0.82rem' }}
+                <div
+                  ref={controlActionDropdownRef}
+                  className="admin-action-select"
+                  onBlur={(event) => {
+                    if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+                      setControlActionMenuOpen(false);
+                    }
+                  }}
                 >
-                  <option value="grant">Manual Grant (New 30-day Premium access)</option>
-                  <option value="extend">Extend Subscription (Add days to existing)</option>
-                  <option value="suspend">Suspend Access (Temporary cutoff, preserves paid period)</option>
-                  <option value="reinstate">Reinstate Access (Restore halted status)</option>
-                  <option value="revoke">Revoke Access (Permanent cutoff, cannot reinstate)</option>
-                </select>
+                  <button
+                    ref={controlActionButtonRef}
+                    type="button"
+                    className="admin-action-select-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={controlActionMenuOpen}
+                    aria-controls="admin-action-options"
+                    aria-labelledby="admin-action-type-label admin-action-selected-label"
+                    onClick={() => {
+                      const opening = !controlActionMenuOpen;
+                      setControlActionMenuOpen(opening);
+                      if (opening) {
+                        const selectedIndex = ADMIN_SUBSCRIPTION_ACTIONS.findIndex((option) => option.value === controlAction);
+                        requestAnimationFrame(() => controlActionOptionRefs.current[selectedIndex]?.focus());
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        const selectedIndex = ADMIN_SUBSCRIPTION_ACTIONS.findIndex((option) => option.value === controlAction);
+                        const targetIndex = event.key === 'ArrowDown'
+                          ? (selectedIndex + 1) % ADMIN_SUBSCRIPTION_ACTIONS.length
+                          : (selectedIndex - 1 + ADMIN_SUBSCRIPTION_ACTIONS.length) % ADMIN_SUBSCRIPTION_ACTIONS.length;
+                        setControlActionMenuOpen(true);
+                        requestAnimationFrame(() => controlActionOptionRefs.current[targetIndex]?.focus());
+                      } else if (event.key === 'Escape') {
+                        setControlActionMenuOpen(false);
+                      }
+                    }}
+                  >
+                    <span id="admin-action-selected-label">{ADMIN_SUBSCRIPTION_ACTIONS.find((option) => option.value === controlAction)?.label}</span>
+                    <span aria-hidden="true">{controlActionMenuOpen ? '▴' : '▾'}</span>
+                  </button>
+                  {controlActionMenuOpen && (
+                    <div id="admin-action-options" className="admin-action-option-list" role="listbox" aria-labelledby="admin-action-type-label">
+                      {ADMIN_SUBSCRIPTION_ACTIONS.map((option, index) => (
+                        <button
+                          key={option.value}
+                          ref={(element) => { controlActionOptionRefs.current[index] = element; }}
+                          type="button"
+                          role="option"
+                          aria-selected={controlAction === option.value}
+                          tabIndex={controlAction === option.value ? 0 : -1}
+                          className={`admin-action-option ${controlAction === option.value ? 'is-selected' : ''}`}
+                          onClick={() => selectSubscriptionAction(option.value)}
+                          onKeyDown={(event) => handleSubscriptionActionKeyDown(event, index)}
+                        >
+                          <span className="admin-action-option-title">{option.label}</span>
+                          <span className="admin-action-option-description">{option.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="admin-action-context" aria-live="polite">
+                  {ADMIN_SUBSCRIPTION_ACTIONS.find((option) => option.value === controlAction)?.explanation}
+                </p>
               </div>
 
               <div>
@@ -2242,6 +2392,7 @@ export default function AdminConsolePage() {
                   value={controlTargetUserId}
                   onChange={(e) => {
                     setControlTargetUserId(e.target.value);
+                    setControlTargetSubscription(null);
                     if (!e.target.value.includes('@')) {
                       setControlTargetUserEmail('');
                     }
@@ -2249,6 +2400,22 @@ export default function AdminConsolePage() {
                   className="admin-form-input"
                   style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: 8, fontSize: '0.82rem' }}
                 />
+                {controlTargetSubscription && (
+                  <div className="admin-action-target-summary" aria-live="polite">
+                    <span><strong>Current status:</strong> {controlTargetSubscription.status}</span>
+                    <span>
+                      <strong>Subscription expiry:</strong>{' '}
+                      {controlTargetSubscription.currentPeriodEnd
+                        ? new Date(controlTargetSubscription.currentPeriodEnd).toLocaleString('en-IN')
+                        : 'Not available'}
+                    </span>
+                  </div>
+                )}
+                {!controlTargetSubscription && controlTargetUserId.trim() && (
+                  <p className="admin-action-context">
+                    Current status and expiry are shown when this action is opened from a subscription record or User 360 dossier.
+                  </p>
+                )}
               </div>
 
               {(controlAction === 'grant' || controlAction === 'extend') && (
@@ -2266,6 +2433,21 @@ export default function AdminConsolePage() {
                     style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: 8, fontSize: '0.82rem' }}
                   />
                 </div>
+              )}
+
+              {(controlAction === 'terminate' || controlAction === 'revoke') && (
+                <label className="admin-action-confirmation">
+                  <input
+                    type="checkbox"
+                    checked={controlActionConfirmed}
+                    onChange={(event) => setControlActionConfirmed(event.target.checked)}
+                  />
+                  <span>
+                    {controlAction === 'terminate'
+                      ? 'I understand Premium access stops immediately, but may be restored before the original expiry.'
+                      : 'I understand this permanently disables access and cannot be undone through reinstatement.'}
+                  </span>
+                </label>
               )}
 
               <div>
@@ -2286,7 +2468,10 @@ export default function AdminConsolePage() {
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               <button
                 type="button"
-                onClick={() => setControlModalOpen(false)}
+                onClick={() => {
+                  setControlModalOpen(false);
+                  setControlActionMenuOpen(false);
+                }}
                 disabled={actionInProgress}
                 style={{ padding: '0.55rem 1rem', borderRadius: 10, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.12)', color: 'var(--text-secondary)', fontSize: '0.82rem', cursor: 'pointer' }}
               >
@@ -2295,10 +2480,22 @@ export default function AdminConsolePage() {
               <button
                 type="button"
                 onClick={handleControlSubmit}
-                disabled={!controlTargetUserId.trim() || !controlReason.trim() || actionInProgress}
-                style={{ padding: '0.55rem 1.25rem', borderRadius: 10, background: !controlTargetUserId.trim() || !controlReason.trim() || actionInProgress ? 'rgba(99, 102, 241, 0.3)' : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', border: 'none', color: '#ffffff', fontWeight: 700, fontSize: '0.82rem', cursor: !controlTargetUserId.trim() || !controlReason.trim() || actionInProgress ? 'not-allowed' : 'pointer' }}
+                disabled={!controlTargetUserId.trim() || !controlReason.trim() || actionInProgress || ((controlAction === 'terminate' || controlAction === 'revoke') && !controlActionConfirmed)}
+                style={{ padding: '0.55rem 1.25rem', borderRadius: 10, background: !controlTargetUserId.trim() || !controlReason.trim() || actionInProgress ? 'rgba(99, 102, 241, 0.3)' : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', border: 'none', color: '#ffffff', fontWeight: 700, fontSize: '0.82rem', cursor: !controlTargetUserId.trim() || !controlReason.trim() || actionInProgress || ((controlAction === 'terminate' || controlAction === 'revoke') && !controlActionConfirmed) ? 'not-allowed' : 'pointer' }}
               >
-                {actionInProgress ? 'Executing...' : 'Execute Entitlement Action'}
+                {actionInProgress
+                  ? 'Executing...'
+                  : controlAction === 'grant'
+                    ? 'Grant Premium'
+                    : controlAction === 'extend'
+                      ? 'Extend Subscription'
+                      : controlAction === 'suspend'
+                        ? 'Suspend Access'
+                        : controlAction === 'reinstate'
+                          ? 'Reinstate Premium'
+                          : controlAction === 'terminate'
+                            ? 'Terminate Premium'
+                            : 'Permanently Revoke'}
               </button>
             </div>
           </div>
@@ -2471,18 +2668,31 @@ export default function AdminConsolePage() {
                         </div>
                       </div>
 
+                      {user360Dossier.subscription?.terminatedAt && (
+                        <div className="admin-card-inner" style={{ padding: '0.65rem 0.75rem', borderRadius: 9, fontSize: '0.74rem' }}>
+                          <strong className="admin-text-value">Latest reversible termination</strong>
+                          <div className="admin-text-label" style={{ marginTop: '0.2rem' }}>
+                            {new Date(user360Dossier.subscription.terminatedAt).toLocaleString('en-IN')}
+                            {user360Dossier.subscription.terminatedBy ? ` • by ${user360Dossier.subscription.terminatedBy}` : ''}
+                          </div>
+                          {user360Dossier.subscription.terminationReason && (
+                            <div className="admin-text-label" style={{ marginTop: '0.2rem' }}>
+                              Reason: {user360Dossier.subscription.terminationReason}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Quick Admin Action Buttons */}
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', paddingTop: '0.35rem' }}>
                         <button
                           type="button"
-                          onClick={() => {
-                            setControlAction('extend');
-                            setControlTargetUserId(user360Dossier.identity.userId);
-                            setControlTargetUserEmail(user360Dossier.identity.email || '');
-                            setControlDays(30);
-                            setControlReason('');
-                            setControlModalOpen(true);
-                          }}
+                          onClick={() => openSubscriptionControl(
+                            'extend',
+                            user360Dossier.identity.userId,
+                            user360Dossier.identity.email || '',
+                            getSubscriptionControlContext(user360Dossier.subscription)
+                          )}
                           className="admin-action-btn-secondary"
                         >
                           Extend (+30d)
@@ -2490,45 +2700,58 @@ export default function AdminConsolePage() {
                         {user360Dossier.subscription?.status === 'active' ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              setControlAction('suspend');
-                              setControlTargetUserId(user360Dossier.identity.userId);
-                              setControlTargetUserEmail(user360Dossier.identity.email || '');
-                              setControlReason('');
-                              setControlModalOpen(true);
-                            }}
+                            onClick={() => openSubscriptionControl(
+                              'suspend',
+                              user360Dossier.identity.userId,
+                              user360Dossier.identity.email || '',
+                              getSubscriptionControlContext(user360Dossier.subscription)
+                            )}
                             style={{ padding: '0.35rem 0.65rem', borderRadius: 8, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer' }}
                           >
                             Suspend
                           </button>
-                        ) : user360Dossier.subscription?.status === 'halted' ? (
+                        ) : user360Dossier.subscription?.status === 'halted' || user360Dossier.subscription?.status === 'terminated' ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              setControlAction('reinstate');
-                              setControlTargetUserId(user360Dossier.identity.userId);
-                              setControlTargetUserEmail(user360Dossier.identity.email || '');
-                              setControlReason('');
-                              setControlModalOpen(true);
-                            }}
+                            onClick={() => openSubscriptionControl(
+                              'reinstate',
+                              user360Dossier.identity.userId,
+                              user360Dossier.identity.email || '',
+                              getSubscriptionControlContext(user360Dossier.subscription)
+                            )}
                             style={{ padding: '0.35rem 0.65rem', borderRadius: 8, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer' }}
                           >
-                            Reinstate
+                            Reinstate Premium
                           </button>
                         ) : null}
+                        {(user360Dossier.subscription?.status === 'active' || user360Dossier.subscription?.status === 'halted') && (
+                          <button
+                            type="button"
+                            onClick={() => openSubscriptionControl(
+                              'terminate',
+                              user360Dossier.identity.userId,
+                              user360Dossier.identity.email || '',
+                              getSubscriptionControlContext(user360Dossier.subscription)
+                            )}
+                            className="admin-btn-reject"
+                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.74rem' }}
+                          >
+                            Terminate Premium
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            setControlAction('grant');
-                            setControlTargetUserId(user360Dossier.identity.userId);
-                            setControlTargetUserEmail(user360Dossier.identity.email || '');
-                            setControlDays(30);
-                            setControlReason('');
-                            setControlModalOpen(true);
-                          }}
+                          onClick={() => openSubscriptionControl(
+                            'grant',
+                            user360Dossier.identity.userId,
+                            user360Dossier.identity.email || '',
+                            user360Dossier.subscription
+                              ? { status: user360Dossier.subscription.status, currentPeriodEnd: user360Dossier.subscription.currentPeriodEnd || '' }
+                              : undefined
+                          )}
                           style={{ padding: '0.35rem 0.65rem', borderRadius: 8, background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#a855f7', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer' }}
                         >
-                          Manual Grant
+                          Grant Premium
                         </button>
                       </div>
                     </div>

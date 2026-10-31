@@ -117,7 +117,8 @@ export interface AdminAuditLogDocument {
     | 'subscription_suspended'
     | 'subscription_reinstated'
     | 'subscription_terminated'
-    | 'subscription_revoked';
+    | 'subscription_revoked'
+    | 'subscription_permanently_revoked';
   targetUserId: string;
   targetUserEmail?: string;
   targetEntityId: string;
@@ -194,4 +195,3 @@ export function getBillingConfigCollection(): CollectionReference<PaymentSetting
 export function getSystemMetadataCollection(): CollectionReference<DocumentData> {
   return getTypedCollection<DocumentData>(FIRESTORE_COLLECTIONS.SYSTEM_METADATA);
 }
-

@@ -62,31 +62,30 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
     );
   });
 
-  it('transforms 16-industry cloud into a sleek horizontal category rail with chevron navigation', () => {
-    assert.ok(
-      pageContent.includes('className="industry-showcase-wrapper"'),
-      'page.tsx must define industry-showcase-wrapper'
-    );
-    assert.ok(
-      pageContent.includes('industry-rail-nav-btn industry-rail-nav-btn-left'),
-      'page.tsx must provide left navigation chevron button'
-    );
-    assert.ok(
-      pageContent.includes('industry-rail-nav-btn industry-rail-nav-btn-right'),
-      'page.tsx must provide right navigation chevron button'
-    );
-    assert.ok(
-      pageContent.includes('className={`industry-rail-pill'),
-      'page.tsx must style rail items with industry-rail-pill'
-    );
-    assert.ok(
-      cssContent.includes('.industry-rail-pill {'),
-      'globals.css must define .industry-rail-pill'
-    );
-    assert.ok(
-      cssContent.includes('.industry-showcase-pills {') && cssContent.includes('flex-wrap: nowrap;'),
-      'globals.css must prevent multi-row wrapping on industry rail'
-    );
+  it('removes the Explore by Industry slider while retaining search filters and popular pills', () => {
+    for (const removedFeature of [
+      'Explore by Industry:',
+      'industry-showcase-container',
+      'industry-showcase-wrapper',
+      'industry-showcase-pills',
+      'industry-rail-pill',
+      'industry-rail-nav-btn',
+      'industryRailRef',
+      'scrollIndustryRail',
+    ]) {
+      assert.ok(
+        !pageContent.includes(removedFeature),
+        `page.tsx must not retain removed slider code: ${removedFeature}`
+      );
+      assert.ok(
+        !cssContent.includes(removedFeature),
+        `globals.css must not retain removed slider styles: ${removedFeature}`
+      );
+    }
+
+    assert.ok(pageContent.includes('className="search-refinement-industry"'), 'Industry filtering must remain available in search refinements');
+    assert.ok(pageContent.includes('className="quick-pills-container"'), 'Popular search pills must remain available');
+    assert.ok(cssContent.includes('.quick-pills-container {'), 'Popular search pills must retain their styles');
   });
 
   it('styles popular search pills with streamlined single-row trending format', () => {
@@ -318,14 +317,7 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
       'globals.css must define search-filters-badge override for light mode'
     );
 
-    // 2. Industry rail pills light theme visibility
-    assert.ok(
-      cssContent.includes(':root[data-theme="light"] .industry-rail-pill.is-active') &&
-      cssContent.includes('color: #1e1b4b !important;'),
-      'globals.css must ensure active industry pill has high-contrast text in light mode'
-    );
-
-    // 3. Quick search pills light theme visibility
+    // 2. Quick search pills light theme visibility
     assert.ok(
       cssContent.includes(':root[data-theme="light"] .quick-pill-btn.is-active') &&
       cssContent.includes('color: #1e1b4b !important;'),
@@ -333,4 +325,3 @@ describe('Landing Screen De-clutter & Premium Redesign Architecture', () => {
     );
   });
 });
-
