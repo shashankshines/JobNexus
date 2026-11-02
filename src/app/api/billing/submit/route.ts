@@ -96,7 +96,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           title: 'Premium payment submitted',
           message: `${auth.user.name || auth.user.email || 'A user'} submitted a ₹${submission.declaredAmount} UPI payment reference for verification.`,
           actionLabel: 'Review payment',
-          actionUrl: `/admin?tab=verifications&submissionId=${encodeURIComponent(submission.submissionId)}`,
+          actionUrl: '/admin?tab=verifications',
           userId: auth.user.id,
           userEmail: auth.user.email,
           orderId: submission.orderId,
