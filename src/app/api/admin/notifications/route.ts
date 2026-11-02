@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeAdminRequest } from '@/modules/auth/server/admin.auth';
-import { listAdminNotifications, markAdminNotification } from '@/modules/notifications/admin-notifications.service';
+import { ADMIN_NOTIFICATION_EMAIL, listAdminNotifications, markAdminNotification } from '@/modules/notifications/admin-notifications.service';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const auth = await authorizeAdminRequest(request);
   if (!auth.authorized) return NextResponse.json({ success: false, error: auth.error }, { status: auth.statusCode });
+  if (auth.adminEmail !== ADMIN_NOTIFICATION_EMAIL) return NextResponse.json({ success: false, error: 'This notification inbox is assigned to the designated administrator account.' }, { status: 403 });
 
   try {
     const { searchParams } = new URL(request.url);
