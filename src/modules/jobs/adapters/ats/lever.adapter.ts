@@ -39,7 +39,7 @@ export interface LeverPostingRaw {
 export class LeverAdapter implements JobProvider {
   readonly id = 'lever';
   readonly name = 'Lever ATS';
-  readonly timeoutMs = 2500;
+  readonly timeoutMs = 5000;
 
   constructor(
     private readonly employers?: EmployerConfig[],

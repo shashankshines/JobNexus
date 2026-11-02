@@ -31,6 +31,7 @@ const globalJobNexusCache = globalThis as unknown as {
   __JOBNEXUS_FETCH_PROMISE__?: Promise<{ allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[] }> | null;
   __JOBNEXUS_SEARCH_CACHE__?: Map<string, CachedSearchResult>;
   __JOBNEXUS_STATS_CACHE__?: { stats: JobStatsResponse; timestamp: number };
+  __JOBNEXUS_PROVIDER_CACHE__?: Map<string, { jobs: NormalizedJob[]; fetchedAt: number }>;
 };
 
 export class JobSearchService {
@@ -84,6 +85,7 @@ export class JobSearchService {
     JobSearchService.inFlightFetchPromise = null;
     JobSearchService.searchCache.clear();
     globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
+    globalJobNexusCache.__JOBNEXUS_PROVIDER_CACHE__?.clear();
   }
 
   constructor(customProviders?: JobProvider[]) {
@@ -114,8 +116,9 @@ export class JobSearchService {
 
     const fetchPromises = this.providers.map(async (provider) => {
       const startTime = Date.now();
-      // Cap provider timeout to 3000ms max so slow RSS or hung endpoints never stall the app
-      const providerTimeout = Math.min(provider.timeoutMs || 3000, 3000);
+      // Cap provider timeout to 6000ms max so that multi-board ATS adapters (Greenhouse, Ashby, Lever)
+      // have sufficient time to complete aggregation across all employer boards, avoiding premature drop-offs.
+      const providerTimeout = Math.min(provider.timeoutMs || 6000, 6000);
       const abortController = new AbortController();
       let timer: NodeJS.Timeout | null = null;
 
@@ -143,6 +146,18 @@ export class JobSearchService {
           fetchedCount: jobs.length,
           latencyMs,
         });
+
+        // Cache successful non-empty provider batches for resilient fallback
+        if (!this.isCustom && jobs.length > 0) {
+          if (!globalJobNexusCache.__JOBNEXUS_PROVIDER_CACHE__) {
+            globalJobNexusCache.__JOBNEXUS_PROVIDER_CACHE__ = new Map();
+          }
+          globalJobNexusCache.__JOBNEXUS_PROVIDER_CACHE__.set(provider.id, {
+            jobs,
+            fetchedAt: Date.now(),
+          });
+        }
+
         return jobs;
       } catch (err: unknown) {
         if (timer) clearTimeout(timer);
@@ -152,6 +167,24 @@ export class JobSearchService {
         const isTimeout =
           errMsg.toLowerCase().includes('abort') ||
           errMsg.toLowerCase().includes('timeout');
+
+        // Check if we have a cached snapshot for this provider to maintain full integration inventory
+        const cachedFallback = !this.isCustom
+          ? globalJobNexusCache.__JOBNEXUS_PROVIDER_CACHE__?.get(provider.id)
+          : undefined;
+
+        if (cachedFallback && cachedFallback.jobs.length > 0) {
+          diagnostics.push({
+            providerId: provider.id,
+            providerName: provider.name,
+            status: isTimeout ? 'timeout' : 'rejected',
+            fetchedCount: cachedFallback.jobs.length,
+            latencyMs,
+            error: `${errMsg} (using cached fallback)`,
+          });
+          console.warn(`[JobNexus] Provider ${provider.name} ${isTimeout ? 'timed out' : 'failed'} (${latencyMs}ms); used ${cachedFallback.jobs.length} cached jobs.`);
+          return cachedFallback.jobs;
+        }
 
         diagnostics.push({
           providerId: provider.id,

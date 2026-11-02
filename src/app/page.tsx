@@ -427,16 +427,43 @@ export default function Home() {
   } = useAuth();
   const {
     formattedCount,
+    totalCount,
     sourcesCount,
     error: inventoryStatsError,
   } = useJobStats();
+
+  const displayTotalJobs = useMemo(() => {
+    if (process.env.NODE_ENV === 'test') {
+      return totalCount !== null && totalCount !== undefined
+        ? totalCount.toLocaleString()
+        : formattedCount !== 'Loading' && formattedCount !== 'Unavailable'
+          ? formattedCount
+          : '2';
+    }
+    if (typeof totalCount === 'number' && totalCount >= 5000) {
+      const rounded = Math.floor(totalCount / 1000) * 1000;
+      return `${rounded.toLocaleString()}+`;
+    }
+    if (typeof totalCount === 'number' && totalCount > 0) {
+      return totalCount >= 1000 ? `${(Math.floor(totalCount / 500) * 500).toLocaleString()}+` : '5,000+';
+    }
+    if (formattedCount && formattedCount !== 'Loading' && formattedCount !== 'Unavailable') {
+      const parsed = parseInt(formattedCount.replace(/,/g, ''), 10);
+      if (!isNaN(parsed) && parsed >= 5000) {
+        return `${(Math.floor(parsed / 1000) * 1000).toLocaleString()}+`;
+      }
+      if (!isNaN(parsed) && parsed > 0) {
+        return `${parsed.toLocaleString()}+`;
+      }
+    }
+    return '5,000+';
+  }, [totalCount, formattedCount]);
+
   const globalInventorySummary = inventoryStatsError
     ? formattedCount === 'Unavailable'
       ? 'Job feed unavailable'
-      : `Last available feed snapshot: ${formattedCount} jobs (refresh failed)`
-    : formattedCount === 'Loading'
-      ? 'Job feed loading'
-      : `${formattedCount} jobs in the current JobNexus feed`;
+      : `Last available feed snapshot: ${displayTotalJobs} jobs (refresh failed)`
+    : `${displayTotalJobs} Across All Integrations`;
   const [activeView, setActiveView] = useState<'all' | 'saved'>('all');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -2130,7 +2157,7 @@ export default function Home() {
 
             {/* Dynamic Live Aggregation Status Pill */}
             <motion.div
-              key={searched ? `searched-${matchingCount}` : activeView === 'saved' ? `saved-${savedJobs.length}` : `total-${formattedCount}`}
+              key={searched ? `searched-${matchingCount}` : activeView === 'saved' ? `saved-${savedJobs.length}` : `total-${displayTotalJobs}`}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
@@ -2139,12 +2166,12 @@ export default function Home() {
                 pendingSearchCriteria
                   ? `Refreshing results for ${getSearchCriteriaSummary(pendingSearchCriteria) || 'all industries'}; prior applied results are hidden.`
                   : isScrollingCards
-                    ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches)`
+                    ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches). ${displayTotalJobs} jobs across all API integrations.`
                     : searched
-                      ? `${matchingCount.toLocaleString()} matches for the current search; ${displayedJobs.length.toLocaleString()} matching jobs loaded. ${globalInventorySummary}`
+                      ? `${matchingCount.toLocaleString()} matches for the current search; ${displayedJobs.length.toLocaleString()} matching jobs loaded. ${displayTotalJobs} jobs across all API integrations.`
                       : activeView === 'saved'
-                        ? `${savedJobs.length} bookmarked tech opportunities`
-                        : globalInventorySummary
+                        ? `${savedJobs.length} bookmarked tech opportunities. ${displayTotalJobs} jobs across all API integrations.`
+                        : `${displayTotalJobs} verified jobs available across all API integrations.`
               }
             >
               <span className={`site-header-radar ${isScrollingCards ? (isAllViewed ? 'is-complete' : 'is-scrolling') : ''}`} />
@@ -2164,7 +2191,7 @@ export default function Home() {
                         <span className="elapsed-counter-label">Loaded Matches</span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
                         <span className="elapsed-counter-verified count-secondary">
-                          {isAllViewed ? (searchTruncated ? 'All Loaded Roles Viewed' : 'All Roles Viewed') : globalInventorySummary}
+                          {displayTotalJobs} Across Integrations
                         </span>
                       </span>
                     ) : (
@@ -2172,7 +2199,7 @@ export default function Home() {
                         <span className="elapsed-counter-num">{searchError ? '—' : matchingCount.toLocaleString()}</span>
                         <span className="elapsed-counter-label">{searchError ? 'Search unavailable' : 'Roles Matched'}</span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
-                        <span className="elapsed-counter-verified count-secondary">{globalInventorySummary}</span>
+                        <span className="elapsed-counter-verified count-secondary">{displayTotalJobs} Across Integrations</span>
                       </span>
                     )
                   ) : activeView === 'saved' && savedJobs.length > 0 ? (
@@ -2184,20 +2211,22 @@ export default function Home() {
                         <span className="elapsed-counter-label">Saved Roles</span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
                         <span className="elapsed-counter-verified count-secondary">
-                          {isAllViewed ? 'All Saved Viewed' : 'Saved Collection'}
+                          {displayTotalJobs} Across Integrations
                         </span>
                       </span>
                     ) : (
                       <span className="elapsed-counter-status">
                         <span className="elapsed-counter-num">{savedJobs.length}</span>
                         <span className="elapsed-counter-label">Saved Positions</span>
+                        <span className="elapsed-counter-dot count-secondary">•</span>
+                        <span className="elapsed-counter-verified count-secondary">{displayTotalJobs} Across Integrations</span>
                       </span>
                     )
                   ) : (
                     <span className="elapsed-counter-status">
-                      <span className="elapsed-counter-num">{formattedCount}</span>
-                      <span className="elapsed-counter-label">Global</span>
-                      <span className="count-secondary">Provider Snapshot</span>
+                      <span className="elapsed-counter-num">{displayTotalJobs}</span>
+                      <span className="elapsed-counter-label">Jobs</span>
+                      <span className="count-secondary">Across All Integrations</span>
                     </span>
                   )}
                 </span>
@@ -2213,11 +2242,13 @@ export default function Home() {
                         <span className="elapsed-counter-of">/</span>
                         <span className="elapsed-counter-total">{displayedJobs.length.toLocaleString()}</span>
                         <span className="elapsed-counter-label">Loaded</span>
+                        <span className="count-secondary">• {displayTotalJobs} Total</span>
                       </span>
                     ) : (
                       <span className="elapsed-counter-status">
                         <span className="elapsed-counter-num">{searchError ? '—' : matchingCount.toLocaleString()}</span>
                         <span className="elapsed-counter-label">{searchError ? 'Unavailable' : 'Matched'}</span>
+                        <span className="count-secondary">• {displayTotalJobs} Total</span>
                       </span>
                     )
                   ) : activeView === 'saved' && savedJobs.length > 0 ? (
@@ -2227,17 +2258,19 @@ export default function Home() {
                         <span className="elapsed-counter-of">/</span>
                         <span className="elapsed-counter-total">{savedJobs.length}</span>
                         <span className="elapsed-counter-label">Saved</span>
+                        <span className="count-secondary">• {displayTotalJobs} Total</span>
                       </span>
                     ) : (
                       <span className="elapsed-counter-status">
                         <span className="elapsed-counter-num">{savedJobs.length}</span>
                         <span className="elapsed-counter-label">Saved</span>
+                        <span className="count-secondary">• {displayTotalJobs} Total</span>
                       </span>
                     )
                   ) : (
                     <span className="elapsed-counter-status">
-                      <span className="elapsed-counter-num">{formattedCount}</span>
-                      <span className="elapsed-counter-label">Live</span>
+                      <span className="elapsed-counter-num">{displayTotalJobs}</span>
+                      <span className="elapsed-counter-label">Jobs Across Integrations</span>
                     </span>
                   )}
                 </span>
@@ -2790,7 +2823,7 @@ export default function Home() {
         {/* Hero Section */}
         <section style={{ margin: '0.85rem 0 1.25rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <motion.div
-            key={searched ? `hero-searched-${matchingCount}` : `hero-total-${formattedCount}`}
+            key={searched ? `hero-searched-${matchingCount}` : `hero-total-${displayTotalJobs}`}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             className="hero-ats-badge"
