@@ -40,6 +40,7 @@ import {
 import { SubscriptionDocument, AdminAuditLogDocument } from '@/modules/storage/firestore/collections';
 import { PaymentSettingsView } from '@/app/components/admin/PaymentSettingsView';
 import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
+import { AdminNotificationCenter } from '@/app/components/admin/AdminNotificationCenter';
 
 const ADMIN_PAGE_SIZE = 5;
 
@@ -740,6 +741,7 @@ export default function AdminConsolePage() {
 
       {/* Main Container */}
       <main className="admin-main-container">
+        <AdminNotificationCenter />
         {/* Notification Banner */}
         {notification && (
           <div className={notification.type === 'success' ? 'admin-success-banner' : 'admin-error-banner'} style={{ marginBottom: '1.5rem', justifyContent: 'space-between' }}>
