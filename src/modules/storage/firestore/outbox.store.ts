@@ -8,7 +8,6 @@ import {
   getEmailOutboxCollection,
   EmailOutboxDocument,
 } from './collections';
-import { getFirestoreDb } from './client';
 
 export interface CreateOutboxParams {
   idempotencyKey: string;
@@ -128,8 +127,11 @@ export async function updateOutboxDeliveryStatus(params: {
     lastAttemptAt: nowIso,
     attempts: (current.attempts || 0) + 1,
     ...(params.providerMessageId ? { providerMessageId: params.providerMessageId } : {}),
-    ...(params.error ? { error: params.error } : {}),
-    ...(params.status === 'sent' ? { sentAt: nowIso } : {}),
+    ...(params.status === 'sent'
+      ? { sentAt: nowIso, error: '' }
+      : params.error
+        ? { error: params.error }
+        : {}),
   };
 
   await ref.update(updates);
