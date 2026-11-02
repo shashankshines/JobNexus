@@ -2193,10 +2193,207 @@ html[data-theme="light"] .site-header-btn-admin {
 :root[data-theme="light"] .site-header-btn-admin .admin-btn-text,
 [data-theme="light"] .site-header-btn-admin .admin-btn-text,
 html[data-theme="light"] .site-header-btn-admin .admin-btn-text,
-:root[data-theme="light"] .site-header-btn-admin span:not(.admin-live-dot),
-[data-theme="light"] .site-header-btn-admin span:not(.admin-live-dot) {
+:root[data-theme="light"] .site-header-btn-admin span:not(.admin-live-dot):not(.admin-pending-badge),
+[data-theme="light"] .site-header-btn-admin span:not(.admin-live-dot):not(.admin-pending-badge) {
   color: #312e81 !important;
   font-weight: 700 !important;
+}
+
+.site-header-btn-admin.has-pending-approvals {
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.25);
+}
+
+:root[data-theme="light"] .site-header-btn-admin.has-pending-approvals,
+[data-theme="light"] .site-header-btn-admin.has-pending-approvals,
+html[data-theme="light"] .site-header-btn-admin.has-pending-approvals {
+  background: #fffbeb !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.18) !important;
+}
+
+.admin-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 0.38rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff !important;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 1px 6px rgba(245, 158, 11, 0.45);
+  flex-shrink: 0;
+}
+
+.admin-avatar-alert-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f59e0b;
+  border: 1.5px solid var(--surface-card, #0f172a);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.75);
+  pointer-events: none;
+}
+
+/* In-App Admin Approval Notification Banner (Main App, strictly gated to designated admin) */
+.admin-inapp-approval-banner {
+  margin: 0.35rem 0 0.9rem;
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(99, 102, 241, 0.12) 100%);
+  border: 1.5px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  position: relative;
+  z-index: 25;
+}
+
+.admin-inapp-approval-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: min(100%, 240px);
+}
+
+.admin-inapp-approval-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.admin-inapp-approval-title {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.admin-inapp-approval-sub {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: 0.12rem;
+}
+
+.admin-inapp-approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.admin-inapp-approval-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.48rem 0.9rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff !important;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(217, 119, 6, 0.35);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.admin-inapp-approval-cta:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.admin-inapp-approval-dismiss {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-inapp-approval-dismiss:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] .admin-inapp-approval-banner,
+[data-theme="light"] .admin-inapp-approval-banner,
+html[data-theme="light"] .admin-inapp-approval-banner {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
+  border: 1.5px solid #f59e0b !important;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.12) !important;
+}
+
+:root[data-theme="light"] .admin-inapp-approval-icon,
+[data-theme="light"] .admin-inapp-approval-icon,
+html[data-theme="light"] .admin-inapp-approval-icon {
+  background: #fde68a !important;
+  border-color: #f59e0b !important;
+  color: #92400e !important;
+}
+
+:root[data-theme="light"] .admin-inapp-approval-title,
+[data-theme="light"] .admin-inapp-approval-title,
+html[data-theme="light"] .admin-inapp-approval-title {
+  color: #451a03 !important;
+}
+
+:root[data-theme="light"] .admin-inapp-approval-sub,
+[data-theme="light"] .admin-inapp-approval-sub,
+html[data-theme="light"] .admin-inapp-approval-sub {
+  color: #78350f !important;
+}
+
+@media (max-width: 640px) {
+  .site-header-btn-admin {
+    height: 32px;
+    padding: 0 0.6rem;
+    gap: 0.35rem;
+  }
+
+  .site-header-btn-admin .admin-btn-text {
+    display: none;
+  }
+
+  .admin-inapp-approval-banner {
+    padding: 0.7rem 0.85rem;
+  }
+
+  .admin-inapp-approval-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .admin-inapp-approval-cta {
+    flex: 1;
+    justify-content: center;
+    min-height: 38px;
+  }
 }
 
 :root[data-theme="light"] .site-header-btn-admin .admin-btn-icon,
@@ -2559,6 +2756,7 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
 }
 
 .site-header-avatar {
+  position: relative;
   width: 26px;
   height: 26px;
   border-radius: 8px;

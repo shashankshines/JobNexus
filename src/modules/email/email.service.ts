@@ -8,6 +8,7 @@ import { ResendEmailAdapter } from './adapters/resend.adapter';
 import { SmtpEmailAdapter } from './adapters/smtp.adapter';
 import { SimulationEmailAdapter } from './adapters/simulation.adapter';
 import { renderPaymentSubmittedEmail } from './templates/payment-submitted.template';
+import { renderAdminPaymentReviewEmail } from './templates/admin-payment-review.template';
 import { renderPaymentApprovedEmail } from './templates/payment-approved.template';
 import { renderPaymentRejectedEmail } from './templates/payment-rejected.template';
 import { maskUtr } from './templates/base.template';
@@ -19,6 +20,7 @@ import {
 } from '../storage/firestore/outbox.store';
 import { EmailOutboxDocument } from '../storage/firestore/collections';
 import { getUserById } from '../auth/server/session.store';
+import { parseAdminEmails } from '../auth/server/admin.auth';
 import { recordAdminAuditLog } from '../storage/firestore/audit.store';
 
 // Shared in-memory simulation provider for local / test environments
@@ -115,7 +117,15 @@ function resolveTrustedRecipientEmail(userId: string, snapshotEmail?: string): s
 }
 
 function getAppBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const configured =
+    process.env.APP_BASE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
+      : '') ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : '') ||
+    'http://localhost:3000';
+  return configured.replace(/\/+$/, '');
 }
 
 // ============================================================================
@@ -237,6 +247,136 @@ export async function sendSubmissionAcknowledgement(
       error: sendResult.error,
     };
   }
+}
+
+// ============================================================================
+// Event A2: Admin Approval Required Notification (Sent to ADMIN_EMAILS)
+// ============================================================================
+
+export interface SendAdminSubmissionAlertParams {
+  userId: string;
+  orderId: string;
+  submissionId: string;
+  userEmail?: string;
+  utrNumber: string;
+  declaredAmount: number;
+  currency?: string;
+  paymentDate: string;
+  submittedAt: string;
+  slaDeadlineAt?: string;
+}
+
+export async function sendAdminSubmissionAlert(
+  params: SendAdminSubmissionAlertParams
+): Promise<{
+  success: boolean;
+  status: 'sent' | 'pending' | 'failed' | 'retryable_failure' | 'skipped_missing_email';
+  sentCount: number;
+  outboxIds: string[];
+  error?: string;
+}> {
+  const adminEmails = Array.from(parseAdminEmails()).filter((e) => e.includes('@'));
+  if (adminEmails.length === 0) {
+    return {
+      success: false,
+      status: 'skipped_missing_email',
+      sentCount: 0,
+      outboxIds: [],
+      error: 'No authorized administrator emails configured in ADMIN_EMAILS.',
+    };
+  }
+
+  const applicantEmail = resolveTrustedRecipientEmail(params.userId, params.userEmail) || undefined;
+  const adminReviewUrl = `${getAppBaseUrl()}/admin?tab=verifications`;
+  const provider = getEmailProvider();
+
+  let sentCount = 0;
+  let sawRetryableFailure = false;
+  let lastError: string | undefined;
+  const outboxIds: string[] = [];
+
+  for (const adminEmail of adminEmails) {
+    const idempotencyKey = `admin_payment_review:${params.submissionId}:${adminEmail}`;
+    const existing = await getOutboxRecordByIdempotencyKey(idempotencyKey);
+    if (existing && isTrulyDeliveredRecord(existing, provider.providerName)) {
+      sentCount++;
+      outboxIds.push(existing.id);
+      continue;
+    }
+
+    const emailContent = renderAdminPaymentReviewEmail({
+      userId: params.userId,
+      orderId: params.orderId,
+      submissionId: params.submissionId,
+      recipientEmail: adminEmail,
+      applicantEmail,
+      planTitle: 'JobNexus Premium (30 Days)',
+      amountInr: params.declaredAmount,
+      currency: params.currency || 'INR',
+      maskedUtr: params.utrNumber,
+      paymentDate: params.paymentDate,
+      submittedAt: params.submittedAt,
+      slaDeadlineAt: params.slaDeadlineAt,
+      statusUrl: adminReviewUrl,
+    });
+
+    const { record } = await createOutboxRecord({
+      idempotencyKey,
+      userId: params.userId,
+      orderId: params.orderId,
+      submissionId: params.submissionId,
+      recipientEmail: adminEmail,
+      subject: emailContent.subject,
+      templateType: 'admin_payment_review',
+      payload: {
+        applicantEmail,
+        declaredAmount: params.declaredAmount,
+        currency: params.currency || 'INR',
+        maskedUtr: maskUtr(params.utrNumber),
+        paymentDate: params.paymentDate,
+        submittedAt: params.submittedAt,
+        slaDeadlineAt: params.slaDeadlineAt,
+      },
+    });
+    outboxIds.push(record.id);
+
+    const sendResult = await provider.send({
+      to: adminEmail,
+      subject: emailContent.subject,
+      html: emailContent.html,
+      text: emailContent.text,
+      idempotencyKey,
+    });
+
+    if (sendResult.success) {
+      sentCount++;
+      await updateOutboxDeliveryStatus({
+        id: record.id,
+        status: 'sent',
+        providerMessageId: sendResult.providerMessageId,
+      });
+    } else {
+      const nextStatus = sendResult.retryable ? 'retryable_failure' : 'failed';
+      if (sendResult.retryable) sawRetryableFailure = true;
+      lastError = sendResult.error;
+      await updateOutboxDeliveryStatus({
+        id: record.id,
+        status: nextStatus,
+        error: sendResult.error,
+      });
+    }
+  }
+
+  if (sentCount === adminEmails.length) {
+    return { success: true, status: 'sent', sentCount, outboxIds };
+  }
+  return {
+    success: false,
+    status: sawRetryableFailure ? 'retryable_failure' : 'failed',
+    sentCount,
+    outboxIds,
+    error: lastError,
+  };
 }
 
 // ============================================================================
@@ -505,6 +645,22 @@ export async function retryNotificationById(
       submittedAt: (record.payload?.submittedAt as string) || record.createdAt,
       slaDeadlineAt: record.payload?.slaDeadlineAt as string | undefined,
       statusUrl,
+    });
+  } else if (record.templateType === 'admin_payment_review') {
+    emailContent = renderAdminPaymentReviewEmail({
+      userId: record.userId,
+      orderId: record.orderId,
+      submissionId: record.submissionId,
+      recipientEmail: record.recipientEmail,
+      applicantEmail: record.payload?.applicantEmail as string | undefined,
+      planTitle: 'JobNexus Premium (30 Days)',
+      amountInr: (record.payload?.declaredAmount as number) || 499,
+      currency: (record.payload?.currency as string) || 'INR',
+      maskedUtr: (record.payload?.maskedUtr as string) || '••••••••',
+      paymentDate: (record.payload?.paymentDate as string) || record.createdAt.slice(0, 10),
+      submittedAt: (record.payload?.submittedAt as string) || record.createdAt,
+      slaDeadlineAt: record.payload?.slaDeadlineAt as string | undefined,
+      statusUrl: `${getAppBaseUrl()}/admin?tab=verifications`,
     });
   } else if (record.templateType === 'payment_approved') {
     emailContent = renderPaymentApprovedEmail({

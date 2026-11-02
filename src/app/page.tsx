@@ -439,6 +439,93 @@ export default function Home() {
     user.email?.toLowerCase().trim() === 'shashankshines@gmail.com'
   );
 
+  // Live Admin Pending Approval Notification State (strictly active only for designated admin)
+  const [adminPendingCount, setAdminPendingCount] = useState(0);
+  const [adminSlaBreachCount, setAdminSlaBreachCount] = useState(0);
+  const [adminPendingPreview, setAdminPendingPreview] = useState<
+    Array<{
+      submissionId: string;
+      orderId: string;
+      userId: string;
+      userEmail?: string;
+      declaredAmount: number;
+      submittedAt: string;
+      slaBreached: boolean;
+    }>
+  >([]);
+  const [dismissedAdminAlertKey, setDismissedAdminAlertKey] = useState<string | null>(null);
+  const prevAdminPendingCountRef = useRef<number | null>(null);
+
+  const adminAlertKey = useMemo(() => {
+    if (adminPendingCount <= 0) return '';
+    const latestId = adminPendingPreview[0]?.submissionId || 'none';
+    return `${adminPendingCount}:${latestId}`;
+  }, [adminPendingCount, adminPendingPreview]);
+
+  useEffect(() => {
+    if (!isDesignatedAdmin) {
+      setAdminPendingCount(0);
+      setAdminSlaBreachCount(0);
+      setAdminPendingPreview([]);
+      prevAdminPendingCountRef.current = null;
+      return;
+    }
+
+    let isMounted = true;
+    const pollAdminApprovals = async () => {
+      try {
+        const res = await fetch('/api/admin/overview', { cache: 'no-store' });
+        if (!res.ok || !isMounted) return;
+        const data = await res.json();
+        if (!isMounted || !data?.success || !data?.metrics) return;
+
+        const nextCount = typeof data.metrics.pendingCount === 'number' ? data.metrics.pendingCount : 0;
+        const nextSlaCount = typeof data.metrics.slaBreachCount === 'number' ? data.metrics.slaBreachCount : 0;
+        const nextPreview = Array.isArray(data.metrics.pendingSubmissionsPreview)
+          ? data.metrics.pendingSubmissionsPreview
+          : [];
+
+        if (
+          prevAdminPendingCountRef.current !== null &&
+          nextCount > prevAdminPendingCountRef.current
+        ) {
+          const newest = nextPreview[0];
+          const who = newest?.userEmail || newest?.userId || 'a subscriber';
+          showToast(
+            `New payment approval pending from ${who} (${nextCount} awaiting verification).`,
+            'info'
+          );
+        }
+        prevAdminPendingCountRef.current = nextCount;
+        setAdminPendingCount(nextCount);
+        setAdminSlaBreachCount(nextSlaCount);
+        setAdminPendingPreview(nextPreview);
+      } catch {
+        // Silent background poll failure; never disrupt job discovery
+      }
+    };
+
+    void pollAdminApprovals();
+    const intervalId = window.setInterval(pollAdminApprovals, 45_000);
+    const handleFocus = () => {
+      void pollAdminApprovals();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void pollAdminApprovals();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isDesignatedAdmin, showToast]);
+
   const handleCancelSubscription = async () => {
     if (
       !window.confirm(
@@ -2095,12 +2182,30 @@ export default function Home() {
                   {isDesignatedAdmin && (
                     <Link
                       href="/admin"
-                      title="Open JobNexus Admin Console"
-                      className="site-header-btn-admin"
+                      title={
+                        adminPendingCount > 0
+                          ? `Open JobNexus Admin Console (${adminPendingCount} payment approval${adminPendingCount === 1 ? '' : 's'} pending)`
+                          : 'Open JobNexus Admin Console'
+                      }
+                      aria-label={
+                        adminPendingCount > 0
+                          ? `Admin Console — ${adminPendingCount} payment approval${adminPendingCount === 1 ? '' : 's'} pending`
+                          : 'Open JobNexus Admin Console'
+                      }
+                      className={`site-header-btn-admin${adminPendingCount > 0 ? ' has-pending-approvals' : ''}`}
                     >
                       <ShieldCheck size={14} className="admin-btn-icon" />
                       <span className="admin-btn-text">Admin Console</span>
-                      <span className="admin-live-dot" title="Console Operational" />
+                      {adminPendingCount > 0 ? (
+                        <span
+                          className="admin-pending-badge"
+                          title={`${adminPendingCount} payment approval${adminPendingCount === 1 ? '' : 's'} awaiting verification`}
+                        >
+                          {adminPendingCount}
+                        </span>
+                      ) : (
+                        <span className="admin-live-dot" title="Console Operational" />
+                      )}
                     </Link>
                   )}
 
@@ -2144,6 +2249,12 @@ export default function Home() {
                         }}
                       >
                         {!user.picture && user.initials}
+                        {isDesignatedAdmin && adminPendingCount > 0 && (
+                          <span
+                            className="admin-avatar-alert-dot"
+                            aria-hidden="true"
+                          />
+                        )}
                       </div>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                         {user.name.split(' ')[0]}
@@ -2290,10 +2401,16 @@ export default function Home() {
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                                   <span className="admin-card-title">Admin Console</span>
                                   <span className="admin-card-subtitle">
-                                    Payments, Subscriptions & Settings
+                                    {adminPendingCount > 0
+                                      ? `${adminPendingCount} payment approval${adminPendingCount === 1 ? '' : 's'} pending`
+                                      : 'Payments, Subscriptions & Settings'}
                                   </span>
                                 </div>
-                                <ChevronRight size={14} className="dropdown-item-arrow" />
+                                {adminPendingCount > 0 ? (
+                                  <span className="admin-pending-badge">{adminPendingCount}</span>
+                                ) : (
+                                  <ChevronRight size={14} className="dropdown-item-arrow" />
+                                )}
                               </Link>
                             )}
                           </div>
@@ -2335,6 +2452,64 @@ export default function Home() {
           </header>
         </div>
         <div className="site-header-spacer" aria-hidden="true" />
+
+        {/* Live In-App Admin Payment Approval Banner (strictly visible only to designated admin) */}
+        {isDesignatedAdmin &&
+          adminPendingCount > 0 &&
+          dismissedAdminAlertKey !== adminAlertKey && (
+            <div
+              role="region"
+              aria-label="Administrator payment approval notification"
+              className="admin-inapp-approval-banner"
+            >
+              <div className="admin-inapp-approval-banner-content">
+                <div className="admin-inapp-approval-icon" aria-hidden="true">
+                  <ShieldCheck size={17} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="admin-inapp-approval-title">
+                    Payment Approval Required: {adminPendingCount} UPI submission
+                    {adminPendingCount === 1 ? '' : 's'} awaiting verification
+                    {adminSlaBreachCount > 0 ? ` (${adminSlaBreachCount} SLA overdue)` : ''}
+                  </div>
+                  <div className="admin-inapp-approval-sub">
+                    {adminPendingPreview.length > 0 ? (
+                      <>
+                        Latest:{' '}
+                        <strong>
+                          {adminPendingPreview[0].userEmail || adminPendingPreview[0].userId}
+                        </strong>{' '}
+                        (₹{adminPendingPreview[0].declaredAmount} INR)
+                        {adminPendingPreview.length > 1
+                          ? ` and ${adminPendingCount - 1} more waiting in queue`
+                          : ''}
+                      </>
+                    ) : (
+                      'Verify bank statement credit in the Admin Verification Queue to activate Premium access.'
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="admin-inapp-approval-actions">
+                <Link
+                  href="/admin?tab=verifications"
+                  className="admin-inapp-approval-cta"
+                >
+                  <span>Review &amp; Approve</span>
+                  <ArrowRight size={14} />
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setDismissedAdminAlertKey(adminAlertKey)}
+                  aria-label="Dismiss payment approval notification"
+                  title="Dismiss for current queue"
+                  className="admin-inapp-approval-dismiss"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          )}
 
         {/* Hero Section */}
         <section style={{ margin: '0.85rem 0 1.25rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>

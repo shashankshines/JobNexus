@@ -139,6 +139,7 @@ export interface EmailOutboxDocument {
   subject: string;
   templateType:
     | 'payment_submitted'
+    | 'admin_payment_review'
     | 'payment_approved'
     | 'payment_rejected'
     | 'premium_activated'

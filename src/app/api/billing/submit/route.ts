@@ -14,7 +14,10 @@ import {
   UtrCollisionError,
   UtrFormatError,
 } from '@/modules/storage/firestore/utr-reservation';
-import { sendSubmissionAcknowledgement } from '@/modules/email/email.service';
+import {
+  sendSubmissionAcknowledgement,
+  sendAdminSubmissionAlert,
+} from '@/modules/email/email.service';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const sessionId = extractSessionId(request);
@@ -87,25 +90,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         verificationNotes,
       });
 
-      // Transactional acknowledgement email (Event A)
+      // Transactional acknowledgement email (Event A: Subscriber) + Admin Approval Alert (Event A2: Admin)
+      const sharedEmailParams = {
+        userId: auth.user.id,
+        orderId: submission.orderId,
+        submissionId: submission.submissionId,
+        userEmail: auth.user.email,
+        utrNumber: submission.utrNumber,
+        declaredAmount: submission.declaredAmount,
+        currency: 'INR' as const,
+        paymentDate: submission.paymentDate,
+        submittedAt: submission.submittedAt,
+        slaDeadlineAt: submission.slaDeadlineAt,
+      };
+
+      const [customerEmailOutcome, adminEmailOutcome] = await Promise.allSettled([
+        sendSubmissionAcknowledgement(sharedEmailParams),
+        sendAdminSubmissionAlert(sharedEmailParams),
+      ]);
+
       let emailStatus: 'sent' | 'pending' | 'failed' | 'retryable_failure' | 'skipped_missing_email' = 'pending';
-      try {
-        const emailResult = await sendSubmissionAcknowledgement({
-          userId: auth.user.id,
-          orderId: submission.orderId,
-          submissionId: submission.submissionId,
-          userEmail: auth.user.email,
-          utrNumber: submission.utrNumber,
-          declaredAmount: submission.declaredAmount,
-          currency: 'INR',
-          paymentDate: submission.paymentDate,
-          submittedAt: submission.submittedAt,
-          slaDeadlineAt: submission.slaDeadlineAt,
-        });
-        emailStatus = emailResult.status;
-      } catch (emailErr) {
-        console.error('[BillingSubmit] Acknowledgement email error:', emailErr);
+      if (customerEmailOutcome.status === 'fulfilled') {
+        emailStatus = customerEmailOutcome.value.status;
+      } else {
+        console.error('[BillingSubmit] Acknowledgement email error:', customerEmailOutcome.reason);
         emailStatus = 'failed';
+      }
+
+      let adminAlertStatus: 'sent' | 'pending' | 'failed' | 'retryable_failure' | 'skipped_missing_email' = 'pending';
+      if (adminEmailOutcome.status === 'fulfilled') {
+        adminAlertStatus = adminEmailOutcome.value.status;
+      } else {
+        console.error('[BillingSubmit] Admin approval alert email error:', adminEmailOutcome.reason);
+        adminAlertStatus = 'failed';
       }
 
       return NextResponse.json(
@@ -122,6 +139,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             status: submission.status,
           },
           emailStatus,
+          adminAlertStatus,
           message:
             'Payment reference submitted successfully. Our team will verify and activate your Premium membership within 12 hours.',
         },

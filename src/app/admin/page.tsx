@@ -172,6 +172,8 @@ export default function AdminConsolePage() {
   const [submissionPage, setSubmissionPage] = useState<number>(1);
   const [submissionTotal, setSubmissionTotal] = useState<number>(0);
   const [submissionsLoading, setSubmissionsLoading] = useState<boolean>(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const prevPendingCountRef = useRef<number | null>(null);
 
   // Action Modals state (Approve / Reject)
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionWithOrder | null>(null);
@@ -281,42 +283,17 @@ export default function AdminConsolePage() {
     }
   };
 
-  // Load Overview Data
-  const fetchOverview = async () => {
-    setLoading(true);
-    setAuthError(null);
-    try {
-      const res = await fetch('/api/admin/overview');
-      const data = await res.json();
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          setAuthError({
-            statusCode: res.status,
-            message: data.error || 'Access denied. Administrator privileges required.',
-          });
-        }
-        return;
-      }
-      if (data.success && data.metrics) {
-        setMetrics(data.metrics);
-      }
-    } catch (err) {
-      setNotification({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Network failure loading overview.',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Load Submissions
   const fetchSubmissions = useCallback(async (options?: {
     status?: typeof submissionFilter;
     page?: number;
     query?: string;
+    silent?: boolean;
   }) => {
-    setSubmissionsLoading(true);
+    if (!options?.silent) {
+      setSubmissionsLoading(true);
+    }
+    setSubmissionsError(null);
     try {
       const qStatus = options?.status !== undefined ? options.status : submissionFilter;
       const qPage = options?.page !== undefined ? options.page : submissionPage;
@@ -331,18 +308,80 @@ export default function AdminConsolePage() {
         params.set('query', qText.trim());
       }
 
-      const res = await fetch(`/api/admin/billing/submissions?${params.toString()}`);
+      const res = await fetch(`/api/admin/billing/submissions?${params.toString()}`, {
+        cache: 'no-store',
+      });
       const data = await res.json();
-      if (data.success && Array.isArray(data.submissions)) {
+      if (res.ok && data.success && Array.isArray(data.submissions)) {
         setSubmissions(data.submissions);
         setSubmissionTotal(typeof data.total === 'number' ? data.total : data.submissions.length);
+      } else {
+        setSubmissionsError(
+          data?.error || `Failed to load verification queue (HTTP ${res.status}).`
+        );
       }
     } catch (err) {
       console.warn('[AdminConsole] Failed to fetch submissions:', err);
+      setSubmissionsError(
+        err instanceof Error ? err.message : 'Network failure loading verification queue.'
+      );
     } finally {
-      setSubmissionsLoading(false);
+      if (!options?.silent) {
+        setSubmissionsLoading(false);
+      }
     }
   }, [submissionFilter, submissionPage, verificationSearchQuery]);
+
+  // Load Overview Data
+  const fetchOverview = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    }
+    setAuthError(null);
+    try {
+      const res = await fetch('/api/admin/overview', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          setAuthError({
+            statusCode: res.status,
+            message: data.error || 'Access denied. Administrator privileges required.',
+          });
+        }
+        return;
+      }
+      if (data.success && data.metrics) {
+        const incomingMetrics = data.metrics as AdminOverviewMetrics;
+        if (
+          prevPendingCountRef.current !== null &&
+          incomingMetrics.pendingCount > prevPendingCountRef.current
+        ) {
+          const newest = incomingMetrics.pendingSubmissionsPreview?.[0];
+          const who = newest?.userEmail || newest?.userId || 'a subscriber';
+          setNotification({
+            type: 'success',
+            message: `New UPI payment submission received from ${who} (${incomingMetrics.pendingCount} awaiting verification).`,
+          });
+          if (activeTab === 'verifications') {
+            void fetchSubmissions({ silent: true });
+          }
+        }
+        prevPendingCountRef.current = incomingMetrics.pendingCount;
+        setMetrics(incomingMetrics);
+      }
+    } catch (err) {
+      if (!options?.silent) {
+        setNotification({
+          type: 'error',
+          message: err instanceof Error ? err.message : 'Network failure loading overview.',
+        });
+      }
+    } finally {
+      if (!options?.silent) {
+        setLoading(false);
+      }
+    }
+  }, [activeTab, fetchSubmissions]);
 
   // Open User 360° Profile Dossier
   const openUser360 = async (userIdOrEmail: string) => {
@@ -498,7 +537,7 @@ export default function AdminConsolePage() {
   }, [auditActionFilter, auditEmailFilter, auditUserFilter, auditPage]);
 
   useEffect(() => {
-    fetchOverview();
+    void fetchOverview();
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
@@ -511,7 +550,28 @@ export default function AdminConsolePage() {
         }, 150);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live background refresh on focus & 30s interval so incoming UPI claims appear immediately
+  useEffect(() => {
+    if (authError || typeof window === 'undefined') return;
+    const poll = () => {
+      void fetchOverview({ silent: true });
+    };
+    const intervalId = window.setInterval(poll, 30_000);
+    const handleFocus = () => {
+      void fetchOverview({ silent: true });
+      if (activeTab === 'verifications') {
+        void fetchSubmissions({ silent: true });
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [authError, activeTab, fetchOverview, fetchSubmissions]);
 
   useEffect(() => {
     if (activeTab === 'verifications') {
@@ -742,11 +802,86 @@ export default function AdminConsolePage() {
       <main className="admin-main-container">
         {/* Notification Banner */}
         {notification && (
-          <div className={notification.type === 'success' ? 'admin-success-banner' : 'admin-error-banner'} style={{ marginBottom: '1.5rem', justifyContent: 'space-between' }}>
+          <div className={notification.type === 'success' ? 'admin-success-banner' : 'admin-error-banner'} style={{ marginBottom: '1.25rem', justifyContent: 'space-between' }}>
             <span>{notification.message}</span>
             <button onClick={() => setNotification(null)} aria-label="Dismiss notification" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: '0.2rem', display: 'flex', alignItems: 'center' }}>
               <X size={15} />
             </button>
+          </div>
+        )}
+
+        {/* Prominent Pending Payment Approvals Banner (visible across all tabs whenever claims await review) */}
+        {metrics && metrics.pendingCount > 0 && (
+          <div
+            role="region"
+            aria-label="Pending payment approvals alert"
+            className="admin-warning-banner"
+            style={{
+              marginBottom: '1.25rem',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.85rem',
+              borderWidth: '1.5px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flex: 1, minWidth: 'min(100%, 240px)' }}>
+              <AlertTriangle size={20} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 2 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>
+                  <strong>
+                    Action Required: {metrics.pendingCount} UPI Payment Submission
+                    {metrics.pendingCount === 1 ? '' : 's'} Awaiting Approval
+                  </strong>
+                  {metrics.slaBreachCount > 0 && (
+                    <span style={{ marginLeft: '0.5rem', color: '#ef4444', fontWeight: 800, fontSize: '0.78rem' }}>
+                      ({metrics.slaBreachCount} SLA overdue)
+                    </span>
+                  )}
+                </div>
+                {metrics.pendingSubmissionsPreview && metrics.pendingSubmissionsPreview.length > 0 && (
+                  <div style={{ fontSize: '0.8rem', marginTop: '0.2rem', wordBreak: 'break-word' }}>
+                    Waiting in queue:{' '}
+                    {metrics.pendingSubmissionsPreview
+                      .slice(0, 3)
+                      .map((item) => `${item.userEmail || item.userId} (₹${item.declaredAmount})`)
+                      .join(' • ')}
+                    {metrics.pendingCount > 3 ? ` +${metrics.pendingCount - 3} more` : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+            {(activeTab !== 'verifications' || submissionFilter !== 'pending_verification') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmissionFilter('pending_verification');
+                  setSubmissionPage(1);
+                  if (activeTab === 'verifications') {
+                    void fetchSubmissions({ status: 'pending_verification', page: 1 });
+                  } else {
+                    handleTabSelect('verifications');
+                  }
+                }}
+                style={{
+                  padding: '0.5rem 0.95rem',
+                  borderRadius: 10,
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.8rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
+                }}
+              >
+                <span>Open Verification Queue</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
           </div>
         )}
 
@@ -1057,6 +1192,24 @@ export default function AdminConsolePage() {
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem auto' }} />
                 <p style={{ margin: 0 }}>Loading submissions...</p>
+              </div>
+            ) : submissionsError ? (
+              <div className="admin-error-banner" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <AlertOctagon size={18} style={{ color: '#f87171', flexShrink: 0 }} />
+                  <div>
+                    <strong>Unable to load verification queue:</strong> {submissionsError}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchSubmissions({ status: submissionFilter, page: submissionPage, query: verificationSearchQuery })}
+                  className="admin-btn-secondary"
+                  style={{ padding: '0.4rem 0.85rem', fontSize: '0.78rem' }}
+                >
+                  <RefreshCw size={13} />
+                  Retry
+                </button>
               </div>
             ) : submissions.length === 0 ? (
               <div className="admin-empty-card">

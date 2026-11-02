@@ -5,6 +5,7 @@
 
 export type NotificationEventType =
   | 'payment_submitted'
+  | 'admin_payment_review'
   | 'payment_approved'
   | 'payment_rejected';
 
@@ -46,6 +47,17 @@ export interface PaymentSubmittedEmailData extends BaseNotificationData {
   amountInr: number;
   currency: string;
   maskedUtr: string;
+  submittedAt: string;
+  slaDeadlineAt?: string;
+}
+
+export interface AdminPaymentReviewEmailData extends BaseNotificationData {
+  applicantEmail?: string;
+  planTitle: string;
+  amountInr: number;
+  currency: string;
+  maskedUtr: string;
+  paymentDate: string;
   submittedAt: string;
   slaDeadlineAt?: string;
 }

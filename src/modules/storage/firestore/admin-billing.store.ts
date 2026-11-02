@@ -39,6 +39,18 @@ export interface SubmissionWithOrder extends PaymentSubmissionDocument {
   order?: PaymentOrderDocument | null;
 }
 
+export interface PendingApprovalPreviewItem {
+  submissionId: string;
+  orderId: string;
+  userId: string;
+  userEmail?: string;
+  declaredAmount: number;
+  paymentDate: string;
+  submittedAt: string;
+  slaDeadlineAt: string;
+  isSlaBreached: boolean;
+}
+
 export interface AdminOverviewMetrics {
   pendingCount: number;
   slaBreachCount: number;
@@ -52,6 +64,8 @@ export interface AdminOverviewMetrics {
   paymentBackedSubscribersCount: number;
   manualGrantSubscribersCount: number;
   expiringSoonCount: number;
+  // Live pending approvals summary for Admin In-App & Console notifications
+  pendingSubmissionsPreview?: PendingApprovalPreviewItem[];
 }
 
 export interface User360Identity {
@@ -235,22 +249,43 @@ export async function getAdminOverview(options?: { bypassCache?: boolean; forceC
   let totalApprovedCount = 0;
   let totalRejectedCount = 0;
   let pendingClaimedRevenueInr = 0;
+  const rawPendingItems: PendingApprovalPreviewItem[] = [];
 
   for (const doc of submissionsSnap.docs) {
     const data = doc.data();
     if (data.status === 'pending_verification') {
       pendingCount++;
-      pendingClaimedRevenueInr += Number(data.declaredAmount) || 499;
+      const amount = Number(data.declaredAmount) || 499;
+      pendingClaimedRevenueInr += amount;
       const deadline = new Date(data.slaDeadlineAt).getTime();
-      if (!isNaN(deadline) && deadline < now) {
+      const isBreached = !isNaN(deadline) && deadline < now;
+      if (isBreached) {
         slaBreachCount++;
       }
+      const localUser = getUserById(data.userId);
+      rawPendingItems.push({
+        submissionId: data.submissionId,
+        orderId: data.orderId,
+        userId: data.userId,
+        userEmail: data.userEmail || localUser?.email || undefined,
+        declaredAmount: amount,
+        paymentDate: data.paymentDate,
+        submittedAt: data.submittedAt,
+        slaDeadlineAt: data.slaDeadlineAt,
+        isSlaBreached: isBreached,
+      });
     } else if (data.status === 'approved') {
       totalApprovedCount++;
     } else if (data.status === 'rejected') {
       totalRejectedCount++;
     }
   }
+
+  rawPendingItems.sort((a, b) => {
+    if (a.submittedAt !== b.submittedAt) return a.submittedAt > b.submittedAt ? -1 : 1;
+    return a.submissionId > b.submissionId ? -1 : 1;
+  });
+  const pendingSubmissionsPreview = rawPendingItems.slice(0, 5);
 
   let activeSubscribersCount = 0;
   let paymentBackedSubscribersCount = 0;
@@ -295,6 +330,7 @@ export async function getAdminOverview(options?: { bypassCache?: boolean; forceC
     paymentBackedSubscribersCount,
     manualGrantSubscribersCount,
     expiringSoonCount,
+    pendingSubmissionsPreview,
   };
 
   cachedAdminOverview = { data: metrics, timestamp: now, version: currentVersion };
@@ -334,44 +370,78 @@ export async function getAdminSubmissions(filter?: {
   let nextCursor: string | null = null;
 
   if (!filter?.query) {
-    // 1. Efficient count aggregation: read-cost = 1 metadata index entry
-    const countPromise = 'count' in baseQuery && typeof (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count === 'function'
-      ? (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count().get().then((res) => res.data().count)
-      : baseQuery.get().then((res) => res.size);
-
-    // 2. Cursor pagination vs offset
-    type OrderedQuery = typeof baseQuery & {
-      startAfter?: (...args: unknown[]) => OrderedQuery;
-      offset?: (n: number) => OrderedQuery;
-    };
-    let dataQuery: OrderedQuery = baseQuery.orderBy('submittedAt', 'desc').orderBy('submissionId', 'desc');
-
     const decodedCursor = filter?.cursor ? decodeCursor(filter.cursor) : null;
-    if (decodedCursor && typeof dataQuery.startAfter === 'function') {
-      dataQuery = dataQuery.startAfter(decodedCursor.primary, decodedCursor.secondary).limit(limit + 1);
-    } else if (typeof dataQuery.offset === 'function' && offset > 0) {
-      dataQuery = dataQuery.offset(offset).limit(limit + 1);
-    } else {
-      dataQuery = dataQuery.limit(limit + 1);
-    }
 
-    const [totalCount, pageSnap] = await Promise.all([countPromise, dataQuery.get()]);
-    total = totalCount;
+    try {
+      // 1. Efficient count aggregation: read-cost = 1 metadata index entry
+      const countPromise = 'count' in baseQuery && typeof (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count === 'function'
+        ? (baseQuery as unknown as { count: () => { get: () => Promise<{ data: () => { count: number } }> } }).count().get().then((res) => res.data().count)
+        : baseQuery.get().then((res) => res.size);
 
-    const rawDocs: PaymentSubmissionDocument[] = pageSnap.docs.map(
-      (d) => d.data() as unknown as PaymentSubmissionDocument
-    );
-    if (rawDocs.length > limit) {
-      hasMore = true;
-      pagedSubmissions = rawDocs.slice(0, limit);
-    } else {
-      hasMore = false;
-      pagedSubmissions = rawDocs;
-    }
+      // 2. Cursor pagination vs offset
+      type OrderedQuery = typeof baseQuery & {
+        startAfter?: (...args: unknown[]) => OrderedQuery;
+        offset?: (n: number) => OrderedQuery;
+      };
+      let dataQuery: OrderedQuery = baseQuery.orderBy('submittedAt', 'desc').orderBy('submissionId', 'desc');
 
-    if (pagedSubmissions.length > 0) {
-      const last = pagedSubmissions[pagedSubmissions.length - 1];
-      nextCursor = hasMore ? encodeCursor(last.submittedAt, last.submissionId) : null;
+      if (decodedCursor && typeof dataQuery.startAfter === 'function') {
+        dataQuery = dataQuery.startAfter(decodedCursor.primary, decodedCursor.secondary).limit(limit + 1);
+      } else if (typeof dataQuery.offset === 'function' && offset > 0) {
+        dataQuery = dataQuery.offset(offset).limit(limit + 1);
+      } else {
+        dataQuery = dataQuery.limit(limit + 1);
+      }
+
+      const [totalCount, pageSnap] = await Promise.all([countPromise, dataQuery.get()]);
+      total = totalCount;
+
+      const rawDocs: PaymentSubmissionDocument[] = pageSnap.docs.map(
+        (d) => d.data() as unknown as PaymentSubmissionDocument
+      );
+      if (rawDocs.length > limit) {
+        hasMore = true;
+        pagedSubmissions = rawDocs.slice(0, limit);
+      } else {
+        hasMore = false;
+        pagedSubmissions = rawDocs;
+      }
+
+      if (pagedSubmissions.length > 0) {
+        const last = pagedSubmissions[pagedSubmissions.length - 1];
+        nextCursor = hasMore ? encodeCursor(last.submittedAt, last.submissionId) : null;
+      }
+    } catch (queryErr: unknown) {
+      // Resilient fallback if composite index is still building or missing in Firestore (FAILED_PRECONDITION / code 9)
+      const errCode = (queryErr as { code?: number })?.code;
+      const errMsg = queryErr instanceof Error ? queryErr.message : String(queryErr);
+      if (errCode !== 9 && !errMsg.includes('FAILED_PRECONDITION') && !errMsg.includes('requires an index')) {
+        throw queryErr;
+      }
+
+      const snap = await baseQuery.get();
+      const sortedDocs: PaymentSubmissionDocument[] = snap.docs
+        .map((d) => d.data() as unknown as PaymentSubmissionDocument)
+        .sort((a, b) => {
+          if (a.submittedAt !== b.submittedAt) return a.submittedAt > b.submittedAt ? -1 : 1;
+          return a.submissionId > b.submissionId ? -1 : 1;
+        });
+
+      total = sortedDocs.length;
+      let startIdx = offset;
+      if (decodedCursor) {
+        const cursorIdx = sortedDocs.findIndex(
+          (item) => item.submittedAt === decodedCursor.primary && item.submissionId === decodedCursor.secondary
+        );
+        startIdx = cursorIdx >= 0 ? cursorIdx + 1 : 0;
+      }
+
+      pagedSubmissions = sortedDocs.slice(startIdx, startIdx + limit);
+      hasMore = startIdx + limit < total;
+      if (pagedSubmissions.length > 0 && hasMore) {
+        const last = pagedSubmissions[pagedSubmissions.length - 1];
+        nextCursor = encodeCursor(last.submittedAt, last.submissionId);
+      }
     }
   } else {
     const snap = await baseQuery.get();

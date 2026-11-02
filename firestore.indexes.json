@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "upi_submissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "DESCENDING" },
+        { "fieldPath": "submissionId", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "upi_submissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "submittedAt", "order": "DESCENDING" },
+        { "fieldPath": "submissionId", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+
