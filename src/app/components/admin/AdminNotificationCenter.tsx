@@ -39,7 +39,11 @@ export function AdminNotificationCenter() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const refreshId = window.setInterval(() => { void load(); }, 30000);
+    return () => window.clearInterval(refreshId);
+  }, [load]);
 
   const markRead = async (id: string) => {
     setBusyId(id);
