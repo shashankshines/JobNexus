@@ -340,7 +340,11 @@ export async function getAdminSubmissions(filter?: {
       : baseQuery.get().then((res) => res.size);
 
     // 2. Cursor pagination vs offset
-    let dataQuery: any = baseQuery.orderBy('submittedAt', 'desc').orderBy('submissionId', 'desc');
+    type OrderedQuery = typeof baseQuery & {
+      startAfter?: (...args: unknown[]) => OrderedQuery;
+      offset?: (n: number) => OrderedQuery;
+    };
+    let dataQuery: OrderedQuery = baseQuery.orderBy('submittedAt', 'desc').orderBy('submissionId', 'desc');
 
     const decodedCursor = filter?.cursor ? decodeCursor(filter.cursor) : null;
     if (decodedCursor && typeof dataQuery.startAfter === 'function') {
@@ -354,7 +358,9 @@ export async function getAdminSubmissions(filter?: {
     const [totalCount, pageSnap] = await Promise.all([countPromise, dataQuery.get()]);
     total = totalCount;
 
-    const rawDocs: PaymentSubmissionDocument[] = pageSnap.docs.map((d: any) => d.data());
+    const rawDocs: PaymentSubmissionDocument[] = pageSnap.docs.map(
+      (d) => d.data() as unknown as PaymentSubmissionDocument
+    );
     if (rawDocs.length > limit) {
       hasMore = true;
       pagedSubmissions = rawDocs.slice(0, limit);

@@ -60,10 +60,10 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
             if (!prev) return false;
             if (opStr === '==') return doc[field] === value;
             if (opStr === '!=') return doc[field] !== value;
-            if (opStr === '>') return doc[field] > (value as any);
-            if (opStr === '>=') return doc[field] >= (value as any);
-            if (opStr === '<') return doc[field] < (value as any);
-            if (opStr === '<=') return doc[field] <= (value as any);
+            if (opStr === '>') return (doc[field] as string | number) > (value as string | number);
+            if (opStr === '>=') return (doc[field] as string | number) >= (value as string | number);
+            if (opStr === '<') return (doc[field] as string | number) < (value as string | number);
+            if (opStr === '<=') return (doc[field] as string | number) <= (value as string | number);
             if (opStr === 'in') return Array.isArray(value) && value.includes(doc[field]);
             return true;
           };
@@ -83,7 +83,7 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
           },
         }),
         get: async (): Promise<QuerySnapshot> => {
-          let matches: DocumentData[] = [];
+          const matches: DocumentData[] = [];
           for (const [id, doc] of colData.entries()) {
             if (!predicate || predicate(doc)) {
               matches.push({ id, ...doc });
@@ -108,9 +108,9 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
           let startIndex = offsetCount || 0;
           if (startAfterValues && startAfterValues.length > 0) {
             let cursorFieldValues: unknown[] = [];
-            const firstArg = startAfterValues[0] as any;
+            const firstArg = startAfterValues[0] as { id?: string; data?: () => DocumentData } | undefined;
             if (firstArg && typeof firstArg === 'object' && typeof firstArg.data === 'function') {
-              const docData = { id: firstArg.id, ...firstArg.data() };
+              const docData: DocumentData = { id: firstArg.id, ...firstArg.data() };
               cursorFieldValues = orderings.map((o) => docData[o.field] ?? docData.id);
             } else {
               cursorFieldValues = startAfterValues;

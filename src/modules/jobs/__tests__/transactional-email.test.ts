@@ -301,6 +301,86 @@ describe('JobNexus Transactional Payment Email Lifecycle (Phase 2B.4)', () => {
       assert.strictEqual(simProvider.getSentEmails().length, 1);
       assert.strictEqual(simProvider.getSentEmails()[0].to, 'recovered@example.com');
     });
+
+    it('marks outbox record as retryable_failure outside NODE_ENV=test when no live email provider is configured', async () => {
+      const prevEnv = process.env.NODE_ENV;
+      const prevGmailUser = process.env.GMAIL_USER;
+      const prevGmailPass = process.env.GMAIL_APP_PASSWORD;
+      const prevResend = process.env.RESEND_API_KEY;
+      try {
+        (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
+        delete process.env.GMAIL_USER;
+        delete process.env.GMAIL_APP_PASSWORD;
+        delete process.env.RESEND_API_KEY;
+
+        const subId = `sub_unconf_${Date.now()}`;
+        const result = await sendSubmissionAcknowledgement({
+          userId: 'usr_sweekar',
+          orderId: 'ord_sweekar',
+          submissionId: subId,
+          userEmail: 'sweekarshines@gmail.com',
+          utrNumber: '612398745632',
+          declaredAmount: 499,
+          paymentDate: '2026-11-02',
+          submittedAt: new Date().toISOString(),
+        });
+
+        assert.strictEqual(result.success, false);
+        assert.strictEqual(result.status, 'retryable_failure');
+
+        const outbox = await getOutboxRecordByIdempotencyKey(`payment_submitted:${subId}`);
+        assert.strictEqual(outbox?.status, 'retryable_failure');
+        assert.strictEqual(outbox?.payload?.maskedUtr, '6123••••••••5632');
+      } finally {
+        (process.env as Record<string, string | undefined>).NODE_ENV = prevEnv;
+        if (prevGmailUser !== undefined) process.env.GMAIL_USER = prevGmailUser;
+        if (prevGmailPass !== undefined) process.env.GMAIL_APP_PASSWORD = prevGmailPass;
+        if (prevResend !== undefined) process.env.RESEND_API_KEY = prevResend;
+      }
+    });
+
+    it('allows retrying a previously simulated (sim_msg_*) record once a real provider is configured', async () => {
+      const subId = `sub_sim_upgrade_${Date.now()}`;
+
+      // First run in test simulation mode creates sim_msg_* with status=sent
+      const firstResult = await sendSubmissionAcknowledgement({
+        userId: 'usr_sim_upgrade',
+        orderId: 'ord_sim_upgrade',
+        submissionId: subId,
+        userEmail: 'sweekarshines@gmail.com',
+        utrNumber: '778899001122',
+        declaredAmount: 499,
+        paymentDate: '2026-11-02',
+        submittedAt: new Date().toISOString(),
+      });
+      assert.strictEqual(firstResult.status, 'sent');
+
+      const outbox = await getOutboxRecordByIdempotencyKey(`payment_submitted:${subId}`);
+      assert.ok(outbox?.providerMessageId?.startsWith('sim_msg_'));
+
+      // Now configure a live provider and retry
+      let liveDeliveredTo = '';
+      setTestEmailProvider({
+        providerName: 'smtp',
+        isConfigured: true,
+        async send(opts: EmailSendOptions): Promise<EmailSendResult> {
+          liveDeliveredTo = opts.to;
+          return {
+            success: true,
+            provider: 'smtp',
+            providerMessageId: 'smtp_live_12345',
+          };
+        },
+      });
+
+      const retryRes = await retryNotificationById(outbox!.id, 'shashankshines@gmail.com');
+      assert.strictEqual(retryRes.success, true);
+      assert.strictEqual(retryRes.status, 'sent');
+      assert.strictEqual(liveDeliveredTo, 'sweekarshines@gmail.com');
+
+      const updated = await getOutboxRecordById(outbox!.id);
+      assert.strictEqual(updated?.providerMessageId, 'smtp_live_12345');
+    });
   });
 
   describe('Administrative Notification API Endpoints', () => {

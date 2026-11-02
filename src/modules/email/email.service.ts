@@ -5,10 +5,12 @@
 
 import { EmailProviderAdapter } from './adapters/email-provider.interface';
 import { ResendEmailAdapter } from './adapters/resend.adapter';
+import { SmtpEmailAdapter } from './adapters/smtp.adapter';
 import { SimulationEmailAdapter } from './adapters/simulation.adapter';
 import { renderPaymentSubmittedEmail } from './templates/payment-submitted.template';
 import { renderPaymentApprovedEmail } from './templates/payment-approved.template';
 import { renderPaymentRejectedEmail } from './templates/payment-rejected.template';
+import { maskUtr } from './templates/base.template';
 import {
   createOutboxRecord,
   getOutboxRecordById,
@@ -49,14 +51,50 @@ export function getEmailProvider(): EmailProviderAdapter {
     return customTestProvider;
   }
 
-  const resendApiKey = process.env.RESEND_API_KEY;
+  const smtpUser = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const smtpPass = process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS;
   const fromEmail = process.env.EMAIL_FROM;
 
+  if (smtpUser && smtpUser.trim().includes('@') && smtpPass && smtpPass.replace(/\s+/g, '').length >= 8) {
+    return new SmtpEmailAdapter({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465,
+      user: smtpUser,
+      pass: smtpPass,
+      defaultFrom: fromEmail,
+    });
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY;
   if (resendApiKey && resendApiKey.trim().length > 5) {
     return new ResendEmailAdapter(resendApiKey, fromEmail);
   }
 
-  return getSimulationProvider();
+  if (process.env.NODE_ENV === 'test') {
+    return getSimulationProvider();
+  }
+
+  return {
+    providerName: 'unconfigured',
+    isConfigured: false,
+    async send() {
+      return {
+        success: false,
+        provider: 'unconfigured',
+        error:
+          'No live email provider configured. Add GMAIL_USER and GMAIL_APP_PASSWORD (or RESEND_API_KEY) in .env.local and retry from Admin Console.',
+        retryable: true,
+      };
+    },
+  };
+}
+
+function isTrulyDeliveredRecord(record: EmailOutboxDocument | null, activeProviderName: string): boolean {
+  if (!record || record.status !== 'sent') return false;
+  if (activeProviderName !== 'simulation' && record.providerMessageId?.startsWith('sim_msg_')) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -118,10 +156,11 @@ export async function sendSubmissionAcknowledgement(
   }
 
   const idempotencyKey = `payment_submitted:${params.submissionId}`;
+  const provider = getEmailProvider();
 
-  // Check if already sent
+  // Check if already sent via real provider (or simulation in test mode)
   const existing = await getOutboxRecordByIdempotencyKey(idempotencyKey);
-  if (existing && existing.status === 'sent') {
+  if (existing && isTrulyDeliveredRecord(existing, provider.providerName)) {
     return {
       success: true,
       outboxId: existing.id,
@@ -158,13 +197,13 @@ export async function sendSubmissionAcknowledgement(
     payload: {
       declaredAmount: params.declaredAmount,
       currency: params.currency || 'INR',
+      maskedUtr: maskUtr(params.utrNumber),
       submittedAt: params.submittedAt,
       slaDeadlineAt: params.slaDeadlineAt,
     },
   });
 
   // Attempt dispatch
-  const provider = getEmailProvider();
   const sendResult = await provider.send({
     to: recipientEmail,
     subject: emailContent.subject,
@@ -235,9 +274,10 @@ export async function sendPaymentApprovalNotification(
   }
 
   const idempotencyKey = `payment_approved:${params.submissionId}`;
+  const provider = getEmailProvider();
 
   const existing = await getOutboxRecordByIdempotencyKey(idempotencyKey);
-  if (existing && existing.status === 'sent') {
+  if (existing && isTrulyDeliveredRecord(existing, provider.providerName)) {
     return {
       success: true,
       outboxId: existing.id,
@@ -276,7 +316,6 @@ export async function sendPaymentApprovalNotification(
     },
   });
 
-  const provider = getEmailProvider();
   const sendResult = await provider.send({
     to: recipientEmail,
     subject: emailContent.subject,
@@ -348,9 +387,10 @@ export async function sendPaymentRejectionNotification(
   }
 
   const idempotencyKey = `payment_rejected:${params.submissionId}`;
+  const provider = getEmailProvider();
 
   const existing = await getOutboxRecordByIdempotencyKey(idempotencyKey);
-  if (existing && existing.status === 'sent') {
+  if (existing && isTrulyDeliveredRecord(existing, provider.providerName)) {
     return {
       success: true,
       outboxId: existing.id,
@@ -384,12 +424,12 @@ export async function sendPaymentRejectionNotification(
     subject: emailContent.subject,
     templateType: 'payment_rejected',
     payload: {
+      maskedUtr: maskUtr(params.maskedUtr),
       rejectionReason: params.rejectionReason,
       submittedAt: params.submittedAt,
     },
   });
 
-  const provider = getEmailProvider();
   const sendResult = await provider.send({
     to: recipientEmail,
     subject: emailContent.subject,
@@ -442,7 +482,8 @@ export async function retryNotificationById(
     return { success: false, status: 'failed', error: `Notification "${notificationId}" not found.` };
   }
 
-  if (record.status === 'sent') {
+  const provider = getEmailProvider();
+  if (isTrulyDeliveredRecord(record, provider.providerName)) {
     return { success: true, status: 'sent', error: 'Notification was already delivered.' };
   }
 
@@ -462,6 +503,7 @@ export async function retryNotificationById(
       currency: (record.payload?.currency as string) || 'INR',
       maskedUtr: (record.payload?.maskedUtr as string) || '••••••••',
       submittedAt: (record.payload?.submittedAt as string) || record.createdAt,
+      slaDeadlineAt: record.payload?.slaDeadlineAt as string | undefined,
       statusUrl,
     });
   } else if (record.templateType === 'payment_approved') {
@@ -486,7 +528,7 @@ export async function retryNotificationById(
       planTitle: 'JobNexus Premium (30 Days)',
       amountInr: 499,
       currency: 'INR',
-      maskedUtr: '••••••••',
+      maskedUtr: (record.payload?.maskedUtr as string) || '••••••••',
       rejectionReason: (record.payload?.rejectionReason as string) || 'Verification unsuccessful',
       submittedAt: (record.payload?.submittedAt as string) || record.createdAt,
       statusUrl: `${getAppBaseUrl()}/?status=resubmit_reference&orderId=${encodeURIComponent(record.orderId)}`,
@@ -495,7 +537,6 @@ export async function retryNotificationById(
     return { success: false, status: 'failed', error: `Unsupported template type "${record.templateType}".` };
   }
 
-  const provider = getEmailProvider();
   const sendResult = await provider.send({
     to: record.recipientEmail,
     subject: emailContent.subject,
