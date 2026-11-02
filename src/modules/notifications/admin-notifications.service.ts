@@ -44,7 +44,8 @@ export async function createAdminNotification(
   const existing = await ref.get();
   if (existing.exists) return;
 
-  const { eventKey: _eventKey, ...data } = input;
+  const { eventKey, ...data } = input;
+  if (!eventKey) throw new Error('Notification event key is required.');
   await ref.create({
     ...data,
     id,
