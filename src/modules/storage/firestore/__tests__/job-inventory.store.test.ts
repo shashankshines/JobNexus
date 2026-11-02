@@ -60,3 +60,4 @@ describe('JobInventoryStore Unit Tests', () => {
     assert.strictEqual(getFreshPersistedProviderCount(null, 'greenhouse'), null);
   });
 });
+
