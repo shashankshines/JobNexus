@@ -107,7 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           title: 'New Premium checkout started',
           message: `${auth.user.name || auth.user.email || 'A user'} created a ₹${newOrder.amountInr} Premium payment order. Awaiting UPI payment reference.`,
           actionLabel: 'View payment queue',
-          actionUrl: '/admin?tab=verifications',
+          actionUrl: '/admin?tab=ledger',
           userId: auth.user.id,
           userEmail: auth.user.email,
           orderId: newOrder.orderId,
