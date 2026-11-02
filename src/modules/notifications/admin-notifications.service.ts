@@ -1,4 +1,5 @@
 import { getFirestoreDb } from '@/modules/storage/firestore/client';
+import type { Query } from 'firebase-admin/firestore';
 
 export const ADMIN_NOTIFICATION_EMAIL = 'shashankshines@gmail.com';
 const COLLECTION = 'admin_notifications';
@@ -54,7 +55,7 @@ export async function createAdminNotification(
 
 export async function listAdminNotifications(options: { limit?: number; unreadOnly?: boolean } = {}) {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
-  let query: FirebaseFirestore.Query = getFirestoreDb()
+  let query: Query = getFirestoreDb()
     .collection(COLLECTION)
     .where('recipientEmail', '==', ADMIN_NOTIFICATION_EMAIL)
     .orderBy('createdAt', 'desc');
