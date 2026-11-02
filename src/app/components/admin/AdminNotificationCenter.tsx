@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Bell, Check, ExternalLink, RefreshCw } from 'lucide-react';
 
 type AdminNotification = {
@@ -18,6 +18,7 @@ type AdminNotification = {
 };
 
 export function AdminNotificationCenter() {
+  const router = useRouter();
   const [items, setItems] = useState<AdminNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,6 +58,26 @@ export function AdminNotificationCenter() {
     }
   };
 
+  const openAction = async (item: AdminNotification) => {
+    setBusyId(item.id);
+    try {
+      const response = await fetch('/api/admin/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, action: 'actioned' }),
+      });
+      if (!response.ok) throw new Error('Unable to record notification action.');
+      setItems((current) => current.map((entry) => entry.id === item.id
+        ? { ...entry, readAt: entry.readAt || new Date().toISOString(), actionedAt: new Date().toISOString() }
+        : entry));
+      router.push(item.actionUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to open notification action.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const unreadCount = items.filter((item) => !item.readAt).length;
 
   return (
@@ -90,9 +111,9 @@ export function AdminNotificationCenter() {
                   <time dateTime={item.createdAt} style={{ display: 'block', marginTop: 5, fontSize: '.7rem', color: 'var(--text-tertiary, var(--text-secondary))' }}>{new Date(item.createdAt).toLocaleString()}</time>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <Link href={item.actionUrl} onClick={() => { void fetch('/api/admin/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, action: 'actioned' }) }); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 10px', background: 'var(--accent)', color: '#fff', textDecoration: 'none', fontSize: '.78rem', fontWeight: 650, whiteSpace: 'nowrap' }}>
+                  <button type="button" disabled={busyId === item.id} onClick={() => void openAction(item)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 10px', background: 'var(--accent)', color: '#fff', border: 0, fontSize: '.78rem', fontWeight: 650, whiteSpace: 'nowrap', cursor: 'pointer' }}>
                     {item.actionLabel} <ExternalLink size={13} />
-                  </Link>
+                  </button>
                   {!item.readAt && <button type="button" disabled={busyId === item.id} onClick={() => void markRead(item.id)} aria-label="Mark notification as read" style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}><Check size={14} /></button>}
                 </div>
               </div>
