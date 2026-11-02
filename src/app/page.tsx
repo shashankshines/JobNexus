@@ -406,6 +406,9 @@ export default function Home() {
     openAuthModal,
     savedJobs,
     entitlement,
+    billingFlow,
+    isBillingResolved,
+    syncBillingFlow,
     isPremium,
     isPremiumOfferOpen,
     openPremiumOfferModal,
@@ -739,12 +742,12 @@ export default function Home() {
   }, [showRoleDropdown, roleDropdownIsMobile]);
 
   useEffect(() => {
-    if (isHeroPaused) return;
+    if (isHeroPaused || isPremiumOfferOpen || isProfileModalOpen) return;
     const interval = setInterval(() => {
       setHeroWordIndex((prev) => (prev + 1) % HERO_ROTATING_WORDS.length);
     }, 3600);
     return () => clearInterval(interval);
-  }, [isHeroPaused]);
+  }, [isHeroPaused, isPremiumOfferOpen, isProfileModalOpen]);
 
   const currentHeroWord = HERO_ROTATING_WORDS[heroWordIndex];
 
@@ -2045,12 +2048,12 @@ export default function Home() {
                 pendingSearchCriteria
                   ? `Refreshing results for ${getSearchCriteriaSummary(pendingSearchCriteria) || 'all industries'}; prior applied results are hidden.`
                   : isScrollingCards
-                  ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches)`
-                  : searched
-                    ? `${matchingCount.toLocaleString()} matches for the current search; ${displayedJobs.length.toLocaleString()} matching jobs loaded. ${globalInventorySummary}`
-                    : activeView === 'saved'
-                      ? `${savedJobs.length} bookmarked tech opportunities`
-                      : globalInventorySummary
+                    ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches)`
+                    : searched
+                      ? `${matchingCount.toLocaleString()} matches for the current search; ${displayedJobs.length.toLocaleString()} matching jobs loaded. ${globalInventorySummary}`
+                      : activeView === 'saved'
+                        ? `${savedJobs.length} bookmarked tech opportunities`
+                        : globalInventorySummary
               }
             >
               <span className={`site-header-radar ${isScrollingCards ? (isAllViewed ? 'is-complete' : 'is-scrolling') : ''}`} />
@@ -2308,10 +2311,10 @@ export default function Home() {
                             ) : (
                               <span
                                 className={`user-dropdown-role-badge ${isPremium
-                                    ? 'user-dropdown-premium-badge'
-                                    : user.provider === 'google'
-                                      ? 'user-dropdown-google-badge'
-                                      : 'user-dropdown-member-badge'
+                                  ? 'user-dropdown-premium-badge'
+                                  : user.provider === 'google'
+                                    ? 'user-dropdown-google-badge'
+                                    : 'user-dropdown-member-badge'
                                   }`}
                               >
                                 {isPremium ? (
@@ -2346,15 +2349,35 @@ export default function Home() {
                                 className="user-dropdown-upgrade-btn"
                               >
                                 <div className="dropdown-action-icon-wrap dropdown-upgrade-icon-wrap">
-                                  <Crown size={14} className="upgrade-btn-icon" />
+                                  {billingFlow?.hasPendingVerification ? (
+                                    <Clock size={14} className="upgrade-btn-icon" />
+                                  ) : (
+                                    <Crown size={14} className="upgrade-btn-icon" />
+                                  )}
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                                  <span style={{ fontWeight: 700 }}>Upgrade to Premium</span>
+                                  <span style={{ fontWeight: 700 }}>
+                                    {billingFlow?.hasPendingVerification
+                                      ? 'Verification Pending'
+                                      : billingFlow?.hasRejectedSubmission
+                                        ? 'Payment Action Needed'
+                                        : 'Upgrade to Premium'}
+                                  </span>
                                   <span style={{ fontSize: '0.68rem', opacity: 0.75, fontWeight: 500 }}>
-                                    Direct ATS links & no wait
+                                    {billingFlow?.hasPendingVerification
+                                      ? 'UPI payment under review'
+                                      : billingFlow?.hasRejectedSubmission
+                                        ? 'Review verification status'
+                                        : 'Direct ATS links & no wait'}
                                   </span>
                                 </div>
-                                <span className="dropdown-price-pill">₹499</span>
+                                <span className="dropdown-price-pill">
+                                  {billingFlow?.hasPendingVerification
+                                    ? 'Pending'
+                                    : billingFlow?.hasRejectedSubmission
+                                      ? 'Review'
+                                      : '₹499'}
+                                </span>
                               </button>
                             )}
 
@@ -3249,481 +3272,682 @@ export default function Home() {
 
             {/* Search refinements remain visible without an extra filter-toggle step. */}
             <div className="search-refinements">
-                  <div
-                    className="search-refinements-bar"
+              <div
+                className="search-refinements-bar"
+                style={{
+                  display: 'flex',
+                  gap: '0.65rem',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  paddingTop: '0.85rem',
+                  borderTop: '1px solid var(--border)',
+                }}
+              >
+                {/* Role & Category Custom Dropdown */}
+                <div
+                  ref={roleDropdownRef}
+                  className="search-refinement-role"
+                  style={{
+                    position: 'relative',
+                    zIndex: showRoleDropdown ? 300 : 1,
+                    flex: '1.1',
+                    minWidth: 160,
+                    order: 2,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRoleDropdown((prev) => !prev);
+                      setShowIndustryDropdown(false);
+                      setShowWorkplaceDropdown(false);
+                      setShowTypeDropdown(false);
+                      setShowLevelDropdown(false);
+                    }}
+                    aria-expanded={showRoleDropdown}
+                    aria-haspopup="listbox"
+                    aria-label="Filter by role and category"
                     style={{
+                      width: '100%',
                       display: 'flex',
-                      gap: '0.65rem',
-                      flexWrap: 'wrap',
                       alignItems: 'center',
-                      paddingTop: '0.85rem',
-                      borderTop: '1px solid var(--border)',
+                      justifyContent: 'space-between',
+                      gap: '0.45rem',
+                      background: 'var(--input-bg)',
+                      borderRadius: 10,
+                      padding: '0.62rem 0.75rem',
+                      border: showRoleDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
+                      boxShadow: showRoleDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
+                      color: selectedRole ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '0.85rem',
+                      fontWeight: selectedRole ? 600 : 400,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
                     }}
                   >
-                    {/* Role & Category Custom Dropdown */}
-                    <div
-                      ref={roleDropdownRef}
-                      className="search-refinement-role"
-                      style={{
-                        position: 'relative',
-                        zIndex: showRoleDropdown ? 300 : 1,
-                        flex: '1.1',
-                        minWidth: 160,
-                        order: 2,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowRoleDropdown((prev) => !prev);
-                          setShowIndustryDropdown(false);
-                          setShowWorkplaceDropdown(false);
-                          setShowTypeDropdown(false);
-                          setShowLevelDropdown(false);
-                        }}
-                        aria-expanded={showRoleDropdown}
-                        aria-haspopup="listbox"
-                        aria-label="Filter by role and category"
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', overflow: 'hidden', minWidth: 0 }}>
+                      <Briefcase size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedRoleLabel}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      {selectedRole && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={handleClearRole}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleClearRole(e);
+                            }
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            padding: 2,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--text-secondary)',
+                            transition: 'color 0.15s ease',
+                          }}
+                          title="Clear role filter"
+                        >
+                          <X size={13} />
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        color="var(--text-secondary)"
                         style={{
-                          width: '100%',
+                          transform: showRoleDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                        }}
+                      />
+                    </div>
+                  </button>
+
+                  {showRoleDropdown && roleDropdownPosition && typeof document !== 'undefined' && createPortal(
+                    <>
+                      {roleDropdownIsMobile && (
+                        <motion.button
+                          type="button"
+                          aria-label="Close role and category options"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          onClick={() => setShowRoleDropdown(false)}
+                          style={{
+                            position: 'fixed',
+                            inset: 0,
+                            zIndex: 1000,
+                            border: 0,
+                            background: 'rgba(2, 6, 23, 0.48)',
+                            touchAction: 'none',
+                          }}
+                        />
+                      )}
+                      <motion.div
+                        ref={roleDropdownMenuRef}
+                        onKeyDown={(event) => {
+                          const options = roleDropdownMenuRef.current?.querySelectorAll<HTMLElement>('[data-role-option]');
+                          if (!options?.length) return;
+                          const activeOption = (event.target as HTMLElement).closest<HTMLElement>('[data-role-option]');
+                          const activeIndex = activeOption ? Array.from(options).indexOf(activeOption) : -1;
+
+                          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            const direction = event.key === 'ArrowDown' ? 1 : -1;
+                            const nextIndex = activeIndex < 0
+                              ? (direction > 0 ? 0 : options.length - 1)
+                              : (activeIndex + direction + options.length) % options.length;
+                            options[nextIndex]?.focus();
+                          } else if (activeOption && (event.key === 'Enter' || event.key === ' ')) {
+                            event.preventDefault();
+                            activeOption.click();
+                          }
+                        }}
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="glass-panel"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          width: 'max-content',
+                          minWidth: roleDropdownIsMobile ? 0 : 320,
+                          maxWidth: 'min(440px, calc(100vw - 2.5rem))',
+                          maxHeight: 380,
+                          zIndex: 250,
+                          background: 'var(--dropdown-bg)',
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-lg)',
                           display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.45rem',
-                          background: 'var(--input-bg)',
-                          borderRadius: 10,
-                          padding: '0.62rem 0.75rem',
-                          border: showRoleDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
-                          boxShadow: showRoleDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
-                          color: selectedRole ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '0.85rem',
-                          fontWeight: selectedRole ? 600 : 400,
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.2s ease',
+                          flexDirection: 'column',
+                          overflow: 'hidden',
                           textAlign: 'left',
+                          borderRadius: roleDropdownIsMobile ? 18 : 12,
+                          ...roleDropdownPosition,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', overflow: 'hidden', minWidth: 0 }}>
-                          <Briefcase size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {selectedRoleLabel}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                          {selectedRole && (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={handleClearRole}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  handleClearRole(e);
-                                }
-                              }}
-                              style={{
-                                cursor: 'pointer',
-                                padding: 2,
-                                borderRadius: 4,
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: 'var(--text-secondary)',
-                                transition: 'color 0.15s ease',
-                              }}
-                              title="Clear role filter"
-                            >
-                              <X size={13} />
-                            </span>
-                          )}
-                          <ChevronDown
-                            size={14}
-                            color="var(--text-secondary)"
+                        {/* Sticky Search Filter */}
+                        <div
+                          style={{
+                            padding: '0.65rem 0.75rem',
+                            background: 'var(--dropdown-bg)',
+                            borderBottom: '1px solid var(--border)',
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 10,
+                          }}
+                        >
+                          <div
                             style={{
-                              transform: showRoleDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s ease',
-                            }}
-                          />
-                        </div>
-                      </button>
-
-                      {showRoleDropdown && roleDropdownPosition && typeof document !== 'undefined' && createPortal(
-                        <>
-                          {roleDropdownIsMobile && (
-                            <motion.button
-                              type="button"
-                              aria-label="Close role and category options"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              onClick={() => setShowRoleDropdown(false)}
-                              style={{
-                                position: 'fixed',
-                                inset: 0,
-                                zIndex: 1000,
-                                border: 0,
-                                background: 'rgba(2, 6, 23, 0.48)',
-                                touchAction: 'none',
-                              }}
-                            />
-                          )}
-                          <motion.div
-                            ref={roleDropdownMenuRef}
-                            onKeyDown={(event) => {
-                              const options = roleDropdownMenuRef.current?.querySelectorAll<HTMLElement>('[data-role-option]');
-                              if (!options?.length) return;
-                              const activeOption = (event.target as HTMLElement).closest<HTMLElement>('[data-role-option]');
-                              const activeIndex = activeOption ? Array.from(options).indexOf(activeOption) : -1;
-
-                              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                                event.preventDefault();
-                                const direction = event.key === 'ArrowDown' ? 1 : -1;
-                                const nextIndex = activeIndex < 0
-                                  ? (direction > 0 ? 0 : options.length - 1)
-                                  : (activeIndex + direction + options.length) % options.length;
-                                options[nextIndex]?.focus();
-                              } else if (activeOption && (event.key === 'Enter' || event.key === ' ')) {
-                                event.preventDefault();
-                                activeOption.click();
-                              }
-                            }}
-                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                            className="glass-panel"
-                            style={{
-                              position: 'absolute',
-                              top: 'calc(100% + 6px)',
-                              left: 0,
-                              width: 'max-content',
-                              minWidth: roleDropdownIsMobile ? 0 : 320,
-                              maxWidth: 'min(440px, calc(100vw - 2.5rem))',
-                              maxHeight: 380,
-                              zIndex: 250,
-                              background: 'var(--dropdown-bg)',
-                              border: '1px solid var(--border)',
-                              boxShadow: 'var(--shadow-lg)',
                               display: 'flex',
-                              flexDirection: 'column',
-                              overflow: 'hidden',
-                              textAlign: 'left',
-                              borderRadius: roleDropdownIsMobile ? 18 : 12,
-                              ...roleDropdownPosition,
+                              alignItems: 'center',
+                              gap: '0.45rem',
+                              background: 'var(--input-bg)',
+                              borderRadius: 8,
+                              padding: '0.45rem 0.65rem',
+                              minHeight: roleDropdownIsMobile ? 44 : undefined,
+                              border: '1px solid var(--input-border)',
                             }}
                           >
-                            {/* Sticky Search Filter */}
-                            <div
+                            <Search size={13} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                            <input
+                              type="text"
+                              placeholder="Search roles or categories..."
+                              value={roleSearchQuery}
+                              onChange={(e) => setRoleSearchQuery(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              autoFocus={!roleDropdownIsMobile}
                               style={{
-                                padding: '0.65rem 0.75rem',
-                                background: 'var(--dropdown-bg)',
-                                borderBottom: '1px solid var(--border)',
-                                position: 'sticky',
-                                top: 0,
-                                zIndex: 10,
+                                width: '100%',
+                                background: 'transparent',
+                                border: 'none',
+                                outline: 'none',
+                                fontSize: '0.82rem',
+                                color: 'var(--text-primary)',
                               }}
-                            >
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.45rem',
-                                  background: 'var(--input-bg)',
-                                  borderRadius: 8,
-                                  padding: '0.45rem 0.65rem',
-                                  minHeight: roleDropdownIsMobile ? 44 : undefined,
-                                  border: '1px solid var(--input-border)',
-                                }}
+                            />
+                            {roleSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setRoleSearchQuery('')}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 0 }}
                               >
-                                <Search size={13} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-                                <input
-                                  type="text"
-                                  placeholder="Search roles or categories..."
-                                  value={roleSearchQuery}
-                                  onChange={(e) => setRoleSearchQuery(e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  autoFocus={!roleDropdownIsMobile}
-                                  style={{
-                                    width: '100%',
-                                    background: 'transparent',
-                                    border: 'none',
-                                    outline: 'none',
-                                    fontSize: '0.82rem',
-                                    color: 'var(--text-primary)',
-                                  }}
-                                />
-                                {roleSearchQuery && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setRoleSearchQuery('')}
-                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 0 }}
-                                  >
-                                    <X size={12} />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
 
-                            {/* Scrollable Options List */}
-                            <div
-                              role="listbox"
-                              aria-label="Job roles and categories"
-                              style={{ overflowY: 'auto', minHeight: 0, flex: '1 1 auto', padding: '0.35rem 0' }}
-                            >
-                              {/* Reset / All Roles Option */}
+                        {/* Scrollable Options List */}
+                        <div
+                          role="listbox"
+                          aria-label="Job roles and categories"
+                          style={{ overflowY: 'auto', minHeight: 0, flex: '1 1 auto', padding: '0.35rem 0' }}
+                        >
+                          {/* Reset / All Roles Option */}
+                          <div
+                            role="option"
+                            aria-selected={selectedRole === ''}
+                            tabIndex={0}
+                            data-role-option
+                            onClick={() => handleRoleSelect('')}
+                            style={{
+                              padding: '0.65rem 0.95rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '0.5rem',
+                              fontSize: '0.86rem',
+                              color: selectedRole === '' ? 'var(--primary-start)' : 'var(--text-primary)',
+                              fontWeight: selectedRole === '' ? 600 : 400,
+                              background: selectedRole === '' ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                              transition: 'background 0.15s ease',
+                              borderBottom: '1px solid var(--border)',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedRole !== '') e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedRole !== '') e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+                              <Briefcase size={13} color="var(--primary-start)" style={{ flexShrink: 0 }} />
+                              <span style={{ whiteSpace: 'nowrap' }}>All Roles & Categories</span>
+                            </div>
+                            {selectedRole === '' && <Check size={14} color="var(--primary-start)" />}
+                          </div>
+
+                          {/* Categorized Groups */}
+                          {filteredJobPostGroups.length === 0 ? (
+                            <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                              No roles or categories match &ldquo;{roleSearchQuery}&rdquo;
+                            </div>
+                          ) : (
+                            filteredJobPostGroups.map((group, gIdx) => (
+                              <div key={gIdx} style={{ marginBottom: '0.35rem' }}>
+                                <div
+                                  style={{
+                                    padding: '0.55rem 0.95rem 0.35rem',
+                                    fontSize: '0.73rem',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.04em',
+                                    color: 'var(--primary-start)',
+                                    background: 'var(--tag-bg)',
+                                    borderTop: gIdx > 0 ? '1px solid var(--border)' : 'none',
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
+                                  }}
+                                >
+                                  {group.group}
+                                </div>
+                                {group.posts.map((post, pIdx) => {
+                                  const isSelected = selectedRole === post.value;
+                                  return (
+                                    <div
+                                      key={pIdx}
+                                      role="option"
+                                      aria-selected={isSelected}
+                                      tabIndex={0}
+                                      data-role-option
+                                      onClick={() => handleRoleSelect(post.value)}
+                                      style={{
+                                        padding: '0.6rem 0.95rem 0.6rem 1.4rem',
+                                        minHeight: roleDropdownIsMobile ? 44 : undefined,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '0.5rem',
+                                        fontSize: '0.84rem',
+                                        color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
+                                        fontWeight: isSelected ? 600 : 400,
+                                        background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                                        transition: 'background 0.15s ease',
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                      }}
+                                    >
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {post.label}
+                                      </span>
+                                      {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </motion.div>
+                    </>,
+                    document.body
+                  )}
+                </div>
+
+                {/* Company Custom Dropdown */}
+                <div
+                  ref={companyDropdownRef}
+                  className="search-refinement-company"
+                  style={{
+                    position: 'relative',
+                    zIndex: showCompanyDropdown ? 300 : 1,
+                    display: showAdvancedFilters ? 'block' : 'none',
+                    flex: showAdvancedFilters ? '1 1 100%' : '0 0 0',
+                    minWidth: showAdvancedFilters ? '100%' : 0,
+                    order: 6,
+                    gridColumn: showAdvancedFilters ? '1 / -1' : undefined,
+                  }}
+                  id="advanced-company-filter"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCompanyDropdown((prev) => !prev);
+                      setShowRoleDropdown(false);
+                      setShowIndustryDropdown(false);
+                      setShowWorkplaceDropdown(false);
+                      setShowTypeDropdown(false);
+                      setShowLevelDropdown(false);
+                    }}
+                    aria-expanded={showCompanyDropdown}
+                    aria-haspopup="listbox"
+                    aria-label="Filter by company"
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.4rem',
+                      background: 'var(--input-bg)',
+                      borderRadius: 10,
+                      padding: '0.62rem 0.75rem',
+                      border: showCompanyDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
+                      boxShadow: showCompanyDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
+                      color: company ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '0.85rem',
+                      fontWeight: company ? 600 : 400,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden', minWidth: 0 }}>
+                      <Building2 size={15} color={company ? 'var(--primary-start)' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {company || 'All Companies'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      {company && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCompany('');
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setCompany('');
+                            }
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            padding: 2,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--text-secondary)',
+                          }}
+                          title="Clear company filter"
+                        >
+                          <X size={13} />
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        color="var(--text-secondary)"
+                        style={{
+                          transform: showCompanyDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {showCompanyDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="glass-panel dropdown-popover-right"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          width: 'max-content',
+                          minWidth: 'max(100%, 260px)',
+                          maxWidth: 'calc(100vw - 32px)',
+                          maxHeight: 320,
+                          overflowY: 'auto',
+                          zIndex: 250,
+                          background: 'var(--dropdown-bg)',
+                          borderRadius: 12,
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-lg)',
+                          padding: '0.4rem 0',
+                        }}
+                      >
+                        {availableCompanies.length > 5 && (
+                          <div style={{ padding: '0.35rem 0.65rem 0.5rem', borderBottom: '1px solid var(--border)' }}>
+                            <input
+                              type="text"
+                              placeholder="Search employer..."
+                              value={companySearchQuery}
+                              onChange={(e) => setCompanySearchQuery(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                width: '100%',
+                                padding: '0.45rem 0.65rem',
+                                borderRadius: 8,
+                                background: 'var(--input-bg)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-primary)',
+                                fontSize: '0.8rem',
+                                outline: 'none',
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {/* All Companies option */}
+                        <div
+                          onClick={() => {
+                            setCompany('');
+                            setShowCompanyDropdown(false);
+                            setCompanySearchQuery('');
+                          }}
+                          style={{
+                            padding: '0.62rem 0.95rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '0.5rem',
+                            fontSize: '0.84rem',
+                            color: company === '' ? 'var(--primary-start)' : 'var(--text-primary)',
+                            fontWeight: company === '' ? 600 : 400,
+                            background: company === '' ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                            transition: 'background 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (company !== '') e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (company !== '') e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                            <Building2 size={14} color={company === '' ? 'var(--primary-start)' : 'var(--text-secondary)'} />
+                            <span>All Companies</span>
+                          </div>
+                          {company === '' && <Check size={14} color="var(--primary-start)" />}
+                        </div>
+
+                        {filteredCompanies.length === 0 ? (
+                          <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            No companies found matching &quot;{companySearchQuery}&quot;
+                          </div>
+                        ) : (
+                          filteredCompanies.map((compName) => {
+                            const isSelected = company.toLowerCase() === compName.toLowerCase();
+                            return (
                               <div
-                                role="option"
-                                aria-selected={selectedRole === ''}
-                                tabIndex={0}
-                                data-role-option
-                                onClick={() => handleRoleSelect('')}
+                                key={compName}
+                                onClick={() => {
+                                  handleSelectCompany(compName);
+                                }}
                                 style={{
-                                  padding: '0.65rem 0.95rem',
+                                  padding: '0.55rem 0.95rem',
                                   cursor: 'pointer',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   gap: '0.5rem',
-                                  fontSize: '0.86rem',
-                                  color: selectedRole === '' ? 'var(--primary-start)' : 'var(--text-primary)',
-                                  fontWeight: selectedRole === '' ? 600 : 400,
-                                  background: selectedRole === '' ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                                  fontSize: '0.84rem',
+                                  color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
+                                  fontWeight: isSelected ? 600 : 400,
+                                  background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
                                   transition: 'background 0.15s ease',
-                                  borderBottom: '1px solid var(--border)',
                                 }}
                                 onMouseEnter={(e) => {
-                                  if (selectedRole !== '') e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                                  if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
                                 }}
                                 onMouseLeave={(e) => {
-                                  if (selectedRole !== '') e.currentTarget.style.background = 'transparent';
+                                  if (!isSelected) e.currentTarget.style.background = 'transparent';
                                 }}
                               >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
-                                  <Briefcase size={13} color="var(--primary-start)" style={{ flexShrink: 0 }} />
-                                  <span style={{ whiteSpace: 'nowrap' }}>All Roles & Categories</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', overflow: 'hidden', minWidth: 0 }}>
+                                  <Building2 size={13} color={isSelected ? 'var(--primary-start)' : 'var(--text-secondary)'} style={{ flexShrink: 0 }} />
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {compName}
+                                  </span>
                                 </div>
-                                {selectedRole === '' && <Check size={14} color="var(--primary-start)" />}
+                                {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
                               </div>
+                            );
+                          })
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-                              {/* Categorized Groups */}
-                              {filteredJobPostGroups.length === 0 ? (
-                                <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-                                  No roles or categories match &ldquo;{roleSearchQuery}&rdquo;
-                                </div>
-                              ) : (
-                                filteredJobPostGroups.map((group, gIdx) => (
-                                  <div key={gIdx} style={{ marginBottom: '0.35rem' }}>
-                                    <div
-                                      style={{
-                                        padding: '0.55rem 0.95rem 0.35rem',
-                                        fontSize: '0.73rem',
-                                        fontWeight: 700,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.04em',
-                                        color: 'var(--primary-start)',
-                                        background: 'var(--tag-bg)',
-                                        borderTop: gIdx > 0 ? '1px solid var(--border)' : 'none',
-                                        borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
-                                      }}
-                                    >
-                                      {group.group}
-                                    </div>
-                                    {group.posts.map((post, pIdx) => {
-                                      const isSelected = selectedRole === post.value;
-                                      return (
-                                        <div
-                                          key={pIdx}
-                                          role="option"
-                                          aria-selected={isSelected}
-                                          tabIndex={0}
-                                          data-role-option
-                                          onClick={() => handleRoleSelect(post.value)}
-                                          style={{
-                                            padding: '0.6rem 0.95rem 0.6rem 1.4rem',
-                                            minHeight: roleDropdownIsMobile ? 44 : undefined,
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            gap: '0.5rem',
-                                            fontSize: '0.84rem',
-                                            color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
-                                            fontWeight: isSelected ? 600 : 400,
-                                            background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                            transition: 'background 0.15s ease',
-                                          }}
-                                          onMouseEnter={(e) => {
-                                            if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
-                                          }}
-                                          onMouseLeave={(e) => {
-                                            if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                          }}
-                                        >
-                                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {post.label}
-                                          </span>
-                                          {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </motion.div>
-                        </>,
-                        document.body
-                      )}
+                {/* Industry Custom Dropdown */}
+                <div
+                  ref={industryDropdownRef}
+                  className="search-refinement-industry"
+                  style={{
+                    position: 'relative',
+                    zIndex: showIndustryDropdown ? 300 : 1,
+                    flex: '1.4',
+                    minWidth: 190,
+                    order: 1,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowIndustryDropdown((prev) => !prev);
+                      setShowRoleDropdown(false);
+                      setShowWorkplaceDropdown(false);
+                      setShowTypeDropdown(false);
+                      setShowLevelDropdown(false);
+                    }}
+                    aria-expanded={showIndustryDropdown}
+                    aria-haspopup="listbox"
+                    aria-label="Filter by industry"
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.4rem',
+                      background: 'var(--input-bg)',
+                      borderRadius: 10,
+                      padding: '0.62rem 0.75rem',
+                      border: showIndustryDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
+                      boxShadow: showIndustryDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
+                      color: industry ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '0.85rem',
+                      fontWeight: industry ? 600 : 400,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden', minWidth: 0 }}>
+                      <span>{selectedIndustryObj.icon}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedIndustryObj.label}
+                      </span>
                     </div>
-
-                    {/* Company Custom Dropdown */}
-                    <div
-                      ref={companyDropdownRef}
-                      className="search-refinement-company"
-                      style={{
-                        position: 'relative',
-                        zIndex: showCompanyDropdown ? 300 : 1,
-                        display: showAdvancedFilters ? 'block' : 'none',
-                        flex: showAdvancedFilters ? '1 1 100%' : '0 0 0',
-                        minWidth: showAdvancedFilters ? '100%' : 0,
-                        order: 6,
-                        gridColumn: showAdvancedFilters ? '1 / -1' : undefined,
-                      }}
-                      id="advanced-company-filter"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCompanyDropdown((prev) => !prev);
-                          setShowRoleDropdown(false);
-                          setShowIndustryDropdown(false);
-                          setShowWorkplaceDropdown(false);
-                          setShowTypeDropdown(false);
-                          setShowLevelDropdown(false);
-                        }}
-                        aria-expanded={showCompanyDropdown}
-                        aria-haspopup="listbox"
-                        aria-label="Filter by company"
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      {industry && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIndustry('');
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIndustry('');
+                            }
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            padding: 2,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--text-secondary)',
+                          }}
+                          title="Clear industry filter"
+                        >
+                          <X size={13} />
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        color="var(--text-secondary)"
                         style={{
-                          width: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.4rem',
-                          background: 'var(--input-bg)',
-                          borderRadius: 10,
-                          padding: '0.62rem 0.75rem',
-                          border: showCompanyDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
-                          boxShadow: showCompanyDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
-                          color: company ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '0.85rem',
-                          fontWeight: company ? 600 : 400,
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.2s ease',
-                          textAlign: 'left',
+                          transform: showIndustryDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {showIndustryDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="glass-panel dropdown-popover-left"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          width: 'max-content',
+                          minWidth: 'max(100%, 280px)',
+                          maxWidth: 'calc(100vw - 32px)',
+                          maxHeight: 320,
+                          overflowY: 'auto',
+                          zIndex: 250,
+                          background: 'var(--dropdown-bg)',
+                          borderRadius: 12,
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-lg)',
+                          padding: '0.35rem 0',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden', minWidth: 0 }}>
-                          <Building2 size={15} color={company ? 'var(--primary-start)' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {company || 'All Companies'}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                          {company && (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCompany('');
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setCompany('');
-                                }
-                              }}
-                              style={{
-                                cursor: 'pointer',
-                                padding: 2,
-                                borderRadius: 4,
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: 'var(--text-secondary)',
-                              }}
-                              title="Clear company filter"
-                            >
-                              <X size={13} />
-                            </span>
-                          )}
-                          <ChevronDown
-                            size={14}
-                            color="var(--text-secondary)"
-                            style={{
-                              transform: showCompanyDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s ease',
-                              flexShrink: 0,
-                            }}
-                          />
-                        </div>
-                      </button>
-
-                      <AnimatePresence>
-                        {showCompanyDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                            className="glass-panel dropdown-popover-right"
-                            style={{
-                              position: 'absolute',
-                              top: 'calc(100% + 6px)',
-                              left: 0,
-                              width: 'max-content',
-                              minWidth: 'max(100%, 260px)',
-                              maxWidth: 'calc(100vw - 32px)',
-                              maxHeight: 320,
-                              overflowY: 'auto',
-                              zIndex: 250,
-                              background: 'var(--dropdown-bg)',
-                              borderRadius: 12,
-                              border: '1px solid var(--border)',
-                              boxShadow: 'var(--shadow-lg)',
-                              padding: '0.4rem 0',
-                            }}
-                          >
-                            {availableCompanies.length > 5 && (
-                              <div style={{ padding: '0.35rem 0.65rem 0.5rem', borderBottom: '1px solid var(--border)' }}>
-                                <input
-                                  type="text"
-                                  placeholder="Search employer..."
-                                  value={companySearchQuery}
-                                  onChange={(e) => setCompanySearchQuery(e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{
-                                    width: '100%',
-                                    padding: '0.45rem 0.65rem',
-                                    borderRadius: 8,
-                                    background: 'var(--input-bg)',
-                                    border: '1px solid var(--border)',
-                                    color: 'var(--text-primary)',
-                                    fontSize: '0.8rem',
-                                    outline: 'none',
-                                  }}
-                                />
-                              </div>
-                            )}
-
-                            {/* All Companies option */}
+                        {INDUSTRY_OPTIONS.map((opt, idx) => {
+                          const isSelected = industry === opt.value;
+                          return (
                             <div
+                              key={idx}
                               onClick={() => {
-                                setCompany('');
-                                setShowCompanyDropdown(false);
-                                setCompanySearchQuery('');
+                                setIndustry(opt.value);
+                                setShowIndustryDropdown(false);
                               }}
                               style={{
                                 padding: '0.62rem 0.95rem',
@@ -3733,763 +3957,562 @@ export default function Home() {
                                 justifyContent: 'space-between',
                                 gap: '0.5rem',
                                 fontSize: '0.84rem',
-                                color: company === '' ? 'var(--primary-start)' : 'var(--text-primary)',
-                                fontWeight: company === '' ? 600 : 400,
-                                background: company === '' ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                                color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
+                                fontWeight: isSelected ? 600 : 400,
+                                background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
                                 transition: 'background 0.15s ease',
                               }}
                               onMouseEnter={(e) => {
-                                if (company !== '') e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                                if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
                               }}
                               onMouseLeave={(e) => {
-                                if (company !== '') e.currentTarget.style.background = 'transparent';
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                                <Building2 size={14} color={company === '' ? 'var(--primary-start)' : 'var(--text-secondary)'} />
-                                <span>All Companies</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: 1 }}>
+                                <span style={{ fontSize: '1rem', flexShrink: 0 }}>{opt.icon}</span>
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.86rem' }}>
+                                  {opt.label}
+                                </span>
                               </div>
-                              {company === '' && <Check size={14} color="var(--primary-start)" />}
+                              {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
                             </div>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-                            {filteredCompanies.length === 0 ? (
-                              <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                No companies found matching &quot;{companySearchQuery}&quot;
-                              </div>
-                            ) : (
-                              filteredCompanies.map((compName) => {
-                                const isSelected = company.toLowerCase() === compName.toLowerCase();
-                                return (
-                                  <div
-                                    key={compName}
-                                    onClick={() => {
-                                      handleSelectCompany(compName);
-                                    }}
-                                    style={{
-                                      padding: '0.55rem 0.95rem',
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      gap: '0.5rem',
-                                      fontSize: '0.84rem',
-                                      color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
-                                      fontWeight: isSelected ? 600 : 400,
-                                      background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                      transition: 'background 0.15s ease',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                    }}
-                                  >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', overflow: 'hidden', minWidth: 0 }}>
-                                      <Building2 size={13} color={isSelected ? 'var(--primary-start)' : 'var(--text-secondary)'} style={{ flexShrink: 0 }} />
-                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {compName}
-                                      </span>
-                                    </div>
-                                    {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                {/* Workplace Custom Dropdown */}
+                <div
+                  ref={workplaceDropdownRef}
+                  className="search-refinement-workplace"
+                  aria-hidden="true"
+                  style={{
+                    display: 'none',
+                    position: 'relative',
+                    zIndex: showWorkplaceDropdown ? 300 : 1,
+                    flex: '0.85',
+                    minWidth: 140,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowWorkplaceDropdown((prev) => !prev);
+                      setShowRoleDropdown(false);
+                      setShowIndustryDropdown(false);
+                      setShowTypeDropdown(false);
+                      setShowLevelDropdown(false);
+                    }}
+                    aria-expanded={showWorkplaceDropdown}
+                    aria-haspopup="listbox"
+                    aria-label="Filter by workplace model"
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.4rem',
+                      background: 'var(--input-bg)',
+                      borderRadius: 10,
+                      padding: '0.62rem 0.75rem',
+                      border: showWorkplaceDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
+                      boxShadow: showWorkplaceDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
+                      color: remote ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '0.85rem',
+                      fontWeight: remote ? 600 : 400,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden', minWidth: 0 }}>
+                      <span>{selectedWorkplaceObj.icon}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedWorkplaceObj.label}
+                      </span>
                     </div>
-
-                    {/* Industry Custom Dropdown */}
-                    <div
-                      ref={industryDropdownRef}
-                      className="search-refinement-industry"
-                      style={{
-                        position: 'relative',
-                        zIndex: showIndustryDropdown ? 300 : 1,
-                        flex: '1.4',
-                        minWidth: 190,
-                        order: 1,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowIndustryDropdown((prev) => !prev);
-                          setShowRoleDropdown(false);
-                          setShowWorkplaceDropdown(false);
-                          setShowTypeDropdown(false);
-                          setShowLevelDropdown(false);
-                        }}
-                        aria-expanded={showIndustryDropdown}
-                        aria-haspopup="listbox"
-                        aria-label="Filter by industry"
-                        style={{
-                          width: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.4rem',
-                          background: 'var(--input-bg)',
-                          borderRadius: 10,
-                          padding: '0.62rem 0.75rem',
-                          border: showIndustryDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
-                          boxShadow: showIndustryDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
-                          color: industry ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '0.85rem',
-                          fontWeight: industry ? 600 : 400,
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.2s ease',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden', minWidth: 0 }}>
-                          <span>{selectedIndustryObj.icon}</span>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {selectedIndustryObj.label}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                          {industry && (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIndustry('');
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setIndustry('');
-                                }
-                              }}
-                              style={{
-                                cursor: 'pointer',
-                                padding: 2,
-                                borderRadius: 4,
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: 'var(--text-secondary)',
-                              }}
-                              title="Clear industry filter"
-                            >
-                              <X size={13} />
-                            </span>
-                          )}
-                          <ChevronDown
-                            size={14}
-                            color="var(--text-secondary)"
-                            style={{
-                              transform: showIndustryDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s ease',
-                              flexShrink: 0,
-                            }}
-                          />
-                        </div>
-                      </button>
-
-                      <AnimatePresence>
-                        {showIndustryDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                            className="glass-panel dropdown-popover-left"
-                            style={{
-                              position: 'absolute',
-                              top: 'calc(100% + 6px)',
-                              left: 0,
-                              width: 'max-content',
-                              minWidth: 'max(100%, 280px)',
-                              maxWidth: 'calc(100vw - 32px)',
-                              maxHeight: 320,
-                              overflowY: 'auto',
-                              zIndex: 250,
-                              background: 'var(--dropdown-bg)',
-                              borderRadius: 12,
-                              border: '1px solid var(--border)',
-                              boxShadow: 'var(--shadow-lg)',
-                              padding: '0.35rem 0',
-                            }}
-                          >
-                            {INDUSTRY_OPTIONS.map((opt, idx) => {
-                              const isSelected = industry === opt.value;
-                              return (
-                                <div
-                                  key={idx}
-                                  onClick={() => {
-                                    setIndustry(opt.value);
-                                    setShowIndustryDropdown(false);
-                                  }}
-                                  style={{
-                                    padding: '0.62rem 0.95rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '0.5rem',
-                                    fontSize: '0.84rem',
-                                    color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
-                                    fontWeight: isSelected ? 600 : 400,
-                                    background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                    transition: 'background 0.15s ease',
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                  }}
-                                >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: 1 }}>
-                                    <span style={{ fontSize: '1rem', flexShrink: 0 }}>{opt.icon}</span>
-                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.86rem' }}>
-                                      {opt.label}
-                                    </span>
-                                  </div>
-                                  {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
-                                </div>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    {/* Workplace Custom Dropdown */}
-                    <div
-                      ref={workplaceDropdownRef}
-                      className="search-refinement-workplace"
-                      aria-hidden="true"
-                      style={{
-                        display: 'none',
-                        position: 'relative',
-                        zIndex: showWorkplaceDropdown ? 300 : 1,
-                        flex: '0.85',
-                        minWidth: 140,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowWorkplaceDropdown((prev) => !prev);
-                          setShowRoleDropdown(false);
-                          setShowIndustryDropdown(false);
-                          setShowTypeDropdown(false);
-                          setShowLevelDropdown(false);
-                        }}
-                        aria-expanded={showWorkplaceDropdown}
-                        aria-haspopup="listbox"
-                        aria-label="Filter by workplace model"
-                        style={{
-                          width: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.4rem',
-                          background: 'var(--input-bg)',
-                          borderRadius: 10,
-                          padding: '0.62rem 0.75rem',
-                          border: showWorkplaceDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
-                          boxShadow: showWorkplaceDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
-                          color: remote ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '0.85rem',
-                          fontWeight: remote ? 600 : 400,
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.2s ease',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden', minWidth: 0 }}>
-                          <span>{selectedWorkplaceObj.icon}</span>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {selectedWorkplaceObj.label}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                          {remote && (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRemote('');
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setRemote('');
-                                }
-                              }}
-                              style={{
-                                cursor: 'pointer',
-                                padding: 2,
-                                borderRadius: 4,
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: 'var(--text-secondary)',
-                              }}
-                              title="Clear workplace filter"
-                            >
-                              <X size={13} />
-                            </span>
-                          )}
-                          <ChevronDown
-                            size={14}
-                            color="var(--text-secondary)"
-                            style={{
-                              transform: showWorkplaceDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s ease',
-                              flexShrink: 0,
-                            }}
-                          />
-                        </div>
-                      </button>
-
-                      <AnimatePresence>
-                        {showWorkplaceDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                            className="glass-panel dropdown-popover-right"
-                            style={{
-                              position: 'absolute',
-                              top: 'calc(100% + 6px)',
-                              left: 0,
-                              width: 'max-content',
-                              minWidth: 'max(100%, 190px)',
-                              maxWidth: 'calc(100vw - 32px)',
-                              zIndex: 250,
-                              background: 'var(--dropdown-bg)',
-                              borderRadius: 12,
-                              border: '1px solid var(--border)',
-                              boxShadow: 'var(--shadow-lg)',
-                              overflow: 'hidden',
-                              padding: '0.35rem 0',
-                            }}
-                          >
-                            {WORKPLACE_OPTIONS.map((opt, idx) => {
-                              const isSelected = remote === opt.value;
-                              return (
-                                <div
-                                  key={idx}
-                                  onClick={() => {
-                                    setRemote(opt.value);
-                                    setShowWorkplaceDropdown(false);
-                                  }}
-                                  style={{
-                                    padding: '0.62rem 0.95rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '0.5rem',
-                                    fontSize: '0.84rem',
-                                    color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
-                                    fontWeight: isSelected ? 600 : 400,
-                                    background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                    transition: 'background 0.15s ease',
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                  }}
-                                >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: 1 }}>
-                                    <span style={{ flexShrink: 0 }}>{opt.icon}</span>
-                                    <span style={{ whiteSpace: 'nowrap' }}>{opt.label}</span>
-                                  </div>
-                                  {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
-                                </div>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    {/* Type Custom Dropdown */}
-                    <div
-                      ref={typeDropdownRef}
-                      className="search-refinement-type"
-                      style={{
-                        position: 'relative',
-                        zIndex: showTypeDropdown ? 300 : 1,
-                        flex: '0.75',
-                        minWidth: 120,
-                        order: 3,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowTypeDropdown((prev) => !prev);
-                          setShowRoleDropdown(false);
-                          setShowIndustryDropdown(false);
-                          setShowWorkplaceDropdown(false);
-                          setShowLevelDropdown(false);
-                        }}
-                        aria-expanded={showTypeDropdown}
-                        aria-haspopup="listbox"
-                        aria-label="Filter by employment type"
-                        style={{
-                          width: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.4rem',
-                          background: 'var(--input-bg)',
-                          borderRadius: 10,
-                          padding: '0.62rem 0.75rem',
-                          border: showTypeDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
-                          boxShadow: showTypeDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
-                          color: type ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '0.85rem',
-                          fontWeight: type ? 600 : 400,
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.2s ease',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {selectedTypeObj.label}
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                          {type && (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setType('');
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setType('');
-                                }
-                              }}
-                              style={{
-                                cursor: 'pointer',
-                                padding: 2,
-                                borderRadius: 4,
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: 'var(--text-secondary)',
-                              }}
-                              title="Clear employment type filter"
-                            >
-                              <X size={13} />
-                            </span>
-                          )}
-                          <ChevronDown
-                            size={14}
-                            color="var(--text-secondary)"
-                            style={{
-                              transform: showTypeDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s ease',
-                              flexShrink: 0,
-                            }}
-                          />
-                        </div>
-                      </button>
-
-                      <AnimatePresence>
-                        {showTypeDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                            className="glass-panel dropdown-popover-left"
-                            style={{
-                              position: 'absolute',
-                              top: 'calc(100% + 6px)',
-                              left: 0,
-                              width: 'max-content',
-                              minWidth: 'max(100%, 175px)',
-                              maxWidth: 'calc(100vw - 32px)',
-                              zIndex: 250,
-                              background: 'var(--dropdown-bg)',
-                              borderRadius: 12,
-                              border: '1px solid var(--border)',
-                              boxShadow: 'var(--shadow-lg)',
-                              overflow: 'hidden',
-                              padding: '0.35rem 0',
-                            }}
-                          >
-                            {TYPE_OPTIONS.map((opt, idx) => {
-                              const isSelected = type === opt.value;
-                              return (
-                                <div
-                                  key={idx}
-                                  onClick={() => {
-                                    setType(opt.value);
-                                    setShowTypeDropdown(false);
-                                  }}
-                                  style={{
-                                    padding: '0.62rem 0.95rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '0.5rem',
-                                    fontSize: '0.84rem',
-                                    color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
-                                    fontWeight: isSelected ? 600 : 400,
-                                    background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                    transition: 'background 0.15s ease',
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                  }}
-                                >
-                                  <span style={{ whiteSpace: 'nowrap', flex: 1 }}>{opt.label}</span>
-                                  {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
-                                </div>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    {/* Level Custom Dropdown */}
-                    <div
-                      ref={levelDropdownRef}
-                      className="search-refinement-level"
-                      style={{
-                        position: 'relative',
-                        zIndex: showLevelDropdown ? 300 : 1,
-                        flex: '0.8',
-                        minWidth: 130,
-                        order: 4,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowLevelDropdown((prev) => !prev);
-                          setShowRoleDropdown(false);
-                          setShowIndustryDropdown(false);
-                          setShowWorkplaceDropdown(false);
-                          setShowTypeDropdown(false);
-                        }}
-                        aria-expanded={showLevelDropdown}
-                        aria-haspopup="listbox"
-                        aria-label="Filter by seniority level"
-                        style={{
-                          width: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.4rem',
-                          background: 'var(--input-bg)',
-                          borderRadius: 10,
-                          padding: '0.62rem 0.75rem',
-                          border: showLevelDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
-                          boxShadow: showLevelDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
-                          color: level ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '0.85rem',
-                          fontWeight: level ? 600 : 400,
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.2s ease',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {selectedLevelObj.label}
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                          {level && (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLevel('');
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setLevel('');
-                                }
-                              }}
-                              style={{
-                                cursor: 'pointer',
-                                padding: 2,
-                                borderRadius: 4,
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: 'var(--text-secondary)',
-                              }}
-                              title="Clear seniority filter"
-                            >
-                              <X size={13} />
-                            </span>
-                          )}
-                          <ChevronDown
-                            size={14}
-                            color="var(--text-secondary)"
-                            style={{
-                              transform: showLevelDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s ease',
-                              flexShrink: 0,
-                            }}
-                          />
-                        </div>
-                      </button>
-
-                      <AnimatePresence>
-                        {showLevelDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                            className="glass-panel dropdown-popover-right"
-                            style={{
-                              position: 'absolute',
-                              top: 'calc(100% + 6px)',
-                              left: 0,
-                              width: 'max-content',
-                              minWidth: 'max(100%, 185px)',
-                              maxWidth: 'calc(100vw - 32px)',
-                              zIndex: 250,
-                              background: 'var(--dropdown-bg)',
-                              borderRadius: 12,
-                              border: '1px solid var(--border)',
-                              boxShadow: 'var(--shadow-lg)',
-                              overflow: 'hidden',
-                              padding: '0.35rem 0',
-                            }}
-                          >
-                            {LEVEL_OPTIONS.map((opt, idx) => {
-                              const isSelected = level === opt.value;
-                              return (
-                                <div
-                                  key={idx}
-                                  onClick={() => {
-                                    setLevel(opt.value);
-                                    setShowLevelDropdown(false);
-                                  }}
-                                  style={{
-                                    padding: '0.62rem 0.95rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '0.5rem',
-                                    fontSize: '0.84rem',
-                                    color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
-                                    fontWeight: isSelected ? 600 : 400,
-                                    background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                    transition: 'background 0.15s ease',
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = 'transparent';
-                                  }}
-                                >
-                                  <span style={{ whiteSpace: 'nowrap', flex: 1 }}>{opt.label}</span>
-                                  {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
-                                </div>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <button
-                      type="button"
-                      aria-expanded={showAdvancedFilters}
-                      aria-controls="advanced-company-filter"
-                      onClick={() => setShowAdvancedFilters((current) => !current)}
-                      style={{
-                        order: 5,
-                        background: 'var(--input-bg)',
-                        border: '1px solid var(--input-border)',
-                        color: 'var(--text-secondary)',
-                        borderRadius: 10,
-                        fontSize: '0.82rem',
-                        padding: '0.62rem 0.8rem',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <SlidersHorizontal size={14} />
-                      <span>Advanced filters</span>
-                      {company && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      {remote && (
                         <span
-                          aria-label="1 active advanced filter"
-                          style={{
-                            minWidth: 18,
-                            height: 18,
-                            borderRadius: 999,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: 'rgba(99, 102, 241, 0.18)',
-                            color: 'var(--primary-start)',
-                            fontSize: '0.7rem',
-                            fontWeight: 700,
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRemote('');
                           }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setRemote('');
+                            }
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            padding: 2,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--text-secondary)',
+                          }}
+                          title="Clear workplace filter"
                         >
-                          1
+                          <X size={13} />
                         </span>
                       )}
-                    </button>
-
-                    {/* Clear Filters CTA if active */}
-                    {searched && (appliedSearchCriteria.query || appliedSearchCriteria.company || appliedSearchCriteria.location || appliedSearchCriteria.remote || appliedSearchCriteria.role || appliedSearchCriteria.type || appliedSearchCriteria.level || appliedSearchCriteria.industry) && (
-                      <button
-                        type="button"
-                        onClick={clearAllFilters}
-                        className="search-refinement-reset"
+                      <ChevronDown
+                        size={14}
+                        color="var(--text-secondary)"
                         style={{
-                          order: 7,
-                          background: 'rgba(255, 255, 255, 0.04)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          color: 'var(--text-secondary)',
-                          borderRadius: 10,
-                          fontSize: '0.82rem',
-                          padding: '0.65rem 0.85rem',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
-                          whiteSpace: 'nowrap',
+                          transform: showWorkplaceDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {showWorkplaceDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="glass-panel dropdown-popover-right"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          width: 'max-content',
+                          minWidth: 'max(100%, 190px)',
+                          maxWidth: 'calc(100vw - 32px)',
+                          zIndex: 250,
+                          background: 'var(--dropdown-bg)',
+                          borderRadius: 12,
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-lg)',
+                          overflow: 'hidden',
+                          padding: '0.35rem 0',
                         }}
                       >
-                        <X size={13} />
-                        <span>Reset</span>
-                      </button>
+                        {WORKPLACE_OPTIONS.map((opt, idx) => {
+                          const isSelected = remote === opt.value;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setRemote(opt.value);
+                                setShowWorkplaceDropdown(false);
+                              }}
+                              style={{
+                                padding: '0.62rem 0.95rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.5rem',
+                                fontSize: '0.84rem',
+                                color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
+                                fontWeight: isSelected ? 600 : 400,
+                                background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                                transition: 'background 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: 1 }}>
+                                <span style={{ flexShrink: 0 }}>{opt.icon}</span>
+                                <span style={{ whiteSpace: 'nowrap' }}>{opt.label}</span>
+                              </div>
+                              {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
+                            </div>
+                          );
+                        })}
+                      </motion.div>
                     )}
-                  </div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Type Custom Dropdown */}
+                <div
+                  ref={typeDropdownRef}
+                  className="search-refinement-type"
+                  style={{
+                    position: 'relative',
+                    zIndex: showTypeDropdown ? 300 : 1,
+                    flex: '0.75',
+                    minWidth: 120,
+                    order: 3,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTypeDropdown((prev) => !prev);
+                      setShowRoleDropdown(false);
+                      setShowIndustryDropdown(false);
+                      setShowWorkplaceDropdown(false);
+                      setShowLevelDropdown(false);
+                    }}
+                    aria-expanded={showTypeDropdown}
+                    aria-haspopup="listbox"
+                    aria-label="Filter by employment type"
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.4rem',
+                      background: 'var(--input-bg)',
+                      borderRadius: 10,
+                      padding: '0.62rem 0.75rem',
+                      border: showTypeDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
+                      boxShadow: showTypeDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
+                      color: type ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '0.85rem',
+                      fontWeight: type ? 600 : 400,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedTypeObj.label}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      {type && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setType('');
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setType('');
+                            }
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            padding: 2,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--text-secondary)',
+                          }}
+                          title="Clear employment type filter"
+                        >
+                          <X size={13} />
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        color="var(--text-secondary)"
+                        style={{
+                          transform: showTypeDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {showTypeDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="glass-panel dropdown-popover-left"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          width: 'max-content',
+                          minWidth: 'max(100%, 175px)',
+                          maxWidth: 'calc(100vw - 32px)',
+                          zIndex: 250,
+                          background: 'var(--dropdown-bg)',
+                          borderRadius: 12,
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-lg)',
+                          overflow: 'hidden',
+                          padding: '0.35rem 0',
+                        }}
+                      >
+                        {TYPE_OPTIONS.map((opt, idx) => {
+                          const isSelected = type === opt.value;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setType(opt.value);
+                                setShowTypeDropdown(false);
+                              }}
+                              style={{
+                                padding: '0.62rem 0.95rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.5rem',
+                                fontSize: '0.84rem',
+                                color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
+                                fontWeight: isSelected ? 600 : 400,
+                                background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                                transition: 'background 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              <span style={{ whiteSpace: 'nowrap', flex: 1 }}>{opt.label}</span>
+                              {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
+                            </div>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Level Custom Dropdown */}
+                <div
+                  ref={levelDropdownRef}
+                  className="search-refinement-level"
+                  style={{
+                    position: 'relative',
+                    zIndex: showLevelDropdown ? 300 : 1,
+                    flex: '0.8',
+                    minWidth: 130,
+                    order: 4,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLevelDropdown((prev) => !prev);
+                      setShowRoleDropdown(false);
+                      setShowIndustryDropdown(false);
+                      setShowWorkplaceDropdown(false);
+                      setShowTypeDropdown(false);
+                    }}
+                    aria-expanded={showLevelDropdown}
+                    aria-haspopup="listbox"
+                    aria-label="Filter by seniority level"
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.4rem',
+                      background: 'var(--input-bg)',
+                      borderRadius: 10,
+                      padding: '0.62rem 0.75rem',
+                      border: showLevelDropdown ? '1px solid var(--border-focus)' : '1px solid var(--input-border)',
+                      boxShadow: showLevelDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : 'none',
+                      color: level ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '0.85rem',
+                      fontWeight: level ? 600 : 400,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedLevelObj.label}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      {level && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLevel('');
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setLevel('');
+                            }
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            padding: 2,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--text-secondary)',
+                          }}
+                          title="Clear seniority filter"
+                        >
+                          <X size={13} />
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        color="var(--text-secondary)"
+                        style={{
+                          transform: showLevelDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {showLevelDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="glass-panel dropdown-popover-right"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          width: 'max-content',
+                          minWidth: 'max(100%, 185px)',
+                          maxWidth: 'calc(100vw - 32px)',
+                          zIndex: 250,
+                          background: 'var(--dropdown-bg)',
+                          borderRadius: 12,
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-lg)',
+                          overflow: 'hidden',
+                          padding: '0.35rem 0',
+                        }}
+                      >
+                        {LEVEL_OPTIONS.map((opt, idx) => {
+                          const isSelected = level === opt.value;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setLevel(opt.value);
+                                setShowLevelDropdown(false);
+                              }}
+                              style={{
+                                padding: '0.62rem 0.95rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.5rem',
+                                fontSize: '0.84rem',
+                                color: isSelected ? 'var(--primary-start)' : 'var(--text-primary)',
+                                fontWeight: isSelected ? 600 : 400,
+                                background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                                transition: 'background 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              <span style={{ whiteSpace: 'nowrap', flex: 1 }}>{opt.label}</span>
+                              {isSelected && <Check size={14} color="var(--primary-start)" style={{ flexShrink: 0 }} />}
+                            </div>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <button
+                  type="button"
+                  aria-expanded={showAdvancedFilters}
+                  aria-controls="advanced-company-filter"
+                  onClick={() => setShowAdvancedFilters((current) => !current)}
+                  style={{
+                    order: 5,
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
+                    color: 'var(--text-secondary)',
+                    borderRadius: 10,
+                    fontSize: '0.82rem',
+                    padding: '0.62rem 0.8rem',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <SlidersHorizontal size={14} />
+                  <span>Advanced filters</span>
+                  {company && (
+                    <span
+                      aria-label="1 active advanced filter"
+                      style={{
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 999,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'rgba(99, 102, 241, 0.18)',
+                        color: 'var(--primary-start)',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      1
+                    </span>
+                  )}
+                </button>
+
+                {/* Clear Filters CTA if active */}
+                {searched && (appliedSearchCriteria.query || appliedSearchCriteria.company || appliedSearchCriteria.location || appliedSearchCriteria.remote || appliedSearchCriteria.role || appliedSearchCriteria.type || appliedSearchCriteria.level || appliedSearchCriteria.industry) && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="search-refinement-reset"
+                    style={{
+                      order: 7,
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      color: 'var(--text-secondary)',
+                      borderRadius: 10,
+                      fontSize: '0.82rem',
+                      padding: '0.65rem 0.85rem',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <X size={13} />
+                    <span>Reset</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Active Filter Chips Bar */}
@@ -5936,7 +5959,7 @@ export default function Home() {
                           borderRadius: 8,
                           border: '1px solid rgba(234, 179, 8, 0.25)',
                           fontSize: '0.75rem',
-                          color: '#facc15',
+                          color: '#5f5426ff',
                         }}
                       >
                         Auto-renewal cancelled. Premium access remains active until the end of your billing cycle.
@@ -5971,9 +5994,13 @@ export default function Home() {
                         width: '100%',
                         padding: '0.7rem 1rem',
                         borderRadius: 10,
-                        background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
-                        color: '#ffffff',
-                        border: 'none',
+                        background: billingFlow?.hasPendingVerification
+                          ? 'rgba(245, 158, 11, 0.16)'
+                          : 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                        color: billingFlow?.hasPendingVerification ? '#fde68a' : '#ffffff',
+                        border: billingFlow?.hasPendingVerification
+                          ? '1px solid rgba(245, 158, 11, 0.35)'
+                          : 'none',
                         fontSize: '0.85rem',
                         fontWeight: 700,
                         cursor: 'pointer',
@@ -5981,11 +6008,27 @@ export default function Home() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '0.45rem',
-                        boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+                        boxShadow: billingFlow?.hasPendingVerification
+                          ? 'none'
+                          : '0 4px 14px rgba(79, 70, 229, 0.35)',
                       }}
                     >
-                      <span>Upgrade to Premium (₹499/mo)</span>
-                      <Sparkles size={14} />
+                      {billingFlow?.hasPendingVerification ? (
+                        <>
+                          <Clock size={14} />
+                          <span>View Payment Verification Status</span>
+                        </>
+                      ) : billingFlow?.hasRejectedSubmission ? (
+                        <>
+                          <AlertCircle size={14} />
+                          <span>Review Payment Verification Status</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Upgrade to Premium (₹499/mo)</span>
+                          <Sparkles size={14} />
+                        </>
+                      )}
                     </button>
                   </div>
                 )}
@@ -6022,8 +6065,13 @@ export default function Home() {
           isOpen={isPremiumOfferOpen}
           onClose={closePremiumOfferModal}
           onSubscriptionSuccess={handleSubscriptionSuccess}
+          userId={user?.id}
           userEmail={user?.email}
           userName={user?.name}
+          isPremium={isPremium}
+          billingFlow={billingFlow}
+          isBillingResolved={isBillingResolved}
+          onBillingFlowChange={syncBillingFlow}
         />
       </main>
 

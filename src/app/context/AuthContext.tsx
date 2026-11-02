@@ -7,6 +7,7 @@ import {
   getInitials,
 } from '@/modules/jobs/domain/auth.validation';
 import type { UserEntitlement } from '@/modules/billing/domain/subscription.types';
+import type { BillingFlowSnapshot } from '@/modules/billing/domain/billing-flow-state';
 
 export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'error';
 export type AuthMode = 'signin' | 'signup' | 'forgot-password';
@@ -79,6 +80,13 @@ interface AuthContextType {
   savedJobs: SavedJob[];
   savedJobIds: Set<string>;
   entitlement: UserEntitlement | null;
+  billingFlow: BillingFlowSnapshot | null;
+  isBillingResolved: boolean;
+  syncBillingFlow: (
+    updater:
+      | BillingFlowSnapshot
+      | ((prev: BillingFlowSnapshot | null) => BillingFlowSnapshot | null)
+  ) => void;
   isPremium: boolean;
   isAdmin: boolean;
   isPremiumOfferOpen: boolean;
@@ -128,6 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [pendingIntent, setPendingIntent] = useState<PendingAction | null>(null);
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
   const [entitlement, setEntitlement] = useState<UserEntitlement | null>(null);
+  const [billingFlow, setBillingFlow] = useState<BillingFlowSnapshot | null>(null);
+  const [isBillingResolved, setIsBillingResolved] = useState(false);
   const [isPremiumOfferOpen, setIsPremiumOfferOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const authEpochRef = useRef(0);
@@ -152,21 +162,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsPremiumOfferOpen(false);
   }, []);
 
+  const syncBillingFlow = useCallback(
+    (
+      updater:
+        | BillingFlowSnapshot
+        | ((prev: BillingFlowSnapshot | null) => BillingFlowSnapshot | null)
+    ) => {
+      setBillingFlow((prev) => (typeof updater === 'function' ? updater(prev) : updater));
+      setIsBillingResolved(true);
+    },
+    []
+  );
+
   const refreshEntitlement = useCallback(async (expectedEpoch = authEpochRef.current): Promise<UserEntitlement | null> => {
     try {
       const res = await fetch('/api/billing/status', {
+        cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (res.ok) {
         const data = await res.json();
         if (expectedEpoch !== authEpochRef.current) return null;
+        if (data.billingFlow) {
+          setBillingFlow(data.billingFlow);
+        }
         if (data.entitlement) {
           setEntitlement(data.entitlement);
+          setIsBillingResolved(true);
           return data.entitlement;
         }
       }
     } catch (err) {
       console.warn('[AuthContext] Failed to fetch billing status:', err);
+    }
+    if (expectedEpoch === authEpochRef.current) {
+      setIsBillingResolved(true);
     }
     return null;
   }, []);
@@ -224,6 +254,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const data = await res.json();
           if (data.authenticated && data.user) {
             setUser(data.user);
+            setBillingFlow(null);
+            setIsBillingResolved(false);
             setStatus('authenticated');
             // Concurrently restore saved jobs and authoritative billing entitlement
             const [userEntitlement] = await Promise.all([
@@ -276,12 +308,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (expectedEpoch === authEpochRef.current) {
           setUser(null);
+          setBillingFlow(null);
+          setIsBillingResolved(true);
           setStatus('anonymous');
         }
       } catch (err) {
         console.warn('[AuthContext] Session check failed, starting in anonymous mode:', err);
         if (isMounted && expectedEpoch === authEpochRef.current) {
           setUser(null);
+          setBillingFlow(null);
+          setIsBillingResolved(true);
           setStatus('anonymous');
         }
       }
@@ -413,6 +449,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setSavedJobs([]);
       setEntitlement(null);
+      setBillingFlow(null);
+      setIsBillingResolved(false);
       closeAuthModal();
 
       const action = pendingIntent;
@@ -495,6 +533,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (attemptId !== authAttemptRef.current) return;
         const authEpoch = ++authEpochRef.current;
         setUser(data.user);
+        setBillingFlow(null);
+        setIsBillingResolved(false);
         setStatus('authenticated');
         if (data.isDevDemo) {
           showToast('Signed in with Google (Dev Mode). Add credentials to .env.local for live accounts.', 'info');
@@ -529,6 +569,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (attemptId !== authAttemptRef.current) return;
       const authEpoch = ++authEpochRef.current;
       setUser(data.user);
+      setBillingFlow(null);
+      setIsBillingResolved(false);
       setStatus('authenticated');
       showToast(
         `Welcome back, ${data.user.name}! Full company details and direct ATS application links are unlocked.`,
@@ -565,6 +607,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (attemptId !== authAttemptRef.current) return;
       const authEpoch = ++authEpochRef.current;
       setUser(resData.user);
+      setBillingFlow(null);
+      setIsBillingResolved(false);
       setStatus('authenticated');
       showToast(
         `Welcome to JobNexus, ${resData.user.name}! Your account is ready and direct ATS application links are unlocked.`,
@@ -661,6 +705,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSavedJobs([]);
     setEntitlement(null);
+    setBillingFlow(null);
+    setIsBillingResolved(true);
     setIsPremiumOfferOpen(false);
     setStatus('anonymous');
     setPendingIntent(null);
@@ -693,6 +739,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         savedJobs,
         savedJobIds,
         entitlement,
+        billingFlow,
+        isBillingResolved,
+        syncBillingFlow,
         isPremium,
         isAdmin,
         isPremiumOfferOpen,

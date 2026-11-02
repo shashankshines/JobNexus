@@ -25,13 +25,23 @@ import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 import { buildUpiPaymentUri } from './upi-payment-uri';
 import { UpiQrCode } from './UpiQrCode';
 import type { PaymentOrder, PaymentSubmission, UpiPaymentStep } from './types';
+import type { BillingFlowSnapshot } from '@/modules/billing/domain/billing-flow-state';
 
 interface UpiPaymentFlowProps {
   onClose: () => void;
   onSubscriptionSuccess?: () => void;
+  userId?: string;
   userEmail?: string;
   userName?: string;
   isAuthenticated?: boolean;
+  isPremium?: boolean;
+  billingFlow?: BillingFlowSnapshot | null;
+  isBillingResolved?: boolean;
+  onBillingFlowChange?: (
+    updater:
+      | BillingFlowSnapshot
+      | ((prev: BillingFlowSnapshot | null) => BillingFlowSnapshot | null)
+  ) => void;
   onRequireAuth?: () => void;
 }
 
@@ -39,20 +49,35 @@ export function UpiPaymentFlow({
   onClose,
   onSubscriptionSuccess,
   isAuthenticated = false,
+  isPremium = false,
+  billingFlow,
+  isBillingResolved,
+  onBillingFlowChange,
   onRequireAuth,
 }: UpiPaymentFlowProps) {
-  // Step state
-  const [step, setStep] = useState<UpiPaymentStep>('plan_review');
+  const isContextResolved = !isAuthenticated || isBillingResolved === true;
+
+  // Step state — initialized directly from authoritative billingFlow when resolved; never guesses 'plan_review' while unresolved
+  const [isResolvingInitialState, setIsResolvingInitialState] = useState<boolean>(!isContextResolved);
+  const [step, setStep] = useState<UpiPaymentStep>(() => {
+    if (!isAuthenticated) return 'plan_review';
+    if (billingFlow?.step) return billingFlow.step;
+    return isPremium ? 'status_view' : 'plan_review';
+  });
 
   // Authoritative server data
-  const [order, setOrder] = useState<PaymentOrder | null>(null);
-  const [submission, setSubmission] = useState<PaymentSubmission | null>(null);
+  const [order, setOrder] = useState<PaymentOrder | null>(() => billingFlow?.order ?? null);
+  const [submission, setSubmission] = useState<PaymentSubmission | null>(
+    () => billingFlow?.submission ?? null
+  );
 
   // Loading & In-flight states
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
-  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(() =>
+    billingFlow?.checkedAt ? new Date(billingFlow.checkedAt) : null
+  );
 
   // Form input states
   const [utrInput, setUtrInput] = useState('');
@@ -65,56 +90,109 @@ export function UpiPaymentFlow({
   const [copySuccess, setCopySuccess] = useState(false);
   const [emailDeliveryNotice, setEmailDeliveryNotice] = useState<string | null>(null);
 
-  // ---------------------------------------------------------------------------
-  // Check Existing Status on Mount / Open
-  // ---------------------------------------------------------------------------
-  const checkInitialStatus = useCallback(async () => {
-    if (!isAuthenticated) return;
-
-    try {
-      // 1. Check if user already has an active or pending submission
-      const subRes = await fetch('/api/billing/submit');
-      if (subRes.ok) {
-        const subData = await subRes.json();
-        const submissions: PaymentSubmission[] = subData.submissions || [];
-        const pending = submissions.find((s) => s.status === 'pending_verification');
-
-        if (pending) {
-          setSubmission(pending);
-          setStep('status_view');
-          setLastCheckedAt(new Date());
-          return;
-        }
-
-        const approved = submissions.find((s) => s.status === 'approved');
-        if (approved) {
-          setSubmission(approved);
-          setStep('status_view');
-          setLastCheckedAt(new Date());
-          return;
-        }
+  const commitBillingFlowUpdate = useCallback(
+    (next: {
+      step: UpiPaymentStep;
+      order: PaymentOrder | null;
+      submission: PaymentSubmission | null;
+      checkedAt?: string;
+    }) => {
+      setStep(next.step);
+      setOrder(next.order);
+      setSubmission(next.submission);
+      const checkedIso = next.checkedAt || new Date().toISOString();
+      setLastCheckedAt(new Date(checkedIso));
+      if (onBillingFlowChange) {
+        onBillingFlowChange({
+          step: next.step,
+          order: next.order,
+          submission: next.submission,
+          hasPendingVerification: next.submission?.status === 'pending_verification',
+          hasRejectedSubmission: next.submission?.status === 'rejected' && !next.order,
+          checkedAt: checkedIso,
+        });
       }
+    },
+    [onBillingFlowChange]
+  );
 
-      // 2. Check if user has an active, unexpired order
-      const orderRes = await fetch('/api/billing/order');
-      if (orderRes.ok) {
-        const orderData = await orderRes.json();
-        if (orderData.order && orderData.order.status === 'created') {
-          setOrder(orderData.order);
-        }
-      }
-    } catch (err) {
-      console.warn('[UpiPaymentFlow] Initial status check warning:', err);
-    }
-  }, [isAuthenticated]);
-
-  const hasCheckedInitialStatusRef = React.useRef(false);
+  // ---------------------------------------------------------------------------
+  // Resolve Initial State ONLY if Modal Opened Before AuthContext Finished Sync
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (!hasCheckedInitialStatusRef.current && isAuthenticated) {
-      hasCheckedInitialStatusRef.current = true;
-      checkInitialStatus();
+    if (!isResolvingInitialState) return;
+
+    // 1. If AuthContext just finished resolving billingFlow, hydrate once cleanly
+    if (isBillingResolved === true) {
+      const resolvedStep = billingFlow?.step ?? (isPremium ? 'status_view' : 'plan_review');
+      setStep(resolvedStep);
+      setOrder(billingFlow?.order ?? null);
+      setSubmission(billingFlow?.submission ?? null);
+      if (billingFlow?.checkedAt) {
+        setLastCheckedAt(new Date(billingFlow.checkedAt));
+      }
+      setIsResolvingInitialState(false);
+      return;
     }
-  }, [isAuthenticated, checkInitialStatus]);
+
+    // 2. Standalone fallback ONLY when isBillingResolved prop is omitted entirely
+    if (isBillingResolved === undefined && isAuthenticated) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await fetch('/api/billing/status', {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' },
+          });
+          if (!cancelled && res.ok) {
+            const data = await res.json();
+            if (data?.billingFlow) {
+              commitBillingFlowUpdate({
+                step: data.billingFlow.step,
+                order: data.billingFlow.order ?? null,
+                submission: data.billingFlow.submission ?? null,
+                checkedAt: data.billingFlow.checkedAt,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[UpiPaymentFlow] Fallback billing status lookup warning:', err);
+        } finally {
+          if (!cancelled) {
+            setIsResolvingInitialState(false);
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [
+    isResolvingInitialState,
+    isBillingResolved,
+    isAuthenticated,
+    isPremium,
+    billingFlow,
+    commitBillingFlowUpdate,
+  ]);
+
+  // Synchronize external server-driven submission / entitlement changes (e.g. admin approval) without clobbering active form input
+  useEffect(() => {
+    if (isResolvingInitialState || !billingFlow) return;
+    const incomingSub = billingFlow.submission;
+    if (
+      incomingSub &&
+      (incomingSub.submissionId !== submission?.submissionId ||
+        incomingSub.status !== submission?.status)
+    ) {
+      setSubmission(incomingSub);
+      setStep(billingFlow.step);
+      setOrder(billingFlow.order);
+      setLastCheckedAt(new Date(billingFlow.checkedAt));
+    } else if (isPremium && step !== 'status_view') {
+      setStep('status_view');
+    }
+  }, [isResolvingInitialState, billingFlow, isPremium, submission, step]);
 
   // ---------------------------------------------------------------------------
   // Step 1: Proceed to Order Generation
@@ -126,6 +204,20 @@ export function UpiPaymentFlow({
       } else {
         setErrorMessage('Please sign in to upgrade to JobNexus Premium.');
       }
+      return;
+    }
+
+    // Reuse preloaded unexpired order immediately if already in state
+    if (
+      order &&
+      order.status === 'created' &&
+      new Date(order.expiresAt).getTime() > Date.now()
+    ) {
+      commitBillingFlowUpdate({
+        step: 'payment_instructions',
+        order,
+        submission: null,
+      });
       return;
     }
 
@@ -155,8 +247,11 @@ export function UpiPaymentFlow({
         throw new Error('Server returned an invalid order payload.');
       }
 
-      setOrder(data.order);
-      setStep('payment_instructions');
+      commitBillingFlowUpdate({
+        step: 'payment_instructions',
+        order: data.order,
+        submission: null,
+      });
     } catch (err) {
       console.error('[UpiPaymentFlow] Order creation error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Unable to initialize payment order.');
@@ -185,9 +280,11 @@ export function UpiPaymentFlow({
       }
 
       const data = await res.json();
-      setOrder(data.order);
-      setSubmission(null);
-      setStep('payment_instructions');
+      commitBillingFlowUpdate({
+        step: 'payment_instructions',
+        order: data.order,
+        submission: null,
+      });
     } catch (err) {
       console.error('[UpiPaymentFlow] Fresh order error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Unable to create fresh order.');
@@ -297,13 +394,27 @@ export function UpiPaymentFlow({
       }
 
       if (data.submission) {
-        setSubmission(data.submission);
-        if (data.emailStatus?.status === 'sent') {
-          setEmailDeliveryNotice('A payment submission acknowledgement email has been dispatched to your registered address.');
-        } else if (data.emailStatus?.status === 'pending' || data.emailStatus?.status === 'retryable_failure') {
-          setEmailDeliveryNotice('Payment reference recorded. Confirmation email delivery is queued.');
+        const resolvedEmailStatus =
+          typeof data.emailStatus === 'string'
+            ? data.emailStatus
+            : data.emailStatus?.status;
+        if (resolvedEmailStatus === 'sent') {
+          setEmailDeliveryNotice(
+            'A payment submission acknowledgement email has been dispatched to your registered address.'
+          );
+        } else if (
+          resolvedEmailStatus === 'pending' ||
+          resolvedEmailStatus === 'retryable_failure'
+        ) {
+          setEmailDeliveryNotice(
+            'Payment reference recorded. Confirmation email delivery is queued.'
+          );
         }
-        setStep('status_view');
+        commitBillingFlowUpdate({
+          step: 'status_view',
+          order: null,
+          submission: data.submission,
+        });
       } else {
         throw new Error('Invalid response from submission service.');
       }
@@ -319,7 +430,7 @@ export function UpiPaymentFlow({
   };
 
   // ---------------------------------------------------------------------------
-  // Step 3: Refresh Status on Demand (Strictly Read-Only Operation)
+  // Step 3: Refresh Status on Demand (Strictly Read-Only Single Atomic Lookup)
   // ---------------------------------------------------------------------------
   const handleRefreshStatus = async () => {
     if (isRefreshingStatus) return;
@@ -327,33 +438,26 @@ export function UpiPaymentFlow({
     setErrorMessage(null);
 
     try {
-      // 1. Strictly read-only: Fetch user's own authoritative submission records from Firestore
-      const res = await fetch('/api/billing/submit');
-      if (res.ok) {
-        const data = await res.json();
-        const submissions: PaymentSubmission[] = data.submissions || [];
-        if (submissions.length > 0) {
-          const activeSub =
-            submissions.find(
-              (s) => s.status === 'approved' || s.status === 'pending_verification' || s.status === 'rejected'
-            ) || submissions[0];
-          setSubmission(activeSub);
-        }
-      }
-
-      // 2. Strictly read-only: Fetch user's authoritative billing entitlement from Firestore
       const statusRes = await fetch('/api/billing/status', {
+        cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (statusRes.ok) {
         const statusData = await statusRes.json();
+        if (statusData.billingFlow) {
+          commitBillingFlowUpdate({
+            step: statusData.billingFlow.step,
+            order: statusData.billingFlow.order ?? null,
+            submission: statusData.billingFlow.submission ?? submission,
+            checkedAt: statusData.billingFlow.checkedAt,
+          });
+        } else {
+          setLastCheckedAt(new Date());
+        }
         if (statusData.entitlement?.isPremium) {
           if (onSubscriptionSuccess) onSubscriptionSuccess();
         }
       }
-
-      // 3. Update last checked timestamp upon successful read
-      setLastCheckedAt(new Date());
     } catch (err) {
       console.warn('[UpiPaymentFlow] Status refresh warning:', err);
     } finally {
@@ -370,6 +474,44 @@ export function UpiPaymentFlow({
         orderId: order.orderId,
       })
     : '';
+
+  // ---------------------------------------------------------------------------
+  // RENDER: INITIALIZING GUARD (Prevents Flashing Plan Review Before Resolution)
+  // ---------------------------------------------------------------------------
+  if (isResolvingInitialState) {
+    return (
+      <div
+        style={{
+          padding: '2.75rem 2rem',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          gap: '0.85rem',
+          minHeight: 280,
+        }}
+      >
+        <RefreshCw size={24} className="animate-spin" style={{ color: '#818cf8' }} />
+        <div>
+          <h2
+            id="premium-offer-title"
+            style={{
+              fontSize: '1.05rem',
+              fontWeight: 700,
+              color: '#f8fafc',
+              margin: '0 0 0.25rem 0',
+            }}
+          >
+            Checking Membership &amp; Payment Status
+          </h2>
+          <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
+            Loading your authoritative subscription state...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // RENDER: STEP 1 — PLAN REVIEW
@@ -872,7 +1014,13 @@ export function UpiPaymentFlow({
         <div style={{ padding: '1.25rem 2rem 1.75rem 2rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
           <button
             type="button"
-            onClick={() => setStep('submit_reference')}
+            onClick={() =>
+              commitBillingFlowUpdate({
+                step: 'submit_reference',
+                order,
+                submission: null,
+              })
+            }
             style={{
               width: '100%',
               minHeight: 48,
@@ -897,7 +1045,13 @@ export function UpiPaymentFlow({
 
           <button
             type="button"
-            onClick={() => setStep('plan_review')}
+            onClick={() =>
+              commitBillingFlowUpdate({
+                step: 'plan_review',
+                order,
+                submission: null,
+              })
+            }
             style={{
               width: '100%',
               padding: '0.6rem',
@@ -1224,7 +1378,13 @@ export function UpiPaymentFlow({
 
           <button
             type="button"
-            onClick={() => setStep('payment_instructions')}
+            onClick={() =>
+              commitBillingFlowUpdate({
+                step: 'payment_instructions',
+                order,
+                submission: null,
+              })
+            }
             disabled={isSubmitting}
             style={{
               width: '100%',
@@ -1253,10 +1413,10 @@ export function UpiPaymentFlow({
   // ---------------------------------------------------------------------------
   // RENDER: STEP 4 — STATUS & CONFIRMATION VIEW
   // ---------------------------------------------------------------------------
-  if (step === 'status_view' && submission) {
-    const isApproved = submission.status === 'approved';
-    const isPending = submission.status === 'pending_verification';
-    const isRejected = submission.status === 'rejected';
+  if (step === 'status_view' && (submission || isPremium)) {
+    const isApproved = submission ? submission.status === 'approved' : isPremium;
+    const isPending = submission?.status === 'pending_verification';
+    const isRejected = submission?.status === 'rejected';
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1329,6 +1489,7 @@ export function UpiPaymentFlow({
           </div>
 
           <h2
+            id="premium-offer-title"
             style={{
               fontSize: '1.4rem',
               fontWeight: 800,
@@ -1344,9 +1505,31 @@ export function UpiPaymentFlow({
           <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: 0, lineHeight: 1.45 }}>
             {isApproved && 'Your payment has been verified. You now enjoy unmasked ATS links and priority alerts.'}
             {isPending && 'Our team is reviewing your UPI transaction reference against banking records.'}
-            {isRejected && (submission.decisionReason || 'We were unable to verify this transaction reference.')}
+            {isRejected && (submission?.decisionReason || 'We were unable to verify this transaction reference.')}
           </p>
         </div>
+
+        {/* Error Banner inside Status View */}
+        {errorMessage && (
+          <div
+            role="alert"
+            style={{
+              margin: '0 2rem 1rem 2rem',
+              padding: '0.75rem 1rem',
+              borderRadius: 12,
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#fca5a5',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.55rem',
+            }}
+          >
+            <AlertCircle size={16} style={{ flexShrink: 0, color: '#f87171' }} />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
         {/* SLA Review Target Callout */}
         {isPending && (
@@ -1396,42 +1579,44 @@ export function UpiPaymentFlow({
         )}
 
         {/* Verification Summary Card */}
-        <div
-          style={{
-            margin: '0 2rem 1rem 2rem',
-            padding: '1.1rem 1.25rem',
-            borderRadius: 14,
-            background: 'rgba(15, 23, 42, 0.8)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.65rem',
-            fontSize: '0.82rem',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#94a3b8' }}>Submission ID:</span>
-            <code style={{ color: '#e2e8f0', fontWeight: 600 }}>{submission.submissionId}</code>
+        {submission && (
+          <div
+            style={{
+              margin: '0 2rem 1rem 2rem',
+              padding: '1.1rem 1.25rem',
+              borderRadius: 14,
+              background: 'rgba(15, 23, 42, 0.8)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.65rem',
+              fontSize: '0.82rem',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>Submission ID:</span>
+              <code style={{ color: '#e2e8f0', fontWeight: 600 }}>{submission.submissionId}</code>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>UTR Reference:</span>
+              <code style={{ color: '#818cf8', fontWeight: 700 }}>{submission.utrNumber}</code>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>Declared Amount:</span>
+              <span style={{ color: '#34d399', fontWeight: 700 }}>₹{submission.declaredAmount}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>Payment Date:</span>
+              <span style={{ color: '#e2e8f0' }}>{submission.paymentDate}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>Current Status:</span>
+              <span style={{ color: isApproved ? '#34d399' : isPending ? '#fbbf24' : '#f87171', fontWeight: 600 }}>
+                {isApproved ? 'Approved' : isPending ? 'Pending Verification' : 'Rejected'}
+              </span>
+            </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#94a3b8' }}>UTR Reference:</span>
-            <code style={{ color: '#818cf8', fontWeight: 700 }}>{submission.utrNumber}</code>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#94a3b8' }}>Declared Amount:</span>
-            <span style={{ color: '#34d399', fontWeight: 700 }}>₹{submission.declaredAmount}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#94a3b8' }}>Payment Date:</span>
-            <span style={{ color: '#e2e8f0' }}>{submission.paymentDate}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#94a3b8' }}>Current Status:</span>
-            <span style={{ color: isApproved ? '#34d399' : isPending ? '#fbbf24' : '#f87171', fontWeight: 600 }}>
-              {isApproved ? 'Approved' : isPending ? 'Pending Verification' : 'Rejected'}
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Security Invariant Explanatory Banner */}
         {isPending && (

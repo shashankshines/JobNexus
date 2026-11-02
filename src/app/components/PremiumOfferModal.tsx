@@ -3,21 +3,36 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UpiPaymentFlow } from './billing/UpiPaymentFlow';
+import type { BillingFlowSnapshot } from '@/modules/billing/domain/billing-flow-state';
 
 interface PremiumOfferModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubscriptionSuccess?: () => void;
+  userId?: string;
   userEmail?: string;
   userName?: string;
+  isPremium?: boolean;
+  billingFlow?: BillingFlowSnapshot | null;
+  isBillingResolved?: boolean;
+  onBillingFlowChange?: (
+    updater:
+      | BillingFlowSnapshot
+      | ((prev: BillingFlowSnapshot | null) => BillingFlowSnapshot | null)
+  ) => void;
 }
 
 export function PremiumOfferModal({
   isOpen,
   onClose,
   onSubscriptionSuccess,
+  userId,
   userEmail,
   userName,
+  isPremium = false,
+  billingFlow,
+  isBillingResolved,
+  onBillingFlowChange,
 }: PremiumOfferModalProps) {
   // Close on Escape key
   useEffect(() => {
@@ -30,7 +45,8 @@ export function PremiumOfferModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const isAuthenticated = Boolean(userEmail);
+  const isAuthenticated = Boolean(userId || userEmail);
+  const accountKey = userId || userEmail || 'anonymous';
 
   return (
     <AnimatePresence mode="wait">
@@ -110,11 +126,17 @@ export function PremiumOfferModal({
             />
 
             <UpiPaymentFlow
+              key={accountKey}
               onClose={onClose}
               onSubscriptionSuccess={onSubscriptionSuccess}
+              userId={userId}
               userEmail={userEmail}
               userName={userName}
               isAuthenticated={isAuthenticated}
+              isPremium={isPremium}
+              billingFlow={billingFlow}
+              isBillingResolved={isBillingResolved}
+              onBillingFlowChange={onBillingFlowChange}
             />
           </motion.div>
         </div>
