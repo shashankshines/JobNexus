@@ -61,6 +61,11 @@ import {
   normalizeIndustryFilter,
   type JobIndustry,
 } from '@/modules/jobs/domain/job.taxonomy';
+import {
+  isPageReloadNavigation,
+  buildCleanReloadUrl,
+  clearStalePendingSearchIntentOnReload,
+} from '@/modules/jobs/presentation/search-reload-reset';
 const PremiumOfferModal = dynamic(
   () => import('./components/PremiumOfferModal').then((mod) => mod.PremiumOfferModal),
   { ssr: false }
@@ -1324,9 +1329,58 @@ export default function Home() {
   }, [applyPopularPills]);
 
   // Load the discovery feed once; searches use complete server-filtered results.
+  // Refreshing/reloading the page resets all active and draft searches/filters cleanly.
   useEffect(() => {
     if (catalogWarmupStartedRef.current) return;
     catalogWarmupStartedRef.current = true;
+
+    if (isPageReloadNavigation(window)) {
+      clearStalePendingSearchIntentOnReload(window.sessionStorage);
+      const cleanUrl = buildCleanReloadUrl(window.location.pathname, window.location.search);
+      const currentUrl = `${window.location.pathname}${window.location.search}`;
+      if (
+        cleanUrl !== currentUrl ||
+        Boolean(window.history.state && typeof window.history.state === 'object' && 'searchCriteria' in window.history.state)
+      ) {
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+      setQuery('');
+      setSelectedRole('');
+      setCompany('');
+      setLocation('');
+      setType('');
+      setLevel('');
+      setRemote('');
+      setIndustry('');
+      setRoleSearchQuery('');
+      setCompanySearchQuery('');
+      setSortBy('relevance');
+      setAppliedSortBy('relevance');
+      setActiveView('all');
+      setActiveDiscoveryTab('feed');
+      setShowAdvancedFilters(false);
+      setSearched(false);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      void executeSearch(
+        {
+          query: '',
+          role: '',
+          company: '',
+          location: '',
+          type: '',
+          level: '',
+          remote: '',
+          industry: '',
+        },
+        {
+          markSearched: false,
+          syncUrl: false,
+          sort: 'relevance',
+        }
+      );
+      return;
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const criteria = getSearchCriteriaFromUrl(urlParams);
     const initialSort = urlParams.get('sort') === 'date' ? 'date' : 'relevance';
@@ -2703,6 +2757,7 @@ export default function Home() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.18, duration: 0.4 }}
             onSubmit={handleSearchSubmit}
+            autoComplete="off"
             className="glass-panel search-console-form"
             style={{
               width: '100%',
@@ -2825,6 +2880,7 @@ export default function Home() {
                 <Search size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
                 <input
                   type="text"
+                  autoComplete="off"
                   role="combobox"
                   aria-label="Search jobs by role, skills, or company"
                   aria-autocomplete="list"
@@ -2987,6 +3043,7 @@ export default function Home() {
                 <MapPin size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
                 <input
                   type="text"
+                  autoComplete="off"
                   role="combobox"
                   aria-label="Search jobs by city, state, or country"
                   aria-autocomplete="list"
@@ -3461,6 +3518,7 @@ export default function Home() {
                             <Search size={13} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
                             <input
                               type="text"
+                              autoComplete="off"
                               placeholder="Search roles or categories..."
                               value={roleSearchQuery}
                               onChange={(e) => setRoleSearchQuery(e.target.value)}
@@ -3723,6 +3781,7 @@ export default function Home() {
                           <div style={{ padding: '0.35rem 0.65rem 0.5rem', borderBottom: '1px solid var(--border)' }}>
                             <input
                               type="text"
+                              autoComplete="off"
                               placeholder="Search employer..."
                               value={companySearchQuery}
                               onChange={(e) => setCompanySearchQuery(e.target.value)}
