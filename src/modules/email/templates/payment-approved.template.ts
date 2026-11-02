@@ -83,7 +83,7 @@ Your Premium membership is now fully active until ${formattedEnd}.
     badgeBorder: 'rgba(16, 185, 129, 0.35)',
     badgeColor: '#34d399',
     title: 'Welcome to JobNexus Premium!',
-    subtitle: 'Your ₹499 UPI payment has been verified against our banking records. Your 30-day Premium membership is now active.',
+    subtitle: `Your ₹${data.amountInr} UPI payment has been verified against our banking records. Your 30-day Premium membership is now active.`,
     contentHtml,
     ctaText: 'Access JobNexus Premium',
     ctaUrl: data.statusUrl,

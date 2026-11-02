@@ -155,7 +155,7 @@ describe('JobNexus — Manual UPI Payment Foundation (Phase 2B.1)', () => {
       assert.ok(data.error.includes('Unauthorized'));
     });
 
-    it('creates server-authoritative ₹499 order with 24h expiry', async () => {
+    it('creates server-authoritative discounted ₹349 order with 24h expiry', async () => {
       const session = createAuthenticatedSession('usr_order_1');
       const req = createMockRequest('/api/billing/order', {
         method: 'POST',
@@ -169,8 +169,8 @@ describe('JobNexus — Manual UPI Payment Foundation (Phase 2B.1)', () => {
       assert.strictEqual(data.success, true);
       assert.strictEqual(data.reused, false);
       assert.ok(data.order.orderId.startsWith('ord_'));
-      assert.strictEqual(data.order.amountInr, 499);
-      assert.strictEqual(data.order.amountInPaise, 49900);
+      assert.strictEqual(data.order.amountInr, 349);
+      assert.strictEqual(data.order.amountInPaise, 34900);
       assert.strictEqual(data.order.currency, 'INR');
       assert.strictEqual(data.order.planId, 'premium_monthly');
       assert.strictEqual(data.order.status, 'created');
@@ -640,7 +640,7 @@ describe('JobNexus — Manual UPI Payment Foundation (Phase 2B.1)', () => {
       assert.strictEqual(data.checkout.isManualUpi, true);
       assert.strictEqual(data.checkout.upiId, 'jobnexus@icici');
       assert.strictEqual(data.checkout.payeeName, 'JobNexus Official');
-      assert.strictEqual(data.checkout.amount, 49900);
+      assert.strictEqual(data.checkout.amount, 34900);
       assert.ok(data.order.orderId);
     });
   });

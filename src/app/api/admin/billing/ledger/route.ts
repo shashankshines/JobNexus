@@ -9,7 +9,7 @@ import {
  * GET /api/admin/billing/ledger
  * Retrieves Consolidated Payment Ledger merging payment orders with submissions:
  * - Verified payments, pending claims, rejected claims, unsubmitted orders, expired checkouts
- * - Financial integrity summary: verified revenue (₹499 * approved), pending claimed revenue
+ * - Financial integrity summary: verified revenue (sum of verified payment amounts), pending claimed revenue
  * - Explicit disclosure regarding non-automated refunds
  * - Full search (UTR, orderId, userId, userEmail) and date range filtering
  */

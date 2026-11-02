@@ -5,10 +5,12 @@
 
 import { SubscriptionExpiringEmailData, GeneratedEmailContent } from '../email.types';
 import { renderBaseEmail, escapeHtml } from './base.template';
+import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 export function renderSubscriptionExpiringEmail(
   data: SubscriptionExpiringEmailData
 ): GeneratedEmailContent {
+  const isDiscounted = data.amountInr < PREMIUM_PLAN.originalPriceInr;
   const formattedEnd = new Date(data.currentPeriodEnd).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata',
     dateStyle: 'medium',
@@ -33,7 +35,7 @@ export function renderSubscriptionExpiringEmail(
         </tr>
         <tr>
           <td style="color: #94a3b8; padding: 6px 0;">Renewal Amount:</td>
-          <td style="color: #818cf8; font-weight: 800; padding: 6px 0; text-align: right;">₹${data.amountInr} ${escapeHtml(data.currency)} / 30 Days</td>
+          <td style="color: #818cf8; font-weight: 800; padding: 6px 0; text-align: right;">${isDiscounted ? `<s style="color: #64748b; font-weight: 600; margin-right: 6px;">₹${PREMIUM_PLAN.originalPriceInr}</s>` : ''}₹${data.amountInr} ${escapeHtml(data.currency)} / 30 Days</td>
         </tr>
         <tr>
           <td style="color: #94a3b8; padding: 6px 0;">Current Cycle Ends:</td>
@@ -60,7 +62,7 @@ export function renderSubscriptionExpiringEmail(
   const plainTextContent = `
 SUBSCRIPTION RENEWAL REMINDER:
 - Plan: ${data.planTitle}
-- Renewal Amount: ₹${data.amountInr} ${data.currency} (30 Days)
+- Renewal Amount: ₹${data.amountInr} ${data.currency}${isDiscounted ? ` (Discounted from ₹${PREMIUM_PLAN.originalPriceInr})` : ''} (30 Days)
 - Current Cycle Ends: ${formattedEnd} IST
 - Time Remaining: ${remainingSummary}
 
@@ -98,3 +100,4 @@ ${data.renewUrl}
 
   return { subject, html, text };
 }
+

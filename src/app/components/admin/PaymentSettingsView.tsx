@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { UpiQrCode } from '@/app/components/billing/UpiQrCode';
 import { buildUpiPaymentUri } from '@/app/components/billing/upi-payment-uri';
+import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 export interface PaymentSettingsData {
   upiId: string;
@@ -180,7 +181,7 @@ export function PaymentSettingsView({ onRefreshParent }: PaymentSettingsViewProp
       return buildUpiPaymentUri({
         upiId: upiId.trim(),
         payeeName: payeeName.trim() || 'JobNexus',
-        amountInr: 499,
+        amountInr: PREMIUM_PLAN.priceInr,
         note: paymentDescription.trim() || 'JobNexus Premium Subscription',
       });
     } catch {
@@ -606,9 +607,19 @@ export function PaymentSettingsView({ onRefreshParent }: PaymentSettingsViewProp
                       Server-Authoritative
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                    <strong style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>₹499 INR</strong>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>/ 30-day Premium membership</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <s style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-muted, #64748b)' }}>
+                      ₹{PREMIUM_PLAN.originalPriceInr}
+                    </s>
+                    <strong style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>
+                      ₹{PREMIUM_PLAN.priceInr} INR
+                    </strong>
+                    <span className="admin-badge-approved" style={{ fontSize: '0.68rem' }}>
+                      {PREMIUM_PLAN.discountPercent}% OFF
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                      / 30-day Premium membership
+                    </span>
                   </div>
                   <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.72rem', marginTop: '0.35rem' }}>
                     Fixed system pricing invariant. Modifications are strictly restricted to codebase constants to maintain billing integrity.
@@ -685,7 +696,10 @@ export function PaymentSettingsView({ onRefreshParent }: PaymentSettingsViewProp
                     {upiId.trim() || 'handle@bank'}
                   </div>
                   <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10b981', marginTop: 4 }}>
-                    ₹499 INR Fixed
+                    <s style={{ color: 'var(--text-muted, #64748b)', fontWeight: 500, marginRight: 5 }}>
+                      ₹{PREMIUM_PLAN.originalPriceInr}
+                    </s>
+                    ₹{PREMIUM_PLAN.priceInr} INR Fixed
                   </div>
                 </div>
               </div>

@@ -28,8 +28,8 @@ export interface PaymentOrderDocument {
   userId: string;
   userEmail?: string;
   planId: 'premium_monthly';
-  amountInr: number; // 499
-  amountInPaise: number; // 49900
+  amountInr: number; // 349 (regularly 499)
+  amountInPaise: number; // 34900 (regularly 49900)
   currency: 'INR';
   status: 'created' | 'submitted' | 'expired';
   upiId: string;

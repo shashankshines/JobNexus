@@ -168,16 +168,21 @@ describe('JobNexus Phase 2B.2 — Manual UPI Payment UI & Submission Experience'
   // 3. UI Pricing and Security Invariants
   // ==========================================================================
   describe('3. UI Pricing and Security Invariants', () => {
-    it('authoritative plan price is strictly ₹499 across domain constants', () => {
-      assert.strictEqual(PREMIUM_PLAN.priceInr, 499);
-      assert.strictEqual(PREMIUM_PLAN.amountInPaise, 49900);
+    it('authoritative plan price enforces ₹349 discounted from ₹499 across domain constants', () => {
+      assert.strictEqual(PREMIUM_PLAN.originalPriceInr, 499);
+      assert.strictEqual(PREMIUM_PLAN.originalAmountInPaise, 49900);
+      assert.strictEqual(PREMIUM_PLAN.priceInr, 349);
+      assert.strictEqual(PREMIUM_PLAN.amountInPaise, 34900);
+      assert.strictEqual(PREMIUM_PLAN.discountPercent, 30);
+      assert.strictEqual(PREMIUM_PLAN.savingsInr, 150);
       assert.strictEqual(PREMIUM_PLAN.currency, 'INR');
       assert.strictEqual(PREMIUM_PLAN.id, 'premium_monthly');
     });
 
-    it('plan benefits and legal disclaimer explicitly state cancellation and discovery nature', () => {
+    it('plan benefits and legal disclaimer explicitly state cancellation, discount terms, and discovery nature', () => {
       assert.ok(PREMIUM_PLAN.benefits.length >= 4);
       assert.ok(PREMIUM_PLAN.cancellationPolicy.includes('Cancel anytime'));
+      assert.ok(PREMIUM_PLAN.taxTerms.includes('₹349/month'));
       assert.ok(PREMIUM_PLAN.taxTerms.includes('₹499/month'));
       assert.ok(PREMIUM_PLAN.disclaimer.includes('does not guarantee interviews'));
     });

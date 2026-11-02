@@ -5,10 +5,12 @@
 
 import { SubscriptionExpiredEmailData, GeneratedEmailContent } from '../email.types';
 import { renderBaseEmail, escapeHtml } from './base.template';
+import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 export function renderSubscriptionExpiredEmail(
   data: SubscriptionExpiredEmailData
 ): GeneratedEmailContent {
+  const isDiscounted = data.amountInr < PREMIUM_PLAN.originalPriceInr;
   const formattedExpiredAt = new Date(data.expiredAt).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata',
     dateStyle: 'medium',
@@ -33,7 +35,7 @@ export function renderSubscriptionExpiredEmail(
         </tr>
         <tr>
           <td style="color: #94a3b8; padding: 6px 0;">30-Day Renewal:</td>
-          <td style="color: #818cf8; font-weight: 800; padding: 6px 0; text-align: right;">₹${data.amountInr} ${escapeHtml(data.currency)}</td>
+          <td style="color: #818cf8; font-weight: 800; padding: 6px 0; text-align: right;">${isDiscounted ? `<s style="color: #64748b; font-weight: 600; margin-right: 6px;">₹${PREMIUM_PLAN.originalPriceInr}</s>` : ''}₹${data.amountInr} ${escapeHtml(data.currency)}</td>
         </tr>
       </table>
     </div>
@@ -54,7 +56,7 @@ SUBSCRIPTION PERIOD ENDED:
 - Previous Plan: ${data.planTitle}
 - Period Ended: ${formattedExpiredAt} IST
 - Current Tier: Free Discovery
-- 30-Day Renewal Rate: ₹${data.amountInr} ${data.currency}
+- 30-Day Renewal Rate: ₹${data.amountInr} ${data.currency}${isDiscounted ? ` (Discounted from ₹${PREMIUM_PLAN.originalPriceInr})` : ''}
 
 YOUR SAVED JOBS ARE SAFE:
 All of your bookmarked opportunities and account history remain preserved. Reactivate anytime to restore direct employer ATS application links.
@@ -85,3 +87,4 @@ ${data.renewUrl}
     text,
   };
 }
+

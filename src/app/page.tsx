@@ -66,6 +66,7 @@ import {
   buildCleanReloadUrl,
   clearStalePendingSearchIntentOnReload,
 } from '@/modules/jobs/presentation/search-reload-reset';
+import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 const PremiumOfferModal = dynamic(
   () => import('./components/PremiumOfferModal').then((mod) => mod.PremiumOfferModal),
   { ssr: false }
@@ -2472,11 +2473,18 @@ export default function Home() {
                                   </span>
                                 </div>
                                 <span className="dropdown-price-pill">
-                                  {billingFlow?.hasPendingVerification || renewal?.hasPendingRenewalVerification
-                                    ? 'Pending'
-                                    : billingFlow?.hasRejectedSubmission
-                                      ? 'Review'
-                                      : '₹499'}
+                                  {billingFlow?.hasPendingVerification || renewal?.hasPendingRenewalVerification ? (
+                                    'Pending'
+                                  ) : billingFlow?.hasRejectedSubmission ? (
+                                    'Review'
+                                  ) : (
+                                    <>
+                                      <s style={{ opacity: 0.65, fontWeight: 500, marginRight: 4 }}>
+                                        ₹{PREMIUM_PLAN.originalPriceInr}
+                                      </s>
+                                      ₹{PREMIUM_PLAN.priceInr}
+                                    </>
+                                  )}
                                 </span>
                               </button>
                             )}
@@ -2744,11 +2752,25 @@ export default function Home() {
                   }}
                 >
                   <span>
-                    {renewal.hasPendingRenewalVerification
-                      ? 'View Verification Status'
-                      : renewal.stage === 'expired'
-                        ? 'Renew Premium — ₹499'
-                        : 'Renew for +30 Days — ₹499'}
+                    {renewal.hasPendingRenewalVerification ? (
+                      'View Verification Status'
+                    ) : renewal.stage === 'expired' ? (
+                      <>
+                        Renew Premium —{' '}
+                        <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 4 }}>
+                          ₹{PREMIUM_PLAN.originalPriceInr}
+                        </s>
+                        ₹{PREMIUM_PLAN.priceInr}
+                      </>
+                    ) : (
+                      <>
+                        Renew for +30 Days —{' '}
+                        <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 4 }}>
+                          ₹{PREMIUM_PLAN.originalPriceInr}
+                        </s>
+                        ₹{PREMIUM_PLAN.priceInr}
+                      </>
+                    )}
                   </span>
                   <ArrowRight size={14} />
                 </button>
@@ -6164,7 +6186,17 @@ export default function Home() {
                         gap: '0.3rem',
                       }}
                     >
-                      {isPremium ? '⭐ Premium (₹499/mo)' : 'Free Discovery'}
+                      {isPremium ? (
+                        <>
+                          ⭐ Premium (
+                          <s style={{ opacity: 0.6, fontWeight: 500 }}>
+                            ₹{PREMIUM_PLAN.originalPriceInr}
+                          </s>{' '}
+                          ₹{PREMIUM_PLAN.priceInr}/mo)
+                        </>
+                      ) : (
+                        'Free Discovery'
+                      )}
                     </span>
                   </div>
 
@@ -6231,7 +6263,13 @@ export default function Home() {
                           boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
                         }}
                       >
-                        <span>Renew for +30 Days (₹499)</span>
+                        <span>
+                          Renew for +30 Days (
+                          <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 4 }}>
+                            ₹{PREMIUM_PLAN.originalPriceInr}
+                          </s>
+                          ₹{PREMIUM_PLAN.priceInr})
+                        </span>
                         <ArrowRight size={14} />
                       </button>
                     )}
@@ -6309,12 +6347,24 @@ export default function Home() {
                         </>
                       ) : renewal?.stage === 'expired' ? (
                         <>
-                          <span>Renew Premium for 30 Days (₹499)</span>
+                          <span>
+                            Renew Premium for 30 Days (
+                            <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 4 }}>
+                              ₹{PREMIUM_PLAN.originalPriceInr}
+                            </s>
+                            ₹{PREMIUM_PLAN.priceInr})
+                          </span>
                           <Sparkles size={14} />
                         </>
                       ) : (
                         <>
-                          <span>Upgrade to Premium (₹499/mo)</span>
+                          <span>
+                            Upgrade to Premium (
+                            <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 4 }}>
+                              ₹{PREMIUM_PLAN.originalPriceInr}
+                            </s>
+                            ₹{PREMIUM_PLAN.priceInr}/mo)
+                          </span>
                           <Sparkles size={14} />
                         </>
                       )}

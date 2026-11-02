@@ -133,8 +133,8 @@ export async function createPaymentOrder(params: {
     userId,
     ...(userEmail ? { userEmail: userEmail.trim().toLowerCase() } : {}),
     planId: PREMIUM_PLAN.id,
-    amountInr: PREMIUM_PLAN.priceInr, // ₹499
-    amountInPaise: PREMIUM_PLAN.amountInPaise, // 49900
+    amountInr: PREMIUM_PLAN.priceInr, // ₹349 (discounted from ₹499)
+    amountInPaise: PREMIUM_PLAN.amountInPaise, // 34900
     currency: 'INR',
     status: 'created',
     upiId: settings.upiId,
@@ -174,7 +174,12 @@ export async function getActiveOrderForUser(userId: string): Promise<PaymentOrde
   const nowIso = new Date().toISOString();
   const activeOrders = snap.docs
     .map((d) => d.data())
-    .filter((o) => o.status === 'created' && o.expiresAt > nowIso)
+    .filter(
+      (o) =>
+        o.status === 'created' &&
+        o.expiresAt > nowIso &&
+        o.amountInr === PREMIUM_PLAN.priceInr
+    )
     .sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
 
   return activeOrders[0] || null;

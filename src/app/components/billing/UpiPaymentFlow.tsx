@@ -238,10 +238,11 @@ export function UpiPaymentFlow({
       return;
     }
 
-    // Reuse preloaded unexpired order immediately if already in state
+    // Reuse preloaded unexpired order immediately if already in state at current plan price
     if (
       order &&
       order.status === 'created' &&
+      order.amountInr === PREMIUM_PLAN.priceInr &&
       new Date(order.expiresAt).getTime() > Date.now()
     ) {
       commitBillingFlowUpdate({
@@ -626,7 +627,7 @@ export function UpiPaymentFlow({
           <p style={{ fontSize: '0.86rem', color: '#94a3b8', margin: 0, lineHeight: 1.45 }}>
             {isExpiredRenewal
               ? billingFlow?.renewal?.message ||
-                'Your previous 30-day cycle ended. Renew for ₹499 to unlock unmasked employer identities and direct ATS links again — your saved jobs are safe.'
+                `Your previous 30-day cycle ended. Renew for ₹${PREMIUM_PLAN.priceInr} (regularly ₹${PREMIUM_PLAN.originalPriceInr}) to unlock unmasked employer identities and direct ATS links again — your saved jobs are safe.`
               : 'Bypass queues, reveal direct employer ATS application links, and organize target positions with dedicated tools.'}
           </p>
         </div>
@@ -640,24 +641,55 @@ export function UpiPaymentFlow({
             background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(6, 182, 212, 0.08) 100%)',
             border: '1px solid rgba(99, 102, 241, 0.3)',
             display: 'flex',
-            alignItems: 'baseline',
+            alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
           }}
         >
           <div>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                color: '#cbd5e1',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-              }}
-            >
-              Authoritative Monthly Access
-            </span>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginTop: '0.2rem' }}>
-              <span style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>₹{PREMIUM_PLAN.priceInr}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  color: '#cbd5e1',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                Authoritative Monthly Access
+              </span>
+              <span
+                style={{
+                  fontSize: '0.66rem',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: '#fde68a',
+                  background: 'rgba(245, 158, 11, 0.16)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  padding: '0.12rem 0.45rem',
+                  borderRadius: 999,
+                }}
+              >
+                {PREMIUM_PLAN.discountPercent}% OFF · Save ₹{PREMIUM_PLAN.savingsInr}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', marginTop: '0.25rem' }}>
+              <s
+                style={{
+                  fontSize: '1.18rem',
+                  fontWeight: 600,
+                  color: '#64748b',
+                  textDecoration: 'line-through',
+                }}
+              >
+                ₹{PREMIUM_PLAN.originalPriceInr}
+              </s>
+              <span style={{ fontSize: '2.05rem', fontWeight: 800, color: '#ffffff' }}>
+                ₹{PREMIUM_PLAN.priceInr}
+              </span>
               <span style={{ fontSize: '0.88rem', color: '#94a3b8', fontWeight: 500 }}>/ month</span>
             </div>
           </div>
@@ -850,9 +882,23 @@ export function UpiPaymentFlow({
             ) : (
               <>
                 <span>
-                  {isExpiredRenewal
-                    ? 'Renew via UPI (₹499 / 30 Days)'
-                    : 'Proceed to UPI Payment (₹499)'}
+                  {isExpiredRenewal ? (
+                    <>
+                      Renew via UPI (
+                      <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 5 }}>
+                        ₹{PREMIUM_PLAN.originalPriceInr}
+                      </s>
+                      ₹{PREMIUM_PLAN.priceInr} / 30 Days)
+                    </>
+                  ) : (
+                    <>
+                      Proceed to UPI Payment (
+                      <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 5 }}>
+                        ₹{PREMIUM_PLAN.originalPriceInr}
+                      </s>
+                      ₹{PREMIUM_PLAN.priceInr})
+                    </>
+                  )}
                 </span>
                 <ArrowRight size={18} />
               </>
@@ -938,7 +984,13 @@ export function UpiPaymentFlow({
               marginBottom: '0.25rem',
             }}
           >
-            Pay ₹{order.amountInr} via UPI
+            Pay{' '}
+            {order.amountInr < PREMIUM_PLAN.originalPriceInr && (
+              <s style={{ color: '#64748b', fontWeight: 600, fontSize: '1.05rem', marginRight: 6 }}>
+                ₹{PREMIUM_PLAN.originalPriceInr}
+              </s>
+            )}
+            ₹{order.amountInr} via UPI
           </h2>
           <p style={{ fontSize: '0.84rem', color: '#94a3b8', margin: 0 }}>
             Scan the QR code using any UPI app (Google Pay, PhonePe, Paytm, BHIM, Cred) or copy the UPI ID below.
@@ -1047,7 +1099,13 @@ export function UpiPaymentFlow({
             <span>
               Order Ref: <code style={{ color: '#818cf8', fontWeight: 600 }}>{order.orderId}</code>
             </span>
-            <span style={{ color: '#94a3b8' }}>Amount: ₹{order.amountInr}</span>
+            <span style={{ color: '#94a3b8' }}>
+              Amount:{' '}
+              {order.amountInr < PREMIUM_PLAN.originalPriceInr && (
+                <s style={{ opacity: 0.7, marginRight: 4 }}>₹{PREMIUM_PLAN.originalPriceInr}</s>
+              )}
+              <strong style={{ color: '#34d399' }}>₹{order.amountInr}</strong>
+            </span>
           </div>
 
           {/* Mobile Deep Link Button */}
@@ -1278,7 +1336,12 @@ export function UpiPaymentFlow({
                   marginBottom: '0.35rem',
                 }}
               >
-                Plan Amount
+                Plan Amount{' '}
+                {order.amountInr < PREMIUM_PLAN.originalPriceInr && (
+                  <span style={{ fontSize: '0.72rem', fontWeight: 500, color: '#94a3b8' }}>
+                    (<s style={{ opacity: 0.8 }}>₹{PREMIUM_PLAN.originalPriceInr}</s>)
+                  </span>
+                )}
               </label>
               <input
                 id="amount-display"
@@ -1843,9 +1906,17 @@ export function UpiPaymentFlow({
               }}
             >
               <span>
-                {isLoadingOrder
-                  ? 'Preparing Renewal Order...'
-                  : 'Renew for +30 Days (₹499)'}
+                {isLoadingOrder ? (
+                  'Preparing Renewal Order...'
+                ) : (
+                  <>
+                    Renew for +30 Days (
+                    <s style={{ opacity: 0.72, fontWeight: 500, marginRight: 5 }}>
+                      ₹{PREMIUM_PLAN.originalPriceInr}
+                    </s>
+                    ₹{PREMIUM_PLAN.priceInr})
+                  </>
+                )}
               </span>
               {!isLoadingOrder && <ArrowRight size={17} />}
             </button>

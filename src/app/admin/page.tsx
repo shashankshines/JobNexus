@@ -40,6 +40,7 @@ import {
 import { SubscriptionDocument, AdminAuditLogDocument } from '@/modules/storage/firestore/collections';
 import { PaymentSettingsView } from '@/app/components/admin/PaymentSettingsView';
 import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
+import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 const ADMIN_PAGE_SIZE = 5;
 
@@ -995,10 +996,10 @@ export default function AdminConsolePage() {
                   <DollarSign size={18} />
                 </div>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981' }}>
-                  ₹{(metrics?.verifiedRevenueInr ?? (metrics ? metrics.totalApprovedCount * 499 : 0)).toLocaleString('en-IN')}
+                  ₹{(metrics?.verifiedRevenueInr ?? (metrics ? metrics.totalApprovedCount * PREMIUM_PLAN.priceInr : 0)).toLocaleString('en-IN')}
                 </div>
                 <span className="admin-text-label" style={{ fontSize: '0.72rem', marginTop: 4 }}>
-                  {metrics?.totalApprovedCount ?? 0} confirmed ₹499 UPI payments
+                  {metrics?.totalApprovedCount ?? 0} confirmed UPI payments
                 </span>
               </div>
 
@@ -1009,7 +1010,7 @@ export default function AdminConsolePage() {
                   <Clock size={18} />
                 </div>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f59e0b' }}>
-                  ₹{(metrics?.pendingClaimedRevenueInr ?? (metrics ? metrics.pendingCount * 499 : 0)).toLocaleString('en-IN')}
+                  ₹{(metrics?.pendingClaimedRevenueInr ?? (metrics ? metrics.pendingCount * PREMIUM_PLAN.priceInr : 0)).toLocaleString('en-IN')}
                 </div>
                 <span className="admin-text-label" style={{ fontSize: '0.72rem', marginTop: 4 }}>
                   {metrics ? metrics.pendingCount : 0} claims awaiting bank credit check
@@ -1364,7 +1365,7 @@ export default function AdminConsolePage() {
                               style={{ opacity: actionInProgress ? 0.6 : 1, cursor: actionInProgress ? 'not-allowed' : 'pointer' }}
                             >
                               <CheckCircle2 size={14} />
-                              Verify & Approve (₹499)
+                              Verify & Approve (₹{sub.declaredAmount})
                             </button>
                           </div>
                         )}
@@ -1957,7 +1958,7 @@ export default function AdminConsolePage() {
                     style={{ padding: '0.4rem 0.65rem', borderRadius: 8, fontSize: '0.76rem' }}
                   >
                     <option value="all">All Sources</option>
-                    <option value="payment_backed">Payment-Backed (UPI ₹499)</option>
+                    <option value="payment_backed">Payment-Backed (UPI ₹{PREMIUM_PLAN.priceInr})</option>
                     <option value="manual_grant">Manual / Admin Grants</option>
                   </select>
 
@@ -2369,7 +2370,7 @@ export default function AdminConsolePage() {
                   style={{ marginTop: '0.2rem' }}
                 />
                 <span>
-                  <strong>Mandatory Confirmation:</strong> I certify that I have independently verified receipt of the ₹499 credit in the business bank account or official UPI merchant statement.
+                  <strong>Mandatory Confirmation:</strong> I certify that I have independently verified receipt of the ₹{selectedSubmission.declaredAmount} credit in the business bank account or official UPI merchant statement.
                 </span>
               </label>
             </div>
@@ -2805,7 +2806,7 @@ export default function AdminConsolePage() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 4 }}>
                           <span className={user360Dossier.subscription?.source === 'payment_backed' ? 'admin-badge-approved' : user360Dossier.subscription?.source === 'manual_grant' ? 'admin-badge-purple' : 'admin-badge-info'}>
-                            {user360Dossier.subscription?.source === 'payment_backed' ? 'PAYMENT-BACKED (₹499 UPI)' : user360Dossier.subscription?.source === 'manual_grant' ? 'ADMINISTRATIVE GRANT' : 'NO PAID ENTITLEMENT'}
+                            {user360Dossier.subscription?.source === 'payment_backed' ? 'PAYMENT-BACKED (UPI)' : user360Dossier.subscription?.source === 'manual_grant' ? 'ADMINISTRATIVE GRANT' : 'NO PAID ENTITLEMENT'}
                           </span>
                           {user360Dossier.subscription && (
                             <span style={{ fontSize: '0.75rem', color: user360Dossier.subscription.remainingDays > 0 ? '#f59e0b' : '#ef4444', fontWeight: 600 }}>

@@ -811,7 +811,9 @@ describe('30-Day Subscription Expiration Window & Renewal Notifications (End-to-
         path.join(repoRoot, 'src/app/components/billing/UpiPaymentFlow.tsx'),
         'utf8'
       );
-      assert.ok(upiFlowSrc.includes('Renew for +30 Days (₹499)'));
+      assert.ok(upiFlowSrc.includes('Renew for +30 Days ('));
+      assert.ok(upiFlowSrc.includes('PREMIUM_PLAN.originalPriceInr'));
+      assert.ok(upiFlowSrc.includes('PREMIUM_PLAN.priceInr'));
       assert.ok(upiFlowSrc.includes('newlyBecamePremium'));
 
       const homePageSrc = fs.readFileSync(

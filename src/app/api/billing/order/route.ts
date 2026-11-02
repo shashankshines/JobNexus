@@ -138,7 +138,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // Create a new order with server-enforced amount (₹499)
+    // Create a new order with server-enforced discounted amount (₹349, regularly ₹499)
     try {
       const newOrder = await createPaymentOrder({
         userId: auth.user.id,

@@ -55,7 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       {
         success: false,
         error:
-          'Independent verification confirmation required. You must certify that the ₹499 credit was independently verified in the bank / UPI statement.',
+          'Independent verification confirmation required. You must certify that the UPI payment credit was independently verified in the bank / UPI statement.',
       },
       { status: 400 }
     );

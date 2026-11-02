@@ -1,4 +1,4 @@
-import type { SubscriptionRecord } from './subscription.types';
+import { PREMIUM_PLAN, type SubscriptionRecord } from './subscription.types';
 
 /**
  * JobNexus 30-Day Subscription Expiration & Renewal Window Engine
@@ -176,8 +176,8 @@ export function evaluateRenewalWindow(params: {
         ? 'Renewal Payment Under Verification'
         : 'Your 30-Day JobNexus Premium Access Has Ended',
       message: hasPendingRenewalVerification
-        ? 'Your previous 30-day cycle ended, and your submitted ₹499 UPI renewal reference is currently awaiting administrator verification.'
-        : `Your Premium period ended on ${formattedEndDate}. Renew for ₹499 to unlock direct employer ATS links and company identities again — your saved jobs are safe.`,
+        ? 'Your previous 30-day cycle ended, and your submitted UPI renewal reference is currently awaiting administrator verification.'
+        : `Your Premium period ended on ${formattedEndDate}. Renew for ₹${PREMIUM_PLAN.priceInr} (regularly ₹${PREMIUM_PLAN.originalPriceInr}) to unlock direct employer ATS links and company identities again — your saved jobs are safe.`,
     };
   }
 
@@ -216,8 +216,8 @@ export function evaluateRenewalWindow(params: {
         ? `Premium Expires in ${timeLabel} · Renewal Verification Pending`
         : `Premium Access Expires in ${timeLabel}`,
       message: hasPendingRenewalVerification
-        ? `Your ₹499 renewal UPI reference has been received and is under verification before ${formattedEndDate}.`
-        : `Your 30-day cycle ends on ${formattedEndDate}. Renew now for ₹499 to add +30 days seamlessly without losing any remaining hours.`,
+        ? `Your renewal UPI reference has been received and is under verification before ${formattedEndDate}.`
+        : `Your 30-day cycle ends on ${formattedEndDate}. Renew now for ₹${PREMIUM_PLAN.priceInr} (regularly ₹${PREMIUM_PLAN.originalPriceInr}) to add +30 days seamlessly without losing any remaining hours.`,
     };
   }
 
@@ -252,8 +252,8 @@ export function evaluateRenewalWindow(params: {
         ? `Premium Valid for ${dayLabel} · Renewal Under Review`
         : `Your Premium Access Expires in ${dayLabel}`,
       message: hasPendingRenewalVerification
-        ? `Your ₹499 renewal payment is awaiting administrator verification. Upon approval, +30 days will be added to ${formattedEndDate}.`
-        : `Your 30-day membership is valid until ${formattedEndDate}. Renew early to extend by a full +30 days from your current expiry date.`,
+        ? `Your renewal payment is awaiting administrator verification. Upon approval, +30 days will be added to ${formattedEndDate}.`
+        : `Your 30-day membership is valid until ${formattedEndDate}. Renew early for ₹${PREMIUM_PLAN.priceInr} (regularly ₹${PREMIUM_PLAN.originalPriceInr}) to extend by a full +30 days from your current expiry date.`,
     };
   }
 
@@ -293,3 +293,4 @@ export function evaluateRenewalWindow(params: {
     message: `Your 30-day membership is active through ${formattedEndDate}.`,
   };
 }
+

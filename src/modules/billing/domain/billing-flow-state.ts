@@ -1,4 +1,4 @@
-import type { SubscriptionRecord, UserEntitlement } from './subscription.types';
+import { PREMIUM_PLAN, type SubscriptionRecord, type UserEntitlement } from './subscription.types';
 import type {
   PaymentOrderDocument,
   PaymentSubmissionDocument,
@@ -37,7 +37,12 @@ export function resolveBillingFlowSnapshot(params: {
   checkedAt?: string;
   nowMs?: number;
 }): BillingFlowSnapshot {
-  const { entitlement, submissions, activeOrder } = params;
+  const { entitlement, submissions } = params;
+  // Supersede stale pre-discount unsubmitted orders (e.g. ₹499) so users receive the current ₹349 QR
+  const activeOrder =
+    params.activeOrder && params.activeOrder.amountInr === PREMIUM_PLAN.priceInr
+      ? params.activeOrder
+      : null;
   const checkedAt = params.checkedAt || new Date().toISOString();
 
   const pendingSubmission =

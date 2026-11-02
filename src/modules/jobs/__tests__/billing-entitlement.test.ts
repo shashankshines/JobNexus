@@ -86,11 +86,15 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
   // =========================================================================
   // 1. Plan Definition & Server Enforced Pricing
   // =========================================================================
-  it('enforces fixed ₹499/month pricing parameters server-side', () => {
+  it('enforces discounted ₹349/month (struck-out ₹499) pricing parameters server-side', () => {
     assert.strictEqual(PREMIUM_PLAN.id, 'premium_monthly');
     assert.strictEqual(PREMIUM_PLAN.name, 'JobNexus Premium');
-    assert.strictEqual(PREMIUM_PLAN.priceInr, 499);
-    assert.strictEqual(PREMIUM_PLAN.amountInPaise, 49900);
+    assert.strictEqual(PREMIUM_PLAN.originalPriceInr, 499);
+    assert.strictEqual(PREMIUM_PLAN.originalAmountInPaise, 49900);
+    assert.strictEqual(PREMIUM_PLAN.priceInr, 349);
+    assert.strictEqual(PREMIUM_PLAN.amountInPaise, 34900);
+    assert.strictEqual(PREMIUM_PLAN.discountPercent, 30);
+    assert.strictEqual(PREMIUM_PLAN.savingsInr, 150);
     assert.strictEqual(PREMIUM_PLAN.currency, 'INR');
     assert.strictEqual(PREMIUM_PLAN.interval, 'monthly');
     assert.ok(PREMIUM_PLAN.taxTerms.includes('GST'));
@@ -252,7 +256,7 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
     assert.strictEqual(data.entitlement.tier, 'free');
   });
 
-  it('POST /api/billing/checkout initiates ₹499 checkout and prevents duplicate subscriptions', async () => {
+  it('POST /api/billing/checkout initiates discounted ₹349 checkout and prevents duplicate subscriptions', async () => {
     const session = createAuthenticatedSession('user_checkout_test_1');
     const req = createMockRequest('http://localhost:3000/api/billing/checkout', {
       method: 'POST',
@@ -265,8 +269,10 @@ describe('JobNexus Premium — Subscription & Entitlement Domain Tests', () => {
 
     const data = await res.json();
     assert.strictEqual(data.success, true);
-    assert.strictEqual(data.plan.amountInPaise, 49900);
-    assert.strictEqual(data.plan.priceInr, 499);
+    assert.strictEqual(data.plan.originalPriceInr, 499);
+    assert.strictEqual(data.plan.originalAmountInPaise, 49900);
+    assert.strictEqual(data.plan.amountInPaise, 34900);
+    assert.strictEqual(data.plan.priceInr, 349);
     assert.ok(data.checkout.orderId);
 
     // Attempting checkout while actively subscribed returns 409 Conflict

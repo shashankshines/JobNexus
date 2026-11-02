@@ -248,6 +248,7 @@ export async function getAdminOverview(options?: { bypassCache?: boolean; forceC
   let slaBreachCount = 0;
   let totalApprovedCount = 0;
   let totalRejectedCount = 0;
+  let verifiedRevenueInr = 0;
   let pendingClaimedRevenueInr = 0;
   const rawPendingItems: PendingApprovalPreviewItem[] = [];
 
@@ -255,7 +256,7 @@ export async function getAdminOverview(options?: { bypassCache?: boolean; forceC
     const data = doc.data();
     if (data.status === 'pending_verification') {
       pendingCount++;
-      const amount = Number(data.declaredAmount) || 499;
+      const amount = Number(data.declaredAmount) || PREMIUM_PLAN.priceInr;
       pendingClaimedRevenueInr += amount;
       const deadline = new Date(data.slaDeadlineAt).getTime();
       const isBreached = !isNaN(deadline) && deadline < now;
@@ -276,6 +277,7 @@ export async function getAdminOverview(options?: { bypassCache?: boolean; forceC
       });
     } else if (data.status === 'approved') {
       totalApprovedCount++;
+      verifiedRevenueInr += Number(data.declaredAmount) || PREMIUM_PLAN.priceInr;
     } else if (data.status === 'rejected') {
       totalRejectedCount++;
     }
@@ -314,9 +316,6 @@ export async function getAdminOverview(options?: { bypassCache?: boolean; forceC
       }
     }
   }
-
-  // Authoritative verified revenue: approved payment count * ₹499
-  const verifiedRevenueInr = totalApprovedCount * 499;
 
   const metrics: AdminOverviewMetrics = {
     pendingCount,
@@ -522,7 +521,7 @@ export async function getAdminSubmissions(filter?: {
  * Exactly-Once Payment Approval:
  * 1. Validates submission is pending_verification.
  * 2. Idempotently returns success if already approved.
- * 3. Authoritatively validates order amount (₹499), plan ('premium_monthly'), currency ('INR').
+ * 3. Authoritatively validates order amount (₹349 discounted or historical ₹499), plan ('premium_monthly'), currency ('INR').
  * 4. Consumes the UTR reservation in upi_utr_reservations.
  * 5. Applies authoritative subscription formula:
  *    newPeriodEnd = max(now, currentPeriodEnd) + 30 days
@@ -596,7 +595,11 @@ export async function approvePaymentSubmissionInTransaction(params: {
       throw new OrderValidationError(`Invalid planId "${order.planId}". Expected "${PREMIUM_PLAN.id}".`);
     }
 
-    if (order.amountInr !== PREMIUM_PLAN.priceInr || order.currency !== 'INR') {
+    const validPlanAmounts: number[] = [
+      PREMIUM_PLAN.priceInr,
+      PREMIUM_PLAN.originalPriceInr,
+    ];
+    if (!validPlanAmounts.includes(order.amountInr) || order.currency !== 'INR') {
       throw new OrderValidationError(`Invalid order terms: ₹${order.amountInr} ${order.currency}. Expected ₹${PREMIUM_PLAN.priceInr} INR.`);
     }
 
@@ -778,7 +781,7 @@ export async function approvePaymentSubmissionInTransaction(params: {
         orderId: result.submission.orderId,
         submissionId: result.submission.submissionId,
         userEmail: result.subscription.userEmail || result.submission.userEmail,
-        amountInr: 499,
+        amountInr: result.submission.declaredAmount || PREMIUM_PLAN.priceInr,
         currentPeriodStart: result.subscription.currentPeriodStart,
         currentPeriodEnd: result.subscription.currentPeriodEnd,
       });
@@ -1999,7 +2002,7 @@ export async function getConsolidatedPaymentLedger(
       submissionId: sub.submissionId,
       userId: sub.userId,
       userEmail,
-      amount: ord?.amountInr || sub.declaredAmount || 499,
+      amount: ord?.amountInr || sub.declaredAmount || PREMIUM_PLAN.priceInr,
       currency: ord?.currency || 'INR',
       utr: utrStr,
       status,
@@ -2029,7 +2032,7 @@ export async function getConsolidatedPaymentLedger(
         orderId: ord.orderId,
         userId: ord.userId,
         userEmail,
-        amount: ord.amountInr || 499,
+        amount: ord.amountInr || PREMIUM_PLAN.priceInr,
         currency: ord.currency || 'INR',
         status: isExpired ? 'expired' : 'unsubmitted',
         orderCreatedAt: ord.createdAt,
@@ -2062,7 +2065,7 @@ export async function getConsolidatedPaymentLedger(
       if (!item.isOrphan && !verifiedOrderIds.has(item.orderId)) {
         verifiedOrderIds.add(item.orderId);
         verifiedPaymentsCount++;
-        verifiedPaymentAmountInr += (item.amount || 499);
+        verifiedPaymentAmountInr += (item.amount || PREMIUM_PLAN.priceInr);
       }
     } else if (item.status === 'pending') {
       pendingSubmissionsCount++;

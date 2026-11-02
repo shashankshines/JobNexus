@@ -15,6 +15,7 @@ import { renderSubscriptionExpiringEmail } from './templates/subscription-expiri
 import { renderSubscriptionExpiredEmail } from './templates/subscription-expired.template';
 import { maskUtr } from './templates/base.template';
 import { buildRenewalEmailIdempotencyKey } from '../billing/domain/renewal-window';
+import { PREMIUM_PLAN } from '../billing/domain/subscription.types';
 import {
   createOutboxRecord,
   getOutboxRecordById,
@@ -437,7 +438,7 @@ export async function sendPaymentApprovalNotification(
     submissionId: params.submissionId,
     recipientEmail,
     planTitle: 'JobNexus Premium (30 Days)',
-    amountInr: params.amountInr ?? 499,
+    amountInr: params.amountInr ?? PREMIUM_PLAN.priceInr,
     currency: params.currency || 'INR',
     currentPeriodStart: params.currentPeriodStart,
     currentPeriodEnd: params.currentPeriodEnd,
@@ -453,7 +454,7 @@ export async function sendPaymentApprovalNotification(
     subject: emailContent.subject,
     templateType: 'payment_approved',
     payload: {
-      amountInr: params.amountInr ?? 499,
+      amountInr: params.amountInr ?? PREMIUM_PLAN.priceInr,
       currentPeriodStart: params.currentPeriodStart,
       currentPeriodEnd: params.currentPeriodEnd,
     },
@@ -550,7 +551,7 @@ export async function sendPaymentRejectionNotification(
     submissionId: params.submissionId,
     recipientEmail,
     planTitle: 'JobNexus Premium (30 Days)',
-    amountInr: params.amountInr ?? 499,
+    amountInr: params.amountInr ?? PREMIUM_PLAN.priceInr,
     currency: params.currency || 'INR',
     maskedUtr: params.maskedUtr,
     rejectionReason: params.rejectionReason,
@@ -685,7 +686,7 @@ export async function sendSubscriptionExpiringReminder(
   }
 
   const renewUrl = `${getAppBaseUrl()}/?renew=1`;
-  const amountInr = params.amountInr ?? 499;
+  const amountInr = params.amountInr ?? PREMIUM_PLAN.priceInr;
   const currency = params.currency || 'INR';
 
   const emailContent = renderSubscriptionExpiringEmail({
@@ -830,7 +831,7 @@ export async function sendSubscriptionExpiredNotification(
   }
 
   const renewUrl = `${getAppBaseUrl()}/?renew=1`;
-  const amountInr = params.amountInr ?? 499;
+  const amountInr = params.amountInr ?? PREMIUM_PLAN.priceInr;
   const currency = params.currency || 'INR';
 
   const emailContent = renderSubscriptionExpiredEmail({
@@ -930,7 +931,7 @@ export async function retryNotificationById(
       submissionId: record.submissionId,
       recipientEmail: record.recipientEmail,
       planTitle: 'JobNexus Premium (30 Days)',
-      amountInr: (record.payload?.declaredAmount as number) || 499,
+      amountInr: (record.payload?.declaredAmount as number) || PREMIUM_PLAN.priceInr,
       currency: (record.payload?.currency as string) || 'INR',
       maskedUtr: (record.payload?.maskedUtr as string) || '••••••••',
       submittedAt: (record.payload?.submittedAt as string) || record.createdAt,
@@ -945,7 +946,7 @@ export async function retryNotificationById(
       recipientEmail: record.recipientEmail,
       applicantEmail: record.payload?.applicantEmail as string | undefined,
       planTitle: 'JobNexus Premium (30 Days)',
-      amountInr: (record.payload?.declaredAmount as number) || 499,
+      amountInr: (record.payload?.declaredAmount as number) || PREMIUM_PLAN.priceInr,
       currency: (record.payload?.currency as string) || 'INR',
       maskedUtr: (record.payload?.maskedUtr as string) || '••••••••',
       paymentDate: (record.payload?.paymentDate as string) || record.createdAt.slice(0, 10),
@@ -960,7 +961,7 @@ export async function retryNotificationById(
       submissionId: record.submissionId,
       recipientEmail: record.recipientEmail,
       planTitle: 'JobNexus Premium (30 Days)',
-      amountInr: (record.payload?.amountInr as number) || 499,
+      amountInr: (record.payload?.amountInr as number) || PREMIUM_PLAN.priceInr,
       currency: 'INR',
       currentPeriodStart: (record.payload?.currentPeriodStart as string) || record.createdAt,
       currentPeriodEnd: (record.payload?.currentPeriodEnd as string) || record.createdAt,
@@ -973,7 +974,7 @@ export async function retryNotificationById(
       submissionId: record.submissionId,
       recipientEmail: record.recipientEmail,
       planTitle: 'JobNexus Premium (30 Days)',
-      amountInr: 499,
+      amountInr: (record.payload?.amountInr as number) || PREMIUM_PLAN.priceInr,
       currency: 'INR',
       maskedUtr: (record.payload?.maskedUtr as string) || '••••••••',
       rejectionReason: (record.payload?.rejectionReason as string) || 'Verification unsuccessful',
@@ -986,7 +987,7 @@ export async function retryNotificationById(
       subscriptionId: (record.payload?.subscriptionId as string) || record.orderId,
       recipientEmail: record.recipientEmail,
       planTitle: 'JobNexus Premium (30 Days)',
-      amountInr: (record.payload?.amountInr as number) || 499,
+      amountInr: (record.payload?.amountInr as number) || PREMIUM_PLAN.priceInr,
       currency: (record.payload?.currency as string) || 'INR',
       currentPeriodEnd: (record.payload?.currentPeriodEnd as string) || record.createdAt,
       daysRemaining: (record.payload?.daysRemaining as number) || 1,
@@ -1000,7 +1001,7 @@ export async function retryNotificationById(
       subscriptionId: (record.payload?.subscriptionId as string) || record.orderId,
       recipientEmail: record.recipientEmail,
       planTitle: 'JobNexus Premium (30 Days)',
-      amountInr: (record.payload?.amountInr as number) || 499,
+      amountInr: (record.payload?.amountInr as number) || PREMIUM_PLAN.priceInr,
       currency: (record.payload?.currency as string) || 'INR',
       expiredAt: (record.payload?.expiredAt as string) || record.createdAt,
       renewUrl: `${getAppBaseUrl()}/?renew=1`,

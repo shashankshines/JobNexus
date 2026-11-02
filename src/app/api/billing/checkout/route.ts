@@ -131,8 +131,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       plan: {
         id: PREMIUM_PLAN.id,
         name: PREMIUM_PLAN.name,
+        originalPriceInr: PREMIUM_PLAN.originalPriceInr,
+        originalAmountInPaise: PREMIUM_PLAN.originalAmountInPaise,
         priceInr: PREMIUM_PLAN.priceInr,
         amountInPaise: PREMIUM_PLAN.amountInPaise,
+        discountPercent: PREMIUM_PLAN.discountPercent,
+        savingsInr: PREMIUM_PLAN.savingsInr,
         currency: PREMIUM_PLAN.currency,
         interval: PREMIUM_PLAN.interval,
       },
