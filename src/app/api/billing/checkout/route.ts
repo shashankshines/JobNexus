@@ -86,7 +86,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         title: 'New Premium checkout started',
         message: `${auth.user.name || auth.user.email || 'A user'} created or resumed a ₹${order.amountInr} Premium payment order.`,
         actionLabel: 'View payment queue',
-        actionUrl: '/admin?tab=verifications',
+        actionUrl: '/admin?tab=ledger',
         userId: auth.user.id,
         userEmail: auth.user.email,
         orderId: order.orderId,
