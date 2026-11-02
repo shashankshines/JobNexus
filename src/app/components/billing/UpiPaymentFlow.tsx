@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -26,6 +26,10 @@ import { buildUpiPaymentUri } from './upi-payment-uri';
 import { UpiQrCode } from './UpiQrCode';
 import type { PaymentOrder, PaymentSubmission, UpiPaymentStep } from './types';
 import type { BillingFlowSnapshot } from '@/modules/billing/domain/billing-flow-state';
+import {
+  evaluateRenewalWindow,
+  type RenewalWindowSnapshot,
+} from '@/modules/billing/domain/renewal-window';
 
 interface UpiPaymentFlowProps {
   onClose: () => void;
@@ -89,6 +93,7 @@ export function UpiPaymentFlow({
   const [fieldErrors, setFieldErrors] = useState<{ utr?: string; date?: string }>({});
   const [copySuccess, setCopySuccess] = useState(false);
   const [emailDeliveryNotice, setEmailDeliveryNotice] = useState<string | null>(null);
+  const prevIsPremiumRef = useRef(isPremium);
 
   const commitBillingFlowUpdate = useCallback(
     (next: {
@@ -96,6 +101,7 @@ export function UpiPaymentFlow({
       order: PaymentOrder | null;
       submission: PaymentSubmission | null;
       checkedAt?: string;
+      renewal?: RenewalWindowSnapshot;
     }) => {
       setStep(next.step);
       setOrder(next.order);
@@ -103,17 +109,38 @@ export function UpiPaymentFlow({
       const checkedIso = next.checkedAt || new Date().toISOString();
       setLastCheckedAt(new Date(checkedIso));
       if (onBillingFlowChange) {
-        onBillingFlowChange({
-          step: next.step,
-          order: next.order,
-          submission: next.submission,
-          hasPendingVerification: next.submission?.status === 'pending_verification',
-          hasRejectedSubmission: next.submission?.status === 'rejected' && !next.order,
-          checkedAt: checkedIso,
+        const isPendingNow = next.submission?.status === 'pending_verification';
+        onBillingFlowChange((prev) => {
+          const baseRenewal =
+            next.renewal ??
+            prev?.renewal ??
+            billingFlow?.renewal ??
+            evaluateRenewalWindow({
+              subscription: null,
+              hasPendingVerification: isPendingNow,
+            });
+          const mergedRenewal: RenewalWindowSnapshot = isPendingNow
+            ? {
+                ...baseRenewal,
+                hasPendingRenewalVerification: true,
+                canRenewNow: false,
+                emailMilestone: null,
+              }
+            : baseRenewal;
+
+          return {
+            step: next.step,
+            order: next.order,
+            submission: next.submission,
+            hasPendingVerification: isPendingNow,
+            hasRejectedSubmission: next.submission?.status === 'rejected' && !next.order,
+            checkedAt: checkedIso,
+            renewal: mergedRenewal,
+          };
         });
       }
     },
-    [onBillingFlowChange]
+    [onBillingFlowChange, billingFlow?.renewal]
   );
 
   // ---------------------------------------------------------------------------
@@ -152,6 +179,7 @@ export function UpiPaymentFlow({
                 order: data.billingFlow.order ?? null,
                 submission: data.billingFlow.submission ?? null,
                 checkedAt: data.billingFlow.checkedAt,
+                renewal: data.billingFlow.renewal,
               });
             }
           }
@@ -176,8 +204,11 @@ export function UpiPaymentFlow({
     commitBillingFlowUpdate,
   ]);
 
-  // Synchronize external server-driven submission / entitlement changes (e.g. admin approval) without clobbering active form input
+  // Synchronize external server-driven submission / entitlement changes (e.g. admin approval) without clobbering active renewal checkout
   useEffect(() => {
+    const newlyBecamePremium = !prevIsPremiumRef.current && isPremium;
+    prevIsPremiumRef.current = isPremium;
+
     if (isResolvingInitialState || !billingFlow) return;
     const incomingSub = billingFlow.submission;
     if (
@@ -189,7 +220,7 @@ export function UpiPaymentFlow({
       setStep(billingFlow.step);
       setOrder(billingFlow.order);
       setLastCheckedAt(new Date(billingFlow.checkedAt));
-    } else if (isPremium && step !== 'status_view') {
+    } else if (newlyBecamePremium && step !== 'status_view') {
       setStep('status_view');
     }
   }, [isResolvingInitialState, billingFlow, isPremium, submission, step]);
@@ -235,8 +266,12 @@ export function UpiPaymentFlow({
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         if (res.status === 409) {
-          setErrorMessage('You already have an active JobNexus Premium membership.');
-          if (onSubscriptionSuccess) onSubscriptionSuccess();
+          setErrorMessage(
+            errData.error || 'You already have an active JobNexus Premium membership.'
+          );
+          if (errData.alreadySubscribed && onSubscriptionSuccess) {
+            onSubscriptionSuccess();
+          }
           return;
         }
         throw new Error(errData.error || 'Failed to create payment order. Please try again.');
@@ -450,6 +485,7 @@ export function UpiPaymentFlow({
             order: statusData.billingFlow.order ?? null,
             submission: statusData.billingFlow.submission ?? submission,
             checkedAt: statusData.billingFlow.checkedAt,
+            renewal: statusData.billingFlow.renewal,
           });
         } else {
           setLastCheckedAt(new Date());
@@ -517,6 +553,9 @@ export function UpiPaymentFlow({
   // RENDER: STEP 1 — PLAN REVIEW
   // ---------------------------------------------------------------------------
   if (step === 'plan_review') {
+    const isExpiredRenewal = billingFlow?.renewal?.stage === 'expired';
+    const isAdminRestricted = Boolean(billingFlow?.renewal?.isAdminRestricted);
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
@@ -531,15 +570,19 @@ export function UpiPaymentFlow({
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
-                background: 'rgba(99, 102, 241, 0.16)',
-                color: '#a5b4fc',
+                background: isExpiredRenewal
+                  ? 'rgba(245, 158, 11, 0.16)'
+                  : 'rgba(99, 102, 241, 0.16)',
+                color: isExpiredRenewal ? '#fbbf24' : '#a5b4fc',
                 padding: '0.35rem 0.8rem',
                 borderRadius: 999,
-                border: '1px solid rgba(99, 102, 241, 0.35)',
+                border: isExpiredRenewal
+                  ? '1px solid rgba(245, 158, 11, 0.35)'
+                  : '1px solid rgba(99, 102, 241, 0.35)',
               }}
             >
-              <Sparkles size={13} style={{ color: '#818cf8', flexShrink: 0 }} />
-              <span>Membership Offer</span>
+              <Sparkles size={13} style={{ color: isExpiredRenewal ? '#fbbf24' : '#818cf8', flexShrink: 0 }} />
+              <span>{isExpiredRenewal ? 'Membership Expired · Renew Access' : 'Membership Offer'}</span>
             </span>
             <button
               type="button"
@@ -576,10 +619,15 @@ export function UpiPaymentFlow({
               lineHeight: 1.25,
             }}
           >
-            Supercharge Your Job Search with Premium
+            {isExpiredRenewal
+              ? 'Renew Your 30-Day JobNexus Premium'
+              : 'Supercharge Your Job Search with Premium'}
           </h2>
           <p style={{ fontSize: '0.86rem', color: '#94a3b8', margin: 0, lineHeight: 1.45 }}>
-            Bypass queues, reveal direct employer ATS application links, and organize target positions with dedicated tools.
+            {isExpiredRenewal
+              ? billingFlow?.renewal?.message ||
+                'Your previous 30-day cycle ended. Renew for ₹499 to unlock unmasked employer identities and direct ATS links again — your saved jobs are safe.'
+              : 'Bypass queues, reveal direct employer ATS application links, and organize target positions with dedicated tools.'}
           </p>
         </div>
 
@@ -725,6 +773,25 @@ export function UpiPaymentFlow({
           </div>
         </div>
 
+        {/* Administrative Restriction Notice */}
+        {isAdminRestricted && (
+          <div
+            role="alert"
+            style={{
+              margin: '1rem 2rem 0 2rem',
+              padding: '0.8rem 1rem',
+              borderRadius: 10,
+              background: 'rgba(239, 68, 68, 0.14)',
+              border: '1px solid rgba(239, 68, 68, 0.32)',
+              color: '#fca5a5',
+              fontSize: '0.82rem',
+              lineHeight: 1.45,
+            }}
+          >
+            Your membership is currently under administrative restriction and ineligible for self-service renewal. Please contact support if you need assistance.
+          </div>
+        )}
+
         {/* Error message */}
         {errorMessage && (
           <div
@@ -755,21 +822,23 @@ export function UpiPaymentFlow({
           <button
             type="button"
             onClick={handleProceedToPayment}
-            disabled={isLoadingOrder}
+            disabled={isLoadingOrder || isAdminRestricted}
             style={{
               width: '100%',
               minHeight: 48,
               padding: '0.85rem 1.25rem',
               borderRadius: 12,
-              background: isLoadingOrder
+              background: isAdminRestricted
+                ? 'rgba(100, 116, 139, 0.25)'
+                : isLoadingOrder
                 ? '#4338ca'
                 : 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
-              color: '#ffffff',
+              color: isAdminRestricted ? '#94a3b8' : '#ffffff',
               fontSize: '0.95rem',
               fontWeight: 700,
               border: 'none',
-              cursor: isLoadingOrder ? 'wait' : 'pointer',
-              boxShadow: '0 4px 18px rgba(79, 70, 229, 0.45)',
+              cursor: isAdminRestricted ? 'not-allowed' : isLoadingOrder ? 'wait' : 'pointer',
+              boxShadow: isAdminRestricted ? 'none' : '0 4px 18px rgba(79, 70, 229, 0.45)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -780,7 +849,11 @@ export function UpiPaymentFlow({
               <span>Preparing UPI Order...</span>
             ) : (
               <>
-                <span>Proceed to UPI Payment (₹499)</span>
+                <span>
+                  {isExpiredRenewal
+                    ? 'Renew via UPI (₹499 / 30 Days)'
+                    : 'Proceed to UPI Payment (₹499)'}
+                </span>
                 <ArrowRight size={18} />
               </>
             )}
@@ -1579,7 +1652,7 @@ export function UpiPaymentFlow({
         )}
 
         {/* Verification Summary Card */}
-        {submission && (
+        {(submission || (isApproved && billingFlow?.renewal?.currentPeriodEnd)) && (
           <div
             style={{
               margin: '0 2rem 1rem 2rem',
@@ -1593,27 +1666,97 @@ export function UpiPaymentFlow({
               fontSize: '0.82rem',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94a3b8' }}>Submission ID:</span>
-              <code style={{ color: '#e2e8f0', fontWeight: 600 }}>{submission.submissionId}</code>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94a3b8' }}>UTR Reference:</span>
-              <code style={{ color: '#818cf8', fontWeight: 700 }}>{submission.utrNumber}</code>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94a3b8' }}>Declared Amount:</span>
-              <span style={{ color: '#34d399', fontWeight: 700 }}>₹{submission.declaredAmount}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94a3b8' }}>Payment Date:</span>
-              <span style={{ color: '#e2e8f0' }}>{submission.paymentDate}</span>
-            </div>
+            {submission && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Submission ID:</span>
+                  <code style={{ color: '#e2e8f0', fontWeight: 600 }}>{submission.submissionId}</code>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>UTR Reference:</span>
+                  <code style={{ color: '#818cf8', fontWeight: 700 }}>{submission.utrNumber}</code>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Declared Amount:</span>
+                  <span style={{ color: '#34d399', fontWeight: 700 }}>₹{submission.declaredAmount}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Payment Date:</span>
+                  <span style={{ color: '#e2e8f0' }}>{submission.paymentDate}</span>
+                </div>
+              </>
+            )}
+            {isApproved && billingFlow?.renewal?.currentPeriodEnd && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>Access Valid Until:</span>
+                <span style={{ color: '#fbbf24', fontWeight: 700 }}>
+                  {new Date(billingFlow.renewal.currentPeriodEnd).toLocaleDateString('en-IN', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                </span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#94a3b8' }}>Current Status:</span>
               <span style={{ color: isApproved ? '#34d399' : isPending ? '#fbbf24' : '#f87171', fontWeight: 600 }}>
                 {isApproved ? 'Approved' : isPending ? 'Pending Verification' : 'Rejected'}
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* Early Renewal Window Callout (<= 5 Days Remaining or Cancelled Grace) */}
+        {isApproved && billingFlow?.renewal?.canRenewNow && (
+          <div
+            style={{
+              margin: '0 2rem 0.5rem 2rem',
+              padding: '0.9rem 1rem',
+              borderRadius: 12,
+              background:
+                billingFlow.renewal.stage === 'expiring_urgent'
+                  ? 'rgba(239, 68, 68, 0.12)'
+                  : 'rgba(245, 158, 11, 0.1)',
+              border:
+                billingFlow.renewal.stage === 'expiring_urgent'
+                  ? '1px solid rgba(239, 68, 68, 0.32)'
+                  : '1px solid rgba(245, 158, 11, 0.28)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.7rem',
+            }}
+          >
+            <Clock
+              size={18}
+              style={{
+                color:
+                  billingFlow.renewal.stage === 'expiring_urgent' ? '#f87171' : '#fbbf24',
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+            />
+            <div>
+              <div
+                style={{
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  color:
+                    billingFlow.renewal.stage === 'expiring_urgent' ? '#fca5a5' : '#fde68a',
+                }}
+              >
+                {billingFlow.renewal.headline}
+              </div>
+              <p
+                style={{
+                  fontSize: '0.75rem',
+                  color: '#cbd5e1',
+                  margin: '0.2rem 0 0 0',
+                  lineHeight: 1.45,
+                }}
+              >
+                {billingFlow.renewal.message}
+              </p>
             </div>
           </div>
         )}
@@ -1674,6 +1817,40 @@ export function UpiPaymentFlow({
             </div>
           )}
 
+          {isApproved && billingFlow?.renewal?.canRenewNow && (
+            <button
+              type="button"
+              onClick={handleProceedToPayment}
+              disabled={isLoadingOrder}
+              style={{
+                width: '100%',
+                minHeight: 46,
+                padding: '0.8rem 1rem',
+                borderRadius: 12,
+                background: isLoadingOrder
+                  ? '#4338ca'
+                  : 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                color: '#ffffff',
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                border: 'none',
+                cursor: isLoadingOrder ? 'wait' : 'pointer',
+                boxShadow: '0 4px 16px rgba(79, 70, 229, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.45rem',
+              }}
+            >
+              <span>
+                {isLoadingOrder
+                  ? 'Preparing Renewal Order...'
+                  : 'Renew for +30 Days (₹499)'}
+              </span>
+              {!isLoadingOrder && <ArrowRight size={17} />}
+            </button>
+          )}
+
           {isApproved && (
             <button
               type="button"
@@ -1686,11 +1863,15 @@ export function UpiPaymentFlow({
                 minHeight: 46,
                 padding: '0.75rem 1rem',
                 borderRadius: 12,
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                color: '#ffffff',
+                background: billingFlow?.renewal?.canRenewNow
+                  ? 'rgba(16, 185, 129, 0.14)'
+                  : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: billingFlow?.renewal?.canRenewNow ? '#34d399' : '#ffffff',
                 fontSize: '0.92rem',
                 fontWeight: 700,
-                border: 'none',
+                border: billingFlow?.renewal?.canRenewNow
+                  ? '1px solid rgba(52, 211, 153, 0.35)'
+                  : 'none',
                 cursor: 'pointer',
               }}
             >

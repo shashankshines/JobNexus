@@ -8,6 +8,7 @@ import {
 } from '@/modules/jobs/domain/auth.validation';
 import type { UserEntitlement } from '@/modules/billing/domain/subscription.types';
 import type { BillingFlowSnapshot } from '@/modules/billing/domain/billing-flow-state';
+import type { RenewalWindowSnapshot } from '@/modules/billing/domain/renewal-window';
 
 export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'error';
 export type AuthMode = 'signin' | 'signup' | 'forgot-password';
@@ -81,6 +82,7 @@ interface AuthContextType {
   savedJobIds: Set<string>;
   entitlement: UserEntitlement | null;
   billingFlow: BillingFlowSnapshot | null;
+  renewal: RenewalWindowSnapshot | null;
   isBillingResolved: boolean;
   syncBillingFlow: (
     updater:
@@ -142,6 +144,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const authEpochRef = useRef(0);
   const authAttemptRef = useRef(0);
+  const dispatchedRenewalEmailKeysRef = useRef<Set<string>>(new Set());
+  const notifiedRenewalToastKeysRef = useRef<Set<string>>(new Set());
+
+  const renewal = useMemo<RenewalWindowSnapshot | null>(() => {
+    return billingFlow?.renewal ?? null;
+  }, [billingFlow]);
 
   const isPremium = useMemo(() => {
     return Boolean(entitlement?.isPremium);
@@ -212,6 +220,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearToast = useCallback(() => {
     setToast(null);
   }, []);
+
+  // Guarded non-blocking renewal email trigger + urgent/expired in-app toast notification
+  useEffect(() => {
+    if (status !== 'authenticated' || !user || !renewal) return;
+
+    // 1. Trigger due renewal email once per milestone key (non-blocking POST; keeps GET /api/billing/status read-only)
+    if (
+      renewal.emailMilestone &&
+      renewal.emailIdempotencyKey &&
+      !renewal.emailAlreadyDispatched &&
+      !dispatchedRenewalEmailKeysRef.current.has(renewal.emailIdempotencyKey)
+    ) {
+      dispatchedRenewalEmailKeysRef.current.add(renewal.emailIdempotencyKey);
+      fetch('/api/billing/renewal-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).catch((err) => {
+        console.warn('[AuthContext] Non-fatal renewal notification dispatch warning:', err);
+      });
+    }
+
+    // 2. Surface a one-time per-session toast when inside final 24h or recently expired without a pending renewal
+    if (
+      (renewal.stage === 'expiring_urgent' || renewal.stage === 'expired') &&
+      !renewal.hasPendingRenewalVerification &&
+      !renewal.isAdminRestricted &&
+      renewal.currentPeriodEnd
+    ) {
+      const toastKey = `${user.id}:${renewal.stage}:${renewal.currentPeriodEnd}`;
+      if (!notifiedRenewalToastKeysRef.current.has(toastKey)) {
+        notifiedRenewalToastKeysRef.current.add(toastKey);
+        showToast(
+          renewal.headline,
+          'info',
+          renewal.stage === 'expired' ? 'Membership Expired' : 'Renewal Reminder'
+        );
+      }
+    }
+  }, [status, user, renewal, showToast]);
 
   const savedJobIds = useMemo(() => {
     return new Set(savedJobs.map((j) => j.id));
@@ -740,6 +787,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         savedJobIds,
         entitlement,
         billingFlow,
+        renewal,
         isBillingResolved,
         syncBillingFlow,
         isPremium,

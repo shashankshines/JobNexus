@@ -11,7 +11,10 @@ import { renderPaymentSubmittedEmail } from './templates/payment-submitted.templ
 import { renderAdminPaymentReviewEmail } from './templates/admin-payment-review.template';
 import { renderPaymentApprovedEmail } from './templates/payment-approved.template';
 import { renderPaymentRejectedEmail } from './templates/payment-rejected.template';
+import { renderSubscriptionExpiringEmail } from './templates/subscription-expiring.template';
+import { renderSubscriptionExpiredEmail } from './templates/subscription-expired.template';
 import { maskUtr } from './templates/base.template';
+import { buildRenewalEmailIdempotencyKey } from '../billing/domain/renewal-window';
 import {
   createOutboxRecord,
   getOutboxRecordById,
@@ -606,6 +609,294 @@ export async function sendPaymentRejectionNotification(
 }
 
 // ============================================================================
+// Event E1: 30-Day Subscription Expiring Soon / Urgent Renewal Reminder
+// ============================================================================
+
+export interface SendSubscriptionExpiringReminderParams {
+  userId: string;
+  subscriptionId: string;
+  userEmail?: string;
+  currentPeriodEnd: string;
+  daysRemaining: number;
+  hoursRemaining: number;
+  isUrgent24h: boolean;
+  amountInr?: number;
+  currency?: string;
+}
+
+export async function sendSubscriptionExpiringReminder(
+  params: SendSubscriptionExpiringReminderParams
+): Promise<{
+  success: boolean;
+  outboxId?: string;
+  idempotent?: boolean;
+  status: 'sent' | 'pending' | 'failed' | 'retryable_failure' | 'skipped_missing_email';
+  error?: string;
+}> {
+  const recipientEmail = resolveTrustedRecipientEmail(params.userId, params.userEmail);
+  if (!recipientEmail) {
+    return {
+      success: false,
+      status: 'skipped_missing_email',
+      error: `No valid email address recorded for user "${params.userId}". Renewal reminder skipped.`,
+    };
+  }
+
+  const milestone = params.isUrgent24h ? 'expiring_24h' : 'expiring_5d';
+  const idempotencyKey = buildRenewalEmailIdempotencyKey({
+    milestone,
+    userId: params.userId,
+    currentPeriodEnd: params.currentPeriodEnd,
+  });
+
+  const provider = getEmailProvider();
+  const existing = await getOutboxRecordByIdempotencyKey(idempotencyKey);
+
+  if (existing) {
+    if (isTrulyDeliveredRecord(existing, provider.providerName)) {
+      return {
+        success: true,
+        outboxId: existing.id,
+        idempotent: true,
+        status: 'sent',
+      };
+    }
+    if (existing.status === 'failed') {
+      return {
+        success: false,
+        outboxId: existing.id,
+        idempotent: true,
+        status: 'failed',
+        error: existing.error,
+      };
+    }
+    if (
+      existing.status === 'retryable_failure' &&
+      (existing.attempts || 0) >= (existing.maxAttempts || 3)
+    ) {
+      return {
+        success: false,
+        outboxId: existing.id,
+        idempotent: true,
+        status: 'retryable_failure',
+        error: existing.error,
+      };
+    }
+  }
+
+  const renewUrl = `${getAppBaseUrl()}/?renew=1`;
+  const amountInr = params.amountInr ?? 499;
+  const currency = params.currency || 'INR';
+
+  const emailContent = renderSubscriptionExpiringEmail({
+    userId: params.userId,
+    subscriptionId: params.subscriptionId,
+    recipientEmail,
+    planTitle: 'JobNexus Premium (30 Days)',
+    amountInr,
+    currency,
+    currentPeriodEnd: params.currentPeriodEnd,
+    daysRemaining: params.daysRemaining,
+    hoursRemaining: params.hoursRemaining,
+    isUrgent24h: params.isUrgent24h,
+    renewUrl,
+  });
+
+  const { record } = await createOutboxRecord({
+    idempotencyKey,
+    userId: params.userId,
+    orderId: params.subscriptionId,
+    submissionId: milestone,
+    recipientEmail,
+    subject: emailContent.subject,
+    templateType: 'subscription_expiring_soon',
+    payload: {
+      subscriptionId: params.subscriptionId,
+      amountInr,
+      currency,
+      currentPeriodEnd: params.currentPeriodEnd,
+      daysRemaining: params.daysRemaining,
+      hoursRemaining: params.hoursRemaining,
+      isUrgent24h: params.isUrgent24h,
+      milestone,
+    },
+  });
+
+  const sendResult = await provider.send({
+    to: recipientEmail,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
+    idempotencyKey,
+  });
+
+  if (sendResult.success) {
+    await updateOutboxDeliveryStatus({
+      id: record.id,
+      status: 'sent',
+      providerMessageId: sendResult.providerMessageId,
+    });
+    return {
+      success: true,
+      outboxId: record.id,
+      status: 'sent',
+    };
+  } else {
+    const nextStatus = sendResult.retryable ? 'retryable_failure' : 'failed';
+    await updateOutboxDeliveryStatus({
+      id: record.id,
+      status: nextStatus,
+      error: sendResult.error,
+    });
+    return {
+      success: false,
+      outboxId: record.id,
+      status: nextStatus,
+      error: sendResult.error,
+    };
+  }
+}
+
+// ============================================================================
+// Event E2: 30-Day Subscription Expired Notification
+// ============================================================================
+
+export interface SendSubscriptionExpiredParams {
+  userId: string;
+  subscriptionId: string;
+  userEmail?: string;
+  expiredAt: string;
+  amountInr?: number;
+  currency?: string;
+}
+
+export async function sendSubscriptionExpiredNotification(
+  params: SendSubscriptionExpiredParams
+): Promise<{
+  success: boolean;
+  outboxId?: string;
+  idempotent?: boolean;
+  status: 'sent' | 'pending' | 'failed' | 'retryable_failure' | 'skipped_missing_email';
+  error?: string;
+}> {
+  const recipientEmail = resolveTrustedRecipientEmail(params.userId, params.userEmail);
+  if (!recipientEmail) {
+    return {
+      success: false,
+      status: 'skipped_missing_email',
+      error: `No valid email address recorded for user "${params.userId}". Expiry notification skipped.`,
+    };
+  }
+
+  const idempotencyKey = buildRenewalEmailIdempotencyKey({
+    milestone: 'expired',
+    userId: params.userId,
+    currentPeriodEnd: params.expiredAt,
+  });
+
+  const provider = getEmailProvider();
+  const existing = await getOutboxRecordByIdempotencyKey(idempotencyKey);
+
+  if (existing) {
+    if (isTrulyDeliveredRecord(existing, provider.providerName)) {
+      return {
+        success: true,
+        outboxId: existing.id,
+        idempotent: true,
+        status: 'sent',
+      };
+    }
+    if (existing.status === 'failed') {
+      return {
+        success: false,
+        outboxId: existing.id,
+        idempotent: true,
+        status: 'failed',
+        error: existing.error,
+      };
+    }
+    if (
+      existing.status === 'retryable_failure' &&
+      (existing.attempts || 0) >= (existing.maxAttempts || 3)
+    ) {
+      return {
+        success: false,
+        outboxId: existing.id,
+        idempotent: true,
+        status: 'retryable_failure',
+        error: existing.error,
+      };
+    }
+  }
+
+  const renewUrl = `${getAppBaseUrl()}/?renew=1`;
+  const amountInr = params.amountInr ?? 499;
+  const currency = params.currency || 'INR';
+
+  const emailContent = renderSubscriptionExpiredEmail({
+    userId: params.userId,
+    subscriptionId: params.subscriptionId,
+    recipientEmail,
+    planTitle: 'JobNexus Premium (30 Days)',
+    amountInr,
+    currency,
+    expiredAt: params.expiredAt,
+    renewUrl,
+  });
+
+  const { record } = await createOutboxRecord({
+    idempotencyKey,
+    userId: params.userId,
+    orderId: params.subscriptionId,
+    submissionId: 'expired',
+    recipientEmail,
+    subject: emailContent.subject,
+    templateType: 'subscription_expired',
+    payload: {
+      subscriptionId: params.subscriptionId,
+      amountInr,
+      currency,
+      expiredAt: params.expiredAt,
+      milestone: 'expired',
+    },
+  });
+
+  const sendResult = await provider.send({
+    to: recipientEmail,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
+    idempotencyKey,
+  });
+
+  if (sendResult.success) {
+    await updateOutboxDeliveryStatus({
+      id: record.id,
+      status: 'sent',
+      providerMessageId: sendResult.providerMessageId,
+    });
+    return {
+      success: true,
+      outboxId: record.id,
+      status: 'sent',
+    };
+  } else {
+    const nextStatus = sendResult.retryable ? 'retryable_failure' : 'failed';
+    await updateOutboxDeliveryStatus({
+      id: record.id,
+      status: nextStatus,
+      error: sendResult.error,
+    });
+    return {
+      success: false,
+      outboxId: record.id,
+      status: nextStatus,
+      error: sendResult.error,
+    };
+  }
+}
+
+// ============================================================================
 // Event D: Admin Manual Notification Retry & Recovery
 // ============================================================================
 
@@ -688,6 +979,31 @@ export async function retryNotificationById(
       rejectionReason: (record.payload?.rejectionReason as string) || 'Verification unsuccessful',
       submittedAt: (record.payload?.submittedAt as string) || record.createdAt,
       statusUrl: `${getAppBaseUrl()}/?status=resubmit_reference&orderId=${encodeURIComponent(record.orderId)}`,
+    });
+  } else if (record.templateType === 'subscription_expiring_soon') {
+    emailContent = renderSubscriptionExpiringEmail({
+      userId: record.userId,
+      subscriptionId: (record.payload?.subscriptionId as string) || record.orderId,
+      recipientEmail: record.recipientEmail,
+      planTitle: 'JobNexus Premium (30 Days)',
+      amountInr: (record.payload?.amountInr as number) || 499,
+      currency: (record.payload?.currency as string) || 'INR',
+      currentPeriodEnd: (record.payload?.currentPeriodEnd as string) || record.createdAt,
+      daysRemaining: (record.payload?.daysRemaining as number) || 1,
+      hoursRemaining: (record.payload?.hoursRemaining as number) || 24,
+      isUrgent24h: Boolean(record.payload?.isUrgent24h),
+      renewUrl: `${getAppBaseUrl()}/?renew=1`,
+    });
+  } else if (record.templateType === 'subscription_expired') {
+    emailContent = renderSubscriptionExpiredEmail({
+      userId: record.userId,
+      subscriptionId: (record.payload?.subscriptionId as string) || record.orderId,
+      recipientEmail: record.recipientEmail,
+      planTitle: 'JobNexus Premium (30 Days)',
+      amountInr: (record.payload?.amountInr as number) || 499,
+      currency: (record.payload?.currency as string) || 'INR',
+      expiredAt: (record.payload?.expiredAt as string) || record.createdAt,
+      renewUrl: `${getAppBaseUrl()}/?renew=1`,
     });
   } else {
     return { success: false, status: 'failed', error: `Unsupported template type "${record.templateType}".` };

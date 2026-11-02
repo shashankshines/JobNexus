@@ -7,7 +7,9 @@ export type NotificationEventType =
   | 'payment_submitted'
   | 'admin_payment_review'
   | 'payment_approved'
-  | 'payment_rejected';
+  | 'payment_rejected'
+  | 'subscription_expiring_soon'
+  | 'subscription_expired';
 
 export type EmailDeliveryStatus =
   | 'pending'
@@ -77,6 +79,33 @@ export interface PaymentRejectedEmailData extends BaseNotificationData {
   maskedUtr: string;
   rejectionReason: string;
   submittedAt: string;
+}
+
+export interface SubscriptionExpiringEmailData {
+  userId: string;
+  subscriptionId: string;
+  recipientEmail: string;
+  recipientName?: string;
+  planTitle: string;
+  amountInr: number;
+  currency: string;
+  currentPeriodEnd: string;
+  daysRemaining: number;
+  hoursRemaining: number;
+  isUrgent24h: boolean;
+  renewUrl: string;
+}
+
+export interface SubscriptionExpiredEmailData {
+  userId: string;
+  subscriptionId: string;
+  recipientEmail: string;
+  recipientName?: string;
+  planTitle: string;
+  amountInr: number;
+  currency: string;
+  expiredAt: string;
+  renewUrl: string;
 }
 
 export interface GeneratedEmailContent {

@@ -6,7 +6,13 @@ import {
   createPaymentOrder,
   getPaymentOrderById,
   getActiveOrderForUser,
+  getSubmissionsByUserId,
 } from '@/modules/storage/firestore/order.store';
+import { getFirestoreSubscriptionByUserId } from '@/modules/storage/firestore/subscription.store';
+import {
+  evaluateRenewalWindow,
+  isAdministrativelyRestrictedSubscription,
+} from '@/modules/billing/domain/renewal-window';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const sessionId = extractSessionId(request);
@@ -35,10 +41,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Check if user already holds an active Premium membership
+    // Check authoritative subscription, entitlement, and pending submissions
     let currentEntitlement;
+    let subscriptionRecord;
+    let submissions;
     try {
-      currentEntitlement = await getAuthoritativeUserEntitlement(auth.user.id);
+      [currentEntitlement, subscriptionRecord, submissions] = await Promise.all([
+        getAuthoritativeUserEntitlement(auth.user.id),
+        getFirestoreSubscriptionByUserId(auth.user.id),
+        getSubmissionsByUserId(auth.user.id),
+      ]);
     } catch (err) {
       console.error('[Billing Order POST Error]: Firestore entitlement lookup failed:', err);
       return NextResponse.json(
@@ -47,16 +59,49 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    if (isAdministrativelyRestrictedSubscription(subscriptionRecord)) {
+      return NextResponse.json(
+        {
+          error:
+            'Your subscription is under administrative restriction and ineligible for self-service renewal. Please contact support.',
+          restricted: true,
+        },
+        { status: 403 }
+      );
+    }
+
+    const hasPendingVerification = submissions.some(
+      (s) => s.status === 'pending_verification'
+    );
+    if (hasPendingVerification) {
+      return NextResponse.json(
+        {
+          error:
+            'You already have a UPI payment reference awaiting administrator verification.',
+          pendingVerification: true,
+        },
+        { status: 409 }
+      );
+    }
+
+    const renewalWindow = evaluateRenewalWindow({
+      subscription: subscriptionRecord,
+      hasPendingVerification: false,
+    });
+
     if (
       currentEntitlement.isPremium &&
       currentEntitlement.status === 'active' &&
-      !currentEntitlement.subscription?.cancelAtPeriodEnd
+      !currentEntitlement.subscription?.cancelAtPeriodEnd &&
+      !renewalWindow.isWithinRenewalWindow
     ) {
       return NextResponse.json(
         {
-          error: 'You already have an active JobNexus Premium membership.',
+          error:
+            'You already have an active JobNexus Premium membership. Early renewal opens 5 days before your cycle ends.',
           alreadySubscribed: true,
           entitlement: currentEntitlement,
+          renewal: renewalWindow,
         },
         { status: 409 }
       );

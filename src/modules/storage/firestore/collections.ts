@@ -142,6 +142,8 @@ export interface EmailOutboxDocument {
     | 'admin_payment_review'
     | 'payment_approved'
     | 'payment_rejected'
+    | 'subscription_expiring_soon'
+    | 'subscription_expired'
     | 'premium_activated'
     | 'premium_deactivated'
     | 'sla_breach_alert';

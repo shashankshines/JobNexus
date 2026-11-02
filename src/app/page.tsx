@@ -412,6 +412,7 @@ export default function Home() {
     savedJobs,
     entitlement,
     billingFlow,
+    renewal,
     isBillingResolved,
     syncBillingFlow,
     isPremium,
@@ -462,7 +463,42 @@ export default function Home() {
     }>
   >([]);
   const [dismissedAdminAlertKey, setDismissedAdminAlertKey] = useState<string | null>(null);
+  const [dismissedRenewalBannerKey, setDismissedRenewalBannerKey] = useState<string | null>(null);
   const prevAdminPendingCountRef = useRef<number | null>(null);
+
+  const renewalBannerKey = useMemo(() => {
+    if (!renewal?.shouldShowInAppBanner) return '';
+    return `${renewal.stage}:${renewal.currentPeriodEnd || ''}:${renewal.hasPendingRenewalVerification}`;
+  }, [renewal]);
+
+  // Handle ?renew=1 deep-link from 30-day renewal reminder & expiration emails
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (isAuthenticated && !isBillingResolved) return;
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('renew') !== '1') return;
+
+    params.delete('renew');
+    const remaining = params.toString();
+    const cleanUrl = remaining
+      ? `${window.location.pathname}?${remaining}`
+      : window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    if (isAuthenticated) {
+      openPremiumOfferModal();
+    } else {
+      openAuthModal('Sign in to renew your 30-day JobNexus Premium membership.');
+    }
+  }, [
+    isHydrated,
+    isAuthenticated,
+    isBillingResolved,
+    openPremiumOfferModal,
+    openAuthModal,
+  ]);
 
   const adminAlertKey = useMemo(() => {
     if (adminPendingCount <= 0) return '';
@@ -2393,7 +2429,7 @@ export default function Home() {
 
                           {/* Menu Actions */}
                           <div style={{ padding: '0.35rem 0', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                            {!isPremium && (
+                            {(!isPremium || renewal?.shouldShowInAppBanner || renewal?.hasPendingRenewalVerification) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -2403,7 +2439,7 @@ export default function Home() {
                                 className="user-dropdown-upgrade-btn"
                               >
                                 <div className="dropdown-action-icon-wrap dropdown-upgrade-icon-wrap">
-                                  {billingFlow?.hasPendingVerification ? (
+                                  {billingFlow?.hasPendingVerification || renewal?.hasPendingRenewalVerification ? (
                                     <Clock size={14} className="upgrade-btn-icon" />
                                   ) : (
                                     <Crown size={14} className="upgrade-btn-icon" />
@@ -2411,22 +2447,32 @@ export default function Home() {
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                                   <span style={{ fontWeight: 700 }}>
-                                    {billingFlow?.hasPendingVerification
+                                    {billingFlow?.hasPendingVerification || renewal?.hasPendingRenewalVerification
                                       ? 'Verification Pending'
                                       : billingFlow?.hasRejectedSubmission
                                         ? 'Payment Action Needed'
-                                        : 'Upgrade to Premium'}
+                                        : isPremium
+                                          ? 'Renew for +30 Days'
+                                          : renewal?.stage === 'expired'
+                                            ? 'Membership Expired'
+                                            : 'Upgrade to Premium'}
                                   </span>
                                   <span style={{ fontSize: '0.68rem', opacity: 0.75, fontWeight: 500 }}>
-                                    {billingFlow?.hasPendingVerification
+                                    {billingFlow?.hasPendingVerification || renewal?.hasPendingRenewalVerification
                                       ? 'UPI payment under review'
                                       : billingFlow?.hasRejectedSubmission
                                         ? 'Review verification status'
-                                        : 'Direct ATS links & no wait'}
+                                        : isPremium
+                                          ? renewal?.stage === 'expiring_urgent'
+                                            ? `Expires in ${renewal.hoursRemaining}h · Zero lost hours`
+                                            : `Expires in ${renewal?.daysRemaining ?? 1}d · Add +30 days`
+                                          : renewal?.stage === 'expired'
+                                            ? 'Reactivate 30-day access'
+                                            : 'Direct ATS links & no wait'}
                                   </span>
                                 </div>
                                 <span className="dropdown-price-pill">
-                                  {billingFlow?.hasPendingVerification
+                                  {billingFlow?.hasPendingVerification || renewal?.hasPendingRenewalVerification
                                     ? 'Pending'
                                     : billingFlow?.hasRejectedSubmission
                                       ? 'Review'
@@ -2580,6 +2626,137 @@ export default function Home() {
                   onClick={() => setDismissedAdminAlertKey(adminAlertKey)}
                   aria-label="Dismiss payment approval notification"
                   title="Dismiss for current queue"
+                  className="admin-inapp-approval-dismiss"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+
+        {/* Live In-App 30-Day Subscription Expiration & Renewal Banner */}
+        {isAuthenticated &&
+          renewal?.shouldShowInAppBanner &&
+          dismissedRenewalBannerKey !== renewalBannerKey && (
+            <div
+              role="region"
+              aria-label="Subscription renewal notification"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.85rem',
+                padding: '0.85rem 1.15rem',
+                marginBottom: '0.85rem',
+                borderRadius: 14,
+                background:
+                  renewal.stage === 'expiring_urgent'
+                    ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(245, 158, 11, 0.1) 100%)'
+                    : 'linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(99, 102, 241, 0.1) 100%)',
+                border:
+                  renewal.stage === 'expiring_urgent'
+                    ? '1px solid rgba(239, 68, 68, 0.35)'
+                    : '1px solid rgba(245, 158, 11, 0.35)',
+                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.28)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.75rem',
+                  flex: '1 1 280px',
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    background:
+                      renewal.stage === 'expiring_urgent'
+                        ? 'rgba(239, 68, 68, 0.18)'
+                        : 'rgba(245, 158, 11, 0.18)',
+                    border:
+                      renewal.stage === 'expiring_urgent'
+                        ? '1px solid rgba(239, 68, 68, 0.35)'
+                        : '1px solid rgba(245, 158, 11, 0.35)',
+                    color: renewal.stage === 'expiring_urgent' ? '#f87171' : '#fbbf24',
+                  }}
+                >
+                  <Clock size={17} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      color: 'var(--text-primary)',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {renewal.headline}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.78rem',
+                      color: 'var(--text-secondary)',
+                      marginTop: '0.18rem',
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {renewal.message}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.55rem',
+                  flexShrink: 0,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={openPremiumOfferModal}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.52rem 0.95rem',
+                    borderRadius: 10,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.35)',
+                  }}
+                >
+                  <span>
+                    {renewal.hasPendingRenewalVerification
+                      ? 'View Verification Status'
+                      : renewal.stage === 'expired'
+                        ? 'Renew Premium — ₹499'
+                        : 'Renew for +30 Days — ₹499'}
+                  </span>
+                  <ArrowRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDismissedRenewalBannerKey(renewalBannerKey)}
+                  aria-label="Dismiss renewal notification"
+                  title="Dismiss notification"
                   className="admin-inapp-approval-dismiss"
                 >
                   <X size={15} />
@@ -5994,10 +6171,30 @@ export default function Home() {
                   {isPremium && entitlement?.subscription && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
                       <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                        {entitlement.subscription.cancelAtPeriodEnd ? 'Access Paid Through' : 'Next Renewal'}
+                        Access Valid Until
                       </span>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: renewal?.shouldShowInAppBanner ? '#fbbf24' : 'var(--text-primary)' }}>
                         {new Date(entitlement.subscription.currentPeriodEnd).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                        {renewal?.stage === 'expiring_urgent'
+                          ? ` (${renewal.hoursRemaining}h left)`
+                          : renewal?.stage === 'expiring_soon'
+                            ? ` (${renewal.daysRemaining}d left)`
+                            : ''}
+                      </span>
+                    </div>
+                  )}
+
+                  {!isPremium && renewal?.stage === 'expired' && renewal.currentPeriodEnd && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                        Previous Cycle Ended
+                      </span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fbbf24' }}>
+                        {new Date(renewal.currentPeriodEnd).toLocaleDateString(undefined, {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
@@ -6009,7 +6206,35 @@ export default function Home() {
 
                 {/* Subscription Actions */}
                 {isPremium ? (
-                  <div style={{ marginBottom: '1.25rem', textAlign: 'center' }}>
+                  <div style={{ marginBottom: '1.25rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                    {renewal?.canRenewNow && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsProfileModalOpen(false);
+                          openPremiumOfferModal();
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '0.7rem 1rem',
+                          borderRadius: 10,
+                          background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.45rem',
+                          boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+                        }}
+                      >
+                        <span>Renew for +30 Days (₹499)</span>
+                        <ArrowRight size={14} />
+                      </button>
+                    )}
                     {entitlement?.subscription?.cancelAtPeriodEnd ? (
                       <div
                         style={{
@@ -6018,10 +6243,10 @@ export default function Home() {
                           borderRadius: 8,
                           border: '1px solid rgba(234, 179, 8, 0.25)',
                           fontSize: '0.75rem',
-                          color: '#5f5426ff',
+                          color: 'var(--text-secondary)',
                         }}
                       >
-                        Auto-renewal cancelled. Premium access remains active until the end of your billing cycle.
+                        Renewal reminders paused. Premium access remains active until the end of your 30-day cycle.
                       </div>
                     ) : (
                       <button
@@ -6037,7 +6262,7 @@ export default function Home() {
                           textDecoration: 'underline',
                         }}
                       >
-                        {isCancellingSubscription ? 'Cancelling auto-renewal...' : 'Cancel Auto-Renewal'}
+                        {isCancellingSubscription ? 'Updating preference...' : 'Cancel At Period End'}
                       </button>
                     )}
                   </div>
@@ -6081,6 +6306,11 @@ export default function Home() {
                         <>
                           <AlertCircle size={14} />
                           <span>Review Payment Verification Status</span>
+                        </>
+                      ) : renewal?.stage === 'expired' ? (
+                        <>
+                          <span>Renew Premium for 30 Days (₹499)</span>
+                          <Sparkles size={14} />
                         </>
                       ) : (
                         <>

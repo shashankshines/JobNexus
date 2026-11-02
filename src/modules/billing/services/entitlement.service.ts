@@ -196,7 +196,26 @@ export function evaluateSubscriptionEntitlement(
     };
   }
 
-  // 4. Default: fail safe to free tier
+  // 5. Explicit expired / completed subscription status
+  if (sub.status === 'expired' || sub.status === 'completed') {
+    return {
+      userId,
+      isPremium: false,
+      tier: 'free',
+      status: 'expired',
+      subscription: {
+        id: sub.id,
+        planId: sub.planId,
+        status: sub.status,
+        currentPeriodEnd: sub.currentPeriodEnd,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+        provider: sub.provider,
+      },
+      reason: 'Billing cycle expired without confirmed renewal',
+    };
+  }
+
+  // 6. Default: fail safe to free tier
   return {
     userId,
     isPremium: false,

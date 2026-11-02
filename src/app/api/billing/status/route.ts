@@ -5,7 +5,9 @@ import {
   getSubmissionsByUserId,
   getActiveOrderForUser,
 } from '@/modules/storage/firestore/order.store';
+import { getFirestoreSubscriptionByUserId } from '@/modules/storage/firestore/subscription.store';
 import { resolveBillingFlowSnapshot } from '@/modules/billing/domain/billing-flow-state';
+import { enrichRenewalSnapshotWithOutboxStatus } from '@/modules/billing/services/renewal-notifications.service';
 
 export async function GET(request: Request) {
   const sessionId = extractSessionId(request);
@@ -25,23 +27,32 @@ export async function GET(request: Request) {
 
   try {
     // Authoritative parallel read-only lookup directly from Cloud Firestore
-    const [entitlement, submissions, activeOrder] = await Promise.all([
+    const [entitlement, submissions, activeOrder, subscription] = await Promise.all([
       getAuthoritativeUserEntitlement(auth.user.id),
       getSubmissionsByUserId(auth.user.id),
       getActiveOrderForUser(auth.user.id),
+      getFirestoreSubscriptionByUserId(auth.user.id),
     ]);
 
-    const billingFlow = resolveBillingFlowSnapshot({
+    const rawBillingFlow = resolveBillingFlowSnapshot({
       entitlement,
       submissions,
       activeOrder,
+      subscription,
     });
+
+    const renewal = await enrichRenewalSnapshotWithOutboxStatus(rawBillingFlow.renewal);
+    const billingFlow = {
+      ...rawBillingFlow,
+      renewal,
+    };
 
     return NextResponse.json(
       {
         authenticated: true,
         entitlement,
         billingFlow,
+        renewal,
       },
       {
         headers: {
