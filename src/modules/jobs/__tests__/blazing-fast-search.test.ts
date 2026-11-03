@@ -171,4 +171,93 @@ describe('JobNexus — Blazing Fast Search & Pill Caching Architecture', () => {
       'JobSearchService must deduplicate concurrent requests via inFlightFetchPromise'
     );
   });
+
+  it('serves pagination page 2+ instantly via rankedQueryCache without refiltering or re-deduplicating', async () => {
+    let providerFetchCount = 0;
+    const manyJobs: NormalizedJob[] = Array.from({ length: 60 }, (_, idx) => ({
+      id: `job-paged-${idx}`,
+      sourceId: String(idx),
+      sourceName: 'QuickSource',
+      title: `Software Engineer ${idx}`,
+      company: 'FastCorp',
+      location: 'Remote',
+      isRemote: true,
+      description: 'High performance engineering',
+      applicationUrl: `https://fastcorp.com/jobs/${idx}`,
+      publishedAt: new Date(Date.now() - idx * 1000).toISOString(),
+      employmentType: 'Full Time',
+      seniority: 'Mid',
+      tags: ['Engineering', 'TypeScript'],
+      industry: 'technology',
+      category: 'Technology & IT',
+      isIndiaEligible: true,
+      workplaceType: 'remote',
+    }));
+
+    const provider: JobProvider = {
+      id: 'paged-provider',
+      name: 'PagedProvider',
+      async fetchJobs() {
+        providerFetchCount++;
+        return [...manyJobs];
+      },
+    };
+
+    const service = new JobSearchService([provider]);
+
+    // Page 1: Seeds the rankedQueryCache
+    const page1 = await service.searchJobs({ query: 'Engineer', page: 1, pageSize: 25 });
+    assert.strictEqual(page1.jobs.length, 25);
+    assert.strictEqual(page1.hasMore, true);
+    assert.strictEqual(providerFetchCount, 1);
+
+    // Page 2: Must hit rankedQueryCache and return in < 5ms without provider re-fetch
+    const start2 = performance.now();
+    const page2 = await service.searchJobs({ query: 'Engineer', page: 2, pageSize: 25 });
+    const duration2 = performance.now() - start2;
+
+    assert.strictEqual(page2.jobs.length, 25);
+    assert.strictEqual(page2.hasMore, true);
+    assert.strictEqual(page2.snapshotId, page1.snapshotId, 'Snapshot ID must be identical across pages');
+    assert.strictEqual(providerFetchCount, 1, 'Provider must not be called again');
+    assert.ok(duration2 < 10, `Page 2 lookup took ${duration2}ms; must be < 10ms`);
+
+    // Verify disjoint items between page 1 and page 2
+    const p1Ids = new Set(page1.jobs.map((j) => j.id));
+    for (const job of page2.jobs) {
+      assert.ok(!p1Ids.has(job.id), `Job ${job.id} should not appear on both page 1 and page 2`);
+    }
+  });
+
+  it('verifies page.tsx implements prefetchSearch and next-page idle prefetch for 0ms interactions', () => {
+    const pagePath = path.resolve(process.cwd(), 'src/app/page.tsx');
+    const pageContent = fs.readFileSync(pagePath, 'utf8');
+
+    assert.ok(
+      pageContent.includes('const prefetchSearch = useCallback('),
+      'page.tsx must define prefetchSearch callback'
+    );
+    assert.ok(
+      pageContent.includes('onPointerEnter={() => prefetchSearch('),
+      'page.tsx must attach onPointerEnter prefetching to interactive pills and tabs'
+    );
+    assert.ok(
+      pageContent.includes('nextPageParams.set(\'page\', \'2\')'),
+      'page.tsx must idle-prefetch page 2 upon page 1 load'
+    );
+  });
+
+  it('verifies provider.types.ts unlocks Next.js Data Cache in production runtime', () => {
+    const typesPath = path.resolve(process.cwd(), 'src/modules/jobs/providers/provider.types.ts');
+    const typesContent = fs.readFileSync(typesPath, 'utf8');
+
+    assert.ok(
+      typesContent.includes('delete fetchOptions.cache'),
+      'provider.types.ts must strip cache: no-store in production to enable Next.js Data Cache'
+    );
+    assert.ok(
+      typesContent.includes('fetchOptions.next = { revalidate: 900 }'),
+      'provider.types.ts must set 15-minute revalidation for upstream feeds'
+    );
+  });
 });

@@ -1240,6 +1240,11 @@ export function matchesIndustry(job: NormalizedJob, filterIndustry?: string): bo
   const target = normalizeIndustryFilter(filterIndustry);
   if (target === '') return true;
   if (!target) return false;
+  if (job.industry) {
+    if (job.industry === target) return true;
+    const directNormalized = normalizeIndustryFilter(job.industry);
+    if (directNormalized === target) return true;
+  }
   return resolveJobIndustry(
     job.industry,
     job.category,

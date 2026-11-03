@@ -31,16 +31,25 @@ export async function fetchWithTimeout(
     }
   }
 
+  const fetchOptions: RequestInit & { next?: { revalidate?: number | false } } = { ...options };
+  // In production / non-test environments, allow Next.js Data Cache to cache upstream job feeds for 15 minutes (900s).
+  // This bypasses redundant network latency and cold-start waits for upstream boards.
+  if (process.env.NODE_ENV !== 'test') {
+    delete fetchOptions.cache;
+    fetchOptions.next = { revalidate: 900 };
+  } else if (!fetchOptions.next) {
+    fetchOptions.next = { revalidate: 1800 };
+  }
+
   try {
     const response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       signal: controller.signal,
       headers: {
         'User-Agent': 'JobNexus/1.0 (Job Aggregation Engine; +https://github.com/shashankshines/JobNexus)',
         Accept: 'application/json, text/xml, application/xml, */*',
         ...(options.headers || {}),
       },
-      next: { revalidate: 1800 },
     });
     clearTimeout(timer);
     return response;

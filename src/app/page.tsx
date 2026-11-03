@@ -1059,6 +1059,40 @@ export default function Home() {
           page: data.page,
           timestamp: Date.now(),
         });
+
+        // Background idle prefetch for next page so infinite scroll has zero latency
+        if (data.hasMore) {
+          const nextPageParams = new URLSearchParams(params.toString());
+          nextPageParams.set('page', '2');
+          const p2CacheKey = getClientSearchCacheKey(nextPageParams, isAuthenticated);
+          if (!clientSearchCacheRef.current.has(p2CacheKey)) {
+            setTimeout(() => {
+              fetch(`/api/jobs?${nextPageParams.toString()}`, {
+                headers: { Accept: 'application/json' },
+              })
+                .then(async (nextRes) => {
+                  if (!nextRes.ok) return;
+                  const nextData = await nextRes.json();
+                  if (
+                    Array.isArray(nextData.jobs) &&
+                    nextData.snapshotId === data.snapshotId &&
+                    nextData.page === 2
+                  ) {
+                    clientSearchCacheRef.current.set(p2CacheKey, {
+                      jobs: nextData.jobs,
+                      count: nextData.count,
+                      totalAvailable: nextData.totalAvailable,
+                      snapshotId: nextData.snapshotId,
+                      truncated: nextData.hasMore,
+                      page: 2,
+                      timestamp: Date.now(),
+                    });
+                  }
+                })
+                .catch(() => {});
+            }, 800);
+          }
+        }
       } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') {
           return;
@@ -1084,6 +1118,71 @@ export default function Home() {
       }
     },
     [isAuthenticated, applyPopularPills, sortBy]
+  );
+
+  const prefetchSearch = useCallback(
+    (
+      criteria: Partial<SearchCriteria>,
+      options: { sort?: 'relevance' | 'date' } = {}
+    ) => {
+      if (typeof window === 'undefined') return;
+      const normalizedIndustry = normalizeIndustryFilter(criteria.industry);
+      const searchCriteria: SearchCriteria = {
+        query: (criteria.query || '').trim(),
+        role: (criteria.role || '').trim(),
+        company: (criteria.company || '').trim(),
+        location: (criteria.location || '').trim(),
+        type: (criteria.type || '').trim(),
+        level: (criteria.level || '').trim(),
+        remote: (criteria.remote || '').trim(),
+        industry: normalizedIndustry === null ? (criteria.industry || '').trim() : normalizedIndustry,
+      };
+      const selectedSort = options.sort ?? sortBy;
+      const params = new URLSearchParams();
+      if (searchCriteria.query) params.set('query', searchCriteria.query);
+      if (searchCriteria.role) params.set('role', searchCriteria.role);
+      if (searchCriteria.company) params.set('company', searchCriteria.company);
+      if (searchCriteria.location) params.set('location', searchCriteria.location);
+      if (searchCriteria.type) params.set('type', searchCriteria.type);
+      if (searchCriteria.level) params.set('level', searchCriteria.level);
+      if (searchCriteria.remote) params.set('remote', searchCriteria.remote);
+      if (searchCriteria.industry && searchCriteria.industry !== 'all') {
+        params.set('industry', searchCriteria.industry);
+      }
+      params.set('page', '1');
+      params.set('pageSize', String(SEARCH_PAGE_SIZE));
+      params.set('sort', selectedSort);
+      const cacheKey = getClientSearchCacheKey(params, isAuthenticated);
+      const cached = clientSearchCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL_MS) return;
+
+      fetch(`/api/jobs?${params.toString()}`, {
+        headers: { Accept: 'application/json' },
+      })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = await res.json();
+          if (
+            Array.isArray(data.jobs) &&
+            Number.isSafeInteger(data.count) &&
+            Number.isSafeInteger(data.totalAvailable) &&
+            typeof data.snapshotId === 'string' &&
+            /^[a-f0-9]{64}$/.test(data.snapshotId)
+          ) {
+            clientSearchCacheRef.current.set(cacheKey, {
+              jobs: data.jobs,
+              count: data.count,
+              totalAvailable: data.totalAvailable,
+              snapshotId: data.snapshotId,
+              truncated: data.hasMore,
+              page: data.page,
+              timestamp: Date.now(),
+            });
+          }
+        })
+        .catch(() => {});
+    },
+    [isAuthenticated, sortBy]
   );
 
   const loadNextSearchPage = useCallback(async () => {
@@ -1117,6 +1216,75 @@ export default function Home() {
     firstPageParams.set('pageSize', String(SEARCH_PAGE_SIZE));
     const cacheKey = getClientSearchCacheKey(firstPageParams, isAuthenticated);
     const cached = clientSearchCacheRef.current.get(cacheKey);
+
+    // Instant buffered hit check: If idle prefetch already fetched this next page, resolve in 0ms!
+    const nextPageParams = new URLSearchParams(baseRequestKey);
+    nextPageParams.set('page', String(page));
+    nextPageParams.set('pageSize', String(SEARCH_PAGE_SIZE));
+    const nextPageCacheKey = getClientSearchCacheKey(nextPageParams, isAuthenticated);
+    const preBuffered = clientSearchCacheRef.current.get(nextPageCacheKey);
+
+    if (
+      preBuffered &&
+      preBuffered.snapshotId === cached?.snapshotId &&
+      preBuffered.page === page &&
+      Date.now() - preBuffered.timestamp < CLIENT_CACHE_TTL_MS
+    ) {
+      const mergedJobs = [...(cached?.jobs ?? jobs)];
+      const knownIds = new Set(mergedJobs.map((job) => job.id));
+      for (const job of preBuffered.jobs as Job[]) {
+        if (!knownIds.has(job.id)) {
+          mergedJobs.push(job);
+          knownIds.add(job.id);
+        }
+      }
+      setJobs(mergedJobs);
+      setMatchingCount(preBuffered.count);
+      setTotalAvailableJobs(preBuffered.totalAvailable);
+      setSearchTruncated(preBuffered.truncated);
+      setSearchPage(page);
+      setSearchError('');
+      clientSearchCacheRef.current.set(cacheKey, {
+        jobs: mergedJobs,
+        count: preBuffered.count,
+        totalAvailable: preBuffered.totalAvailable,
+        snapshotId: preBuffered.snapshotId,
+        truncated: preBuffered.truncated,
+        page,
+        timestamp: Date.now(),
+      });
+
+      if (preBuffered.truncated) {
+        const nextNextParams = new URLSearchParams(baseRequestKey);
+        nextNextParams.set('page', String(page + 1));
+        nextNextParams.set('pageSize', String(SEARCH_PAGE_SIZE));
+        const pNextKey = getClientSearchCacheKey(nextNextParams, isAuthenticated);
+        if (!clientSearchCacheRef.current.has(pNextKey)) {
+          setTimeout(() => {
+            fetch(`/api/jobs?${nextNextParams.toString()}`, {
+              headers: { Accept: 'application/json' },
+            })
+              .then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json();
+                if (d.snapshotId === preBuffered.snapshotId && d.page === page + 1) {
+                  clientSearchCacheRef.current.set(pNextKey, {
+                    jobs: d.jobs,
+                    count: d.count,
+                    totalAvailable: d.totalAvailable,
+                    snapshotId: d.snapshotId,
+                    truncated: d.hasMore,
+                    page: page + 1,
+                    timestamp: Date.now(),
+                  });
+                }
+              })
+              .catch(() => {});
+          }, 800);
+        }
+      }
+      return;
+    }
 
     const abortController = new AbortController();
     paginationAbortRef.current = abortController;
@@ -1174,6 +1342,36 @@ export default function Home() {
         page,
         timestamp: Date.now(),
       });
+
+      if (data.hasMore) {
+        const nextNextParams = new URLSearchParams(baseRequestKey);
+        nextNextParams.set('page', String(page + 1));
+        nextNextParams.set('pageSize', String(SEARCH_PAGE_SIZE));
+        const pNextKey = getClientSearchCacheKey(nextNextParams, isAuthenticated);
+        if (!clientSearchCacheRef.current.has(pNextKey)) {
+          setTimeout(() => {
+            fetch(`/api/jobs?${nextNextParams.toString()}`, {
+              headers: { Accept: 'application/json' },
+            })
+              .then(async (r) => {
+                if (!r.ok) return;
+                const d = await r.json();
+                if (d.snapshotId === data.snapshotId && d.page === page + 1) {
+                  clientSearchCacheRef.current.set(pNextKey, {
+                    jobs: d.jobs,
+                    count: d.count,
+                    totalAvailable: d.totalAvailable,
+                    snapshotId: d.snapshotId,
+                    truncated: d.hasMore,
+                    page: page + 1,
+                    timestamp: Date.now(),
+                  });
+                }
+              })
+              .catch(() => {});
+          }, 800);
+        }
+      }
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') return;
       if (requestId !== searchRequestIdRef.current) return;
@@ -3050,6 +3248,7 @@ export default function Home() {
                     <button
                       key={cat.id}
                       type="button"
+                      onPointerEnter={() => prefetchSearch({ remote: cat.remoteParam })}
                       onClick={() => handleWorkplaceCategoryClick(cat.remoteParam)}
                       className="workplace-pill-btn"
                       style={{
@@ -5110,6 +5309,7 @@ export default function Home() {
                 <button
                   key={pill.id || idx}
                   type="button"
+                  onPointerEnter={() => prefetchSearch({ query: pill.query })}
                   onClick={() => handleQuickPillClick(pill)}
                   title={`${pill.avgSearches || 0} avg daily searches • ${pill.trend === 'hot' ? 'High Demand' : pill.trend === 'rising' ? 'Trending' : 'Popular'}`}
                   className={`quick-pill-btn ${isSelected ? 'is-selected' : ''}`}
@@ -5631,6 +5831,7 @@ export default function Home() {
                         type="button"
                         whileHover={{ y: -5, scale: 1.01 }}
                         whileTap={{ scale: 0.98 }}
+                        onPointerEnter={() => prefetchSearch({ industry: domain.industry })}
                         onClick={() => handleDomainClick(domain)}
                         className="domain-card"
                         aria-label={`Explore ${INDUSTRY_TAXONOMY[domain.industry].label} jobs`}
@@ -5707,6 +5908,7 @@ export default function Home() {
                   <motion.button
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
+                    onPointerEnter={() => prefetchSearch({})}
                     onClick={handleBrowseAllClick}
                     className="btn-primary"
                     style={{ padding: '0.85rem 1.8rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.55rem' }}

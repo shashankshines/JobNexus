@@ -23,13 +23,23 @@ interface CachedSearchResult {
   timestamp: number;
 }
 
+interface RankedQuerySnapshot {
+  rankedJobs: NormalizedJob[];
+  snapshotId: string;
+  totalAvailable: number;
+  timestamp: number;
+  diagnostics: ProviderDiagnostic[];
+}
+
 // Global cache attachment on globalThis to prevent Next.js dev reloads from wiping in-memory jobs
 const globalJobNexusCache = globalThis as unknown as {
   __JOBNEXUS_RAW_JOBS__?: NormalizedJob[];
+  __JOBNEXUS_UNIQUE_JOBS__?: NormalizedJob[];
   __JOBNEXUS_DIAGNOSTICS__?: ProviderDiagnostic[];
   __JOBNEXUS_CACHE_TIME__?: number;
   __JOBNEXUS_FETCH_PROMISE__?: Promise<{ allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[] }> | null;
   __JOBNEXUS_SEARCH_CACHE__?: Map<string, CachedSearchResult>;
+  __JOBNEXUS_RANKED_QUERY_CACHE__?: Map<string, RankedQuerySnapshot>;
   __JOBNEXUS_STATS_CACHE__?: { stats: JobStatsResponse; timestamp: number };
   __JOBNEXUS_PROVIDER_CACHE__?: Map<string, { jobs: NormalizedJob[]; fetchedAt: number }>;
 };
@@ -38,6 +48,8 @@ export class JobSearchService {
   private providers: JobProvider[];
   private isCustom: boolean;
   private instanceSearchCache = new Map<string, CachedSearchResult>();
+  private instanceRankedQueryCache = new Map<string, RankedQuerySnapshot>();
+  private instanceUniqueJobs: NormalizedJob[] | null = null;
   private customInFlightPromise?: Promise<{ allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[] }> | null;
 
   private static readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -48,6 +60,13 @@ export class JobSearchService {
   }
   static set cachedRawJobs(jobs: NormalizedJob[] | null) {
     globalJobNexusCache.__JOBNEXUS_RAW_JOBS__ = jobs ?? undefined;
+  }
+
+  static get cachedUniqueJobs(): NormalizedJob[] | null {
+    return globalJobNexusCache.__JOBNEXUS_UNIQUE_JOBS__ ?? null;
+  }
+  static set cachedUniqueJobs(jobs: NormalizedJob[] | null) {
+    globalJobNexusCache.__JOBNEXUS_UNIQUE_JOBS__ = jobs ?? undefined;
   }
 
   static get cachedDiagnostics(): ProviderDiagnostic[] | null {
@@ -78,12 +97,21 @@ export class JobSearchService {
     return globalJobNexusCache.__JOBNEXUS_SEARCH_CACHE__;
   }
 
+  static get rankedQueryCache(): Map<string, RankedQuerySnapshot> {
+    if (!globalJobNexusCache.__JOBNEXUS_RANKED_QUERY_CACHE__) {
+      globalJobNexusCache.__JOBNEXUS_RANKED_QUERY_CACHE__ = new Map();
+    }
+    return globalJobNexusCache.__JOBNEXUS_RANKED_QUERY_CACHE__;
+  }
+
   static clearCache(): void {
     JobSearchService.cachedRawJobs = null;
+    JobSearchService.cachedUniqueJobs = null;
     JobSearchService.cachedDiagnostics = null;
     JobSearchService.cacheTimestamp = 0;
     JobSearchService.inFlightFetchPromise = null;
     JobSearchService.searchCache.clear();
+    JobSearchService.rankedQueryCache.clear();
     globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
     globalJobNexusCache.__JOBNEXUS_PROVIDER_CACHE__?.clear();
   }
@@ -103,7 +131,10 @@ export class JobSearchService {
 
   async getJobById(id: string): Promise<LegacyJob | null> {
     const { allJobs } = await this.fetchRawJobs({});
-    const job = deduplicateJobs(allJobs).find((candidate) => candidate.id === id);
+    const uniqueJobs = (!this.isCustom && JobSearchService.cachedUniqueJobs)
+      ? JobSearchService.cachedUniqueJobs
+      : (this.instanceUniqueJobs || (this.instanceUniqueJobs = deduplicateJobs(allJobs)));
+    const job = uniqueJobs.find((candidate) => candidate.id === id);
     return job ? this.toCompactLegacyJob(job) : null;
   }
 
@@ -229,9 +260,14 @@ export class JobSearchService {
       if (this.customInFlightPromise) {
         return this.customInFlightPromise;
       }
-      this.customInFlightPromise = this.fetchFromProviders(params).finally(() => {
-        this.customInFlightPromise = null;
-      });
+      this.customInFlightPromise = this.fetchFromProviders(params)
+        .then((res) => {
+          this.instanceUniqueJobs = deduplicateJobs(res.allJobs);
+          return res;
+        })
+        .finally(() => {
+          this.customInFlightPromise = null;
+        });
       return this.customInFlightPromise;
     }
 
@@ -243,9 +279,11 @@ export class JobSearchService {
       JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
         .then(({ allJobs, diagnostics }) => {
           JobSearchService.cachedRawJobs = allJobs;
+          JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
           JobSearchService.cachedDiagnostics = diagnostics;
           JobSearchService.cacheTimestamp = Date.now();
           JobSearchService.searchCache.clear();
+          JobSearchService.rankedQueryCache.clear();
           globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
           return { allJobs: [...allJobs], diagnostics };
         })
@@ -277,9 +315,11 @@ export class JobSearchService {
         JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
           .then(({ allJobs, diagnostics }) => {
             JobSearchService.cachedRawJobs = allJobs;
+            JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
             JobSearchService.cachedDiagnostics = diagnostics;
             JobSearchService.cacheTimestamp = Date.now();
             JobSearchService.searchCache.clear();
+            JobSearchService.rankedQueryCache.clear();
             return { allJobs, diagnostics };
           })
           .catch((err) => {
@@ -308,8 +348,11 @@ export class JobSearchService {
     JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
       .then(({ allJobs, diagnostics }) => {
         JobSearchService.cachedRawJobs = allJobs;
+        JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
         JobSearchService.cachedDiagnostics = diagnostics;
         JobSearchService.cacheTimestamp = Date.now();
+        JobSearchService.searchCache.clear();
+        JobSearchService.rankedQueryCache.clear();
         return { allJobs: [...allJobs], diagnostics };
       })
       .finally(() => {
@@ -343,18 +386,64 @@ export class JobSearchService {
       return cached.response;
     }
 
-    const { allJobs, diagnostics } = await this.fetchRawJobs(params);
+    const queryKey = JSON.stringify([
+      normalizeFilter(params.query),
+      normalizeFilter(params.role),
+      normalizeFilter(params.company),
+      normalizeFilter(params.location),
+      normalizeFilter(params.type),
+      normalizeFilter(params.level),
+      normalizeFilter(params.remote),
+      normalizedIndustry ?? `invalid:${normalizeFilter(params.industry)}`,
+      params.sort || 'relevance',
+    ]);
+    const activeQueryCache = this.isCustom ? this.instanceRankedQueryCache : JobSearchService.rankedQueryCache;
 
-    // Step 1: Deterministic multi-layer deduplication
-    const uniqueJobs = deduplicateJobs(allJobs);
+    let rankedJobs: NormalizedJob[];
+    let snapshotId: string;
+    let totalAvailable: number;
+    let diagnostics: ProviderDiagnostic[];
 
-    // Step 2: Multi-factor search, location, and seniority filtering & ranking
-    const rankedJobs = filterAndRankJobs(uniqueJobs, params);
-    if (params.sort === 'date') {
-      rankedJobs.sort((a, b) => {
-        const publishedA = new Date(a.publishedAt).getTime() || 0;
-        const publishedB = new Date(b.publishedAt).getTime() || 0;
-        return publishedB - publishedA || a.id.localeCompare(b.id);
+    const cachedQuery = !params.forceRefresh ? activeQueryCache.get(queryKey) : undefined;
+    if (cachedQuery && Date.now() - cachedQuery.timestamp < JobSearchService.CACHE_TTL_MS) {
+      rankedJobs = cachedQuery.rankedJobs;
+      snapshotId = cachedQuery.snapshotId;
+      totalAvailable = cachedQuery.totalAvailable;
+      diagnostics = cachedQuery.diagnostics;
+    } else {
+      const rawResult = await this.fetchRawJobs(params);
+      diagnostics = rawResult.diagnostics;
+      const allJobs = rawResult.allJobs;
+
+      // Deterministic multi-layer deduplication (reads singleton pre-deduplicated cache in 0ms)
+      const uniqueJobs = (!this.isCustom && JobSearchService.cachedUniqueJobs)
+        ? JobSearchService.cachedUniqueJobs
+        : (this.instanceUniqueJobs || (this.instanceUniqueJobs = deduplicateJobs(allJobs)));
+
+      totalAvailable = uniqueJobs.length;
+
+      // Multi-factor search, location, and seniority filtering & ranking
+      rankedJobs = filterAndRankJobs(uniqueJobs, params);
+      if (params.sort === 'date') {
+        rankedJobs.sort((a, b) => {
+          const publishedA = new Date(a.publishedAt).getTime() || 0;
+          const publishedB = new Date(b.publishedAt).getTime() || 0;
+          return publishedB - publishedA || a.id.localeCompare(b.id);
+        });
+      }
+
+      const snapshotHash = createHash('sha256');
+      for (const job of rankedJobs) {
+        snapshotHash.update(job.id).update('\0');
+      }
+      snapshotId = snapshotHash.digest('hex');
+
+      activeQueryCache.set(queryKey, {
+        rankedJobs,
+        snapshotId,
+        totalAvailable,
+        timestamp: Date.now(),
+        diagnostics,
       });
     }
 
@@ -375,10 +464,6 @@ export class JobSearchService {
     const offset = (page - 1) * pageSize;
     const limitedJobs = rankedJobs.slice(offset, offset + pageSize);
     const hasMore = offset + limitedJobs.length < rankedJobs.length;
-    const snapshotHash = createHash('sha256');
-    for (const job of rankedJobs) {
-      snapshotHash.update(job.id).update('\0');
-    }
 
     // Step 4: Map to backward-compatible legacy shape with compact description for fast payload transfer
     const legacyJobs = limitedJobs.map((job) => this.toCompactLegacyJob(job));
@@ -386,8 +471,8 @@ export class JobSearchService {
     const response: JobSearchResponse = {
       jobs: legacyJobs,
       count: rankedJobs.length,
-      totalAvailable: uniqueJobs.length,
-      snapshotId: snapshotHash.digest('hex'),
+      totalAvailable,
+      snapshotId,
       returnedCount: limitedJobs.length,
       page,
       pageSize,
@@ -423,7 +508,9 @@ export class JobSearchService {
     }
 
     const { allJobs, diagnostics } = await this.fetchRawJobs({});
-    const uniqueJobs = deduplicateJobs(allJobs);
+    const uniqueJobs = (!this.isCustom && JobSearchService.cachedUniqueJobs)
+      ? JobSearchService.cachedUniqueJobs
+      : (this.instanceUniqueJobs || (this.instanceUniqueJobs = deduplicateJobs(allJobs)));
 
     const providerBreakdown: Record<string, number> = {};
     for (const diag of diagnostics) {
@@ -458,4 +545,13 @@ export class JobSearchService {
 
     return result;
   }
+}
+
+// Background pre-warm in non-test server environments so user requests are served in 0ms from hot cache
+if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test') {
+  queueMicrotask(() => {
+    new JobSearchService().searchJobs({ page: 1, pageSize: 50 }).catch((err) => {
+      console.warn('[JobSearchService] Background warm-up caught non-fatal error:', err);
+    });
+  });
 }
