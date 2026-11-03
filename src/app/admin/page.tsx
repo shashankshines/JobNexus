@@ -2864,8 +2864,8 @@ export default function AdminConsolePage() {
 
       {/* USER 360° PROFILE & ENTITLEMENT DOSSIER MODAL */}
       {user360ModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.25rem', background: 'rgba(3, 7, 18, 0.85)', backdropFilter: 'blur(10px)' }}>
-          <div className="admin-modal-card" style={{ maxWidth: 860, width: '100%', maxHeight: '90vh', border: '1.5px solid rgba(99, 102, 241, 0.4)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.75rem', background: 'rgba(3, 7, 18, 0.85)', backdropFilter: 'blur(10px)' }}>
+          <div className="admin-modal-card" style={{ maxWidth: 860, width: '100%', maxHeight: '94vh', border: '1.5px solid rgba(99, 102, 241, 0.4)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
             <div style={{ padding: '1.25rem 1.5rem', background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

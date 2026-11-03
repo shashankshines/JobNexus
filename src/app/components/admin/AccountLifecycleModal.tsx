@@ -267,7 +267,7 @@ export function AccountLifecycleModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '1.25rem',
+        padding: '0.75rem',
         background: 'rgba(3, 7, 18, 0.85)',
         backdropFilter: 'blur(10px)',
       }}
@@ -277,10 +277,11 @@ export function AccountLifecycleModal({
         style={{
           maxWidth: 580,
           width: '100%',
+          maxHeight: '92vh',
+          overflowY: 'auto',
           border: `1.5px solid ${isDestructive ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.4)'}`,
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
           borderRadius: 16,
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.65)',
         }}
@@ -527,6 +528,7 @@ export function AccountLifecycleModal({
               justifyContent: 'flex-end',
               gap: '0.75rem',
               marginTop: '0.5rem',
+              flexWrap: 'wrap',
             }}
           >
             <button
@@ -534,7 +536,14 @@ export function AccountLifecycleModal({
               onClick={onClose}
               disabled={loading}
               className="admin-action-btn-secondary"
-              style={{ padding: '0.6rem 1.1rem', fontSize: '0.82rem' }}
+              style={{
+                padding: '0.65rem 1.25rem',
+                fontSize: '0.82rem',
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               Cancel
             </button>
@@ -547,7 +556,7 @@ export function AccountLifecycleModal({
               }
               style={{
                 ...config.buttonStyle,
-                padding: '0.6rem 1.25rem',
+                padding: '0.65rem 1.35rem',
                 borderRadius: 8,
                 border: 'none',
                 fontSize: '0.82rem',
@@ -556,7 +565,9 @@ export function AccountLifecycleModal({
                 opacity: loading || reason.trim().length < 5 ? 0.6 : 1,
                 display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '0.5rem',
+                minHeight: '44px',
               }}
             >
               {loading && <RefreshCw size={14} className="animate-spin" />}

@@ -104,7 +104,8 @@ describe('JobNexus — Admin User & Account Management (P0 & P1)', () => {
         status: 'active',
         currentPeriodStart: new Date(Date.now() - 5 * 86400000).toISOString(),
         currentPeriodEnd: new Date(Date.now() + 25 * 86400000).toISOString(),
-        source: 'payment_backed',
+        provider: 'manual_upi',
+        cancelAtPeriodEnd: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
@@ -212,7 +213,8 @@ describe('JobNexus — Admin User & Account Management (P0 & P1)', () => {
         status: 'active',
         currentPeriodStart: new Date().toISOString(),
         currentPeriodEnd: new Date(Date.now() + 30 * 86400000).toISOString(),
-        source: 'payment_backed',
+        provider: 'manual_upi',
+        cancelAtPeriodEnd: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
