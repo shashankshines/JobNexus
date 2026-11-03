@@ -5210,33 +5210,65 @@ html[data-theme="light"] .admin-btn-secondary:hover {
 }
 
 /* ============================================================================
-   ADMIN CONSOLE PAGINATION BAR STYLES
+   ADMIN CONSOLE PAGINATION BAR & CONNECTED TABLE FOOTER
+   Modern Enterprise Design System (Stripe / GitHub / Linear style)
    ============================================================================ */
+
+/* 1. Base Container (Standalone mode: Submissions, Ledger, Subscriptions) */
 .admin-pagination-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.85rem;
-  padding: 0.85rem 1.15rem;
+  padding: 0.75rem 1.15rem;
   margin-top: 1.25rem;
   border-radius: 12px;
-  background: var(--card-bg, rgba(15, 23, 42, 0.65));
-  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  background: #0d1321;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
 }
 
-/* Light Mode Theme Overrides for Standalone Pagination Bar */
 :root[data-theme="light"] .admin-pagination-bar,
 [data-theme="light"] .admin-pagination-bar,
 html[data-theme="light"] .admin-pagination-bar {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 2. Connected Table Footer Container (Integrated mode: Tables) */
+.admin-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.015);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+:root[data-theme="light"] .admin-table-footer,
+[data-theme="light"] .admin-table-footer,
+html[data-theme="light"] .admin-table-footer {
+  border-top: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+}
+
+/* 3. Left Section: Range Info + Rows Per Page */
+.admin-pagination-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .admin-pagination-info {
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #94a3b8);
   font-weight: 500;
   display: flex;
@@ -5252,7 +5284,7 @@ html[data-theme="light"] .admin-pagination-info {
 
 .admin-pagination-info strong {
   color: var(--text-primary, #f8fafc);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 :root[data-theme="light"] .admin-pagination-info strong,
@@ -5261,29 +5293,125 @@ html[data-theme="light"] .admin-pagination-info strong {
   color: #0f172a !important;
 }
 
+.admin-pagination-page-hint {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  margin-left: 0.25rem;
+}
+
+.admin-pagination-size-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.admin-pagination-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="light"] .admin-pagination-divider,
+[data-theme="light"] .admin-pagination-divider,
+html[data-theme="light"] .admin-pagination-divider {
+  background: #cbd5e1 !important;
+}
+
+.admin-pagination-size-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary, #94a3b8);
+  font-weight: 500;
+}
+
+:root[data-theme="light"] .admin-pagination-size-label,
+[data-theme="light"] .admin-pagination-size-label,
+html[data-theme="light"] .admin-pagination-size-label {
+  color: #64748b !important;
+}
+
+.admin-pagination-select {
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #f1f5f9);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  height: 30px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.admin-pagination-select:focus {
+  border-color: #818cf8;
+}
+
+:root[data-theme="light"] .admin-pagination-select,
+[data-theme="light"] .admin-pagination-select,
+html[data-theme="light"] .admin-pagination-select {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+:root[data-theme="light"] .admin-pagination-select:focus,
+[data-theme="light"] .admin-pagination-select:focus,
+html[data-theme="light"] .admin-pagination-select:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+}
+
+/* 4. Right Section: Controls */
 .admin-pagination-controls {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
 }
 
+.admin-pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Previous / Next Action Buttons */
 .admin-pagination-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 0.42rem 0.85rem;
-  min-height: 36px;
-  border-radius: 8px;
+  padding: 0 0.75rem;
+  height: 32px;
+  border-radius: 6px;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-primary, #f1f5f9);
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.15s ease;
   user-select: none;
+}
+
+.admin-pagination-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.admin-pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.05);
+  color: #64748b;
 }
 
 :root[data-theme="light"] .admin-pagination-btn,
@@ -5291,80 +5419,75 @@ html[data-theme="light"] .admin-pagination-info strong {
 html[data-theme="light"] .admin-pagination-btn {
   background: #ffffff !important;
   border: 1px solid #cbd5e1 !important;
-  color: #1e293b !important;
-}
-
-.admin-pagination-btn:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(129, 140, 248, 0.4);
-  color: #ffffff;
-  transform: translateY(-1px);
+  color: #334155 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
 }
 
 :root[data-theme="light"] .admin-pagination-btn:hover:not(:disabled),
 [data-theme="light"] .admin-pagination-btn:hover:not(:disabled),
 html[data-theme="light"] .admin-pagination-btn:hover:not(:disabled) {
-  background: #f1f5f9 !important;
+  background: #f8fafc !important;
   border-color: #94a3b8 !important;
   color: #0f172a !important;
 }
 
-.admin-pagination-btn:active:not(:disabled) {
-  transform: translateY(0);
+:root[data-theme="light"] .admin-pagination-btn:disabled,
+[data-theme="light"] .admin-pagination-btn:disabled,
+html[data-theme="light"] .admin-pagination-btn:disabled {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #94a3b8 !important;
+  box-shadow: none !important;
+  opacity: 0.65 !important;
 }
 
-.admin-pagination-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
+/* Page Number Buttons (Compact, Square 32px) */
 .admin-page-number-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 0.45rem;
-  border-radius: 8px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text-secondary, #94a3b8);
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.15s ease;
   user-select: none;
+}
+
+.admin-page-number-btn:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+}
+
+.admin-page-number-btn.is-active {
+  background: #6366f1 !important;
+  border-color: #818cf8 !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
 }
 
 :root[data-theme="light"] .admin-page-number-btn,
 [data-theme="light"] .admin-page-number-btn,
 html[data-theme="light"] .admin-page-number-btn {
-  background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
   color: #475569 !important;
-}
-
-.admin-page-number-btn:hover:not(.is-active) {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary, #f8fafc);
-  border-color: rgba(255, 255, 255, 0.18);
 }
 
 :root[data-theme="light"] .admin-page-number-btn:hover:not(.is-active),
 [data-theme="light"] .admin-page-number-btn:hover:not(.is-active),
 html[data-theme="light"] .admin-page-number-btn:hover:not(.is-active) {
   background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
   color: #0f172a !important;
-  border-color: #94a3b8 !important;
-}
-
-.admin-page-number-btn.is-active {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  border-color: #818cf8;
-  color: #ffffff;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
 }
 
 :root[data-theme="light"] .admin-page-number-btn.is-active,
@@ -5373,66 +5496,34 @@ html[data-theme="light"] .admin-page-number-btn.is-active {
   background: #4f46e5 !important;
   border-color: #4338ca !important;
   color: #ffffff !important;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25) !important;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3) !important;
 }
 
 .admin-page-ellipsis {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 36px;
+  width: 24px;
+  height: 32px;
   color: var(--text-secondary, #64748b);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
   user-select: none;
 }
 
-/* ============================================================================
-   CONNECTED TABLE FOOTER
-   Seamlessly integrates directly at the bottom of the table container
-   ============================================================================ */
-.admin-table-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.85rem;
-  padding: 0.85rem 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.015);
-  box-sizing: border-box;
-  width: 100%;
-}
-
-:root[data-theme="light"] .admin-table-footer,
-[data-theme="light"] .admin-table-footer,
-html[data-theme="light"] .admin-table-footer {
-  border-top: 1px solid #e2e8f0 !important;
-  background: #fbfcfe !important;
-}
-
-/* Reset standalone box styling when pagination bar is inside an integrated footer */
-.admin-table-footer .admin-pagination-bar,
-.admin-pagination-bar.is-integrated {
-  margin-top: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  width: 100% !important;
-}
-
+/* Mobile responsive layout */
 @media (max-width: 640px) {
-  .admin-pagination-bar {
+  .admin-pagination-bar,
+  .admin-table-footer {
     flex-direction: column;
     align-items: stretch;
     gap: 0.75rem;
-    padding: 0.75rem;
+    padding: 0.75rem 0.9rem;
   }
 
-  .admin-pagination-info {
-    justify-content: center;
-    font-size: 0.76rem;
+  .admin-pagination-left {
+    justify-content: space-between;
+    width: 100%;
   }
 
   .admin-pagination-controls {
@@ -5442,6 +5533,6 @@ html[data-theme="light"] .admin-table-footer {
 
   .admin-pagination-btn {
     flex: 1;
-    min-height: 38px;
+    min-height: 36px;
   }
 }

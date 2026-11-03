@@ -53,9 +53,9 @@ export function AdminPaginationBar({
 
   const pages = getPageNumbers();
 
+  const isIntegrated = variant === 'integrated';
   const containerClasses = [
-    'admin-pagination-bar',
-    variant === 'integrated' ? 'is-integrated' : '',
+    isIntegrated ? 'admin-table-footer' : 'admin-pagination-bar',
     className,
   ]
     .filter(Boolean)
@@ -63,47 +63,41 @@ export function AdminPaginationBar({
 
   return (
     <div className={containerClasses} role="navigation" aria-label={`Pagination for ${itemName}`}>
-      {/* Range Info & Page Size */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+      {/* Left: Range Info & Page Size */}
+      <div className="admin-pagination-left">
         <div className="admin-pagination-info">
           Showing <strong>{startItem}–{endItem}</strong> of <strong>{totalItems}</strong> {itemName}
           {totalPages > 1 && (
-            <span style={{ opacity: 0.7, marginLeft: '0.35rem' }}>
+            <span className="admin-pagination-page-hint">
               (Page {safeCurrentPage} of {totalPages})
             </span>
           )}
         </div>
 
         {onPageSizeChange && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span className="admin-text-label" style={{ fontSize: '0.76rem' }}>Show:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => onPageSizeChange(parseInt(e.target.value, 10))}
-              aria-label="Select items per page"
-              style={{
-                padding: '0.25rem 0.55rem',
-                borderRadius: 6,
-                border: '1px solid var(--border)',
-                background: 'var(--bg-secondary, rgba(255, 255, 255, 0.05))',
-                color: 'var(--text-primary)',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                minHeight: '32px',
-              }}
-            >
-              {pageSizeOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt} per page
-                </option>
-              ))}
-            </select>
+          <div className="admin-pagination-size-wrap">
+            <span className="admin-pagination-divider" aria-hidden="true" />
+            <label className="admin-pagination-size-label">
+              <span>Show:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => onPageSizeChange(parseInt(e.target.value, 10))}
+                aria-label={`Items per page for ${itemName}`}
+                className="admin-pagination-select"
+              >
+                {pageSizeOptions.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>per page</span>
+            </label>
           </div>
         )}
       </div>
 
-      {/* Navigation Buttons */}
+      {/* Right: Modern Navigation Buttons */}
       <div className="admin-pagination-controls">
         <button
           type="button"
@@ -112,34 +106,36 @@ export function AdminPaginationBar({
           className="admin-pagination-btn"
           aria-label="Previous page"
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={15} />
           <span>Previous</span>
         </button>
 
-        {pages.map((p, idx) => {
-          if (p === 'ellipsis-left' || p === 'ellipsis-right') {
-            return (
-              <span key={`ellipsis-${idx}`} className="admin-page-ellipsis" aria-hidden="true">
-                …
-              </span>
-            );
-          }
+        <div className="admin-pagination-pages">
+          {pages.map((p, idx) => {
+            if (p === 'ellipsis-left' || p === 'ellipsis-right') {
+              return (
+                <span key={`ellipsis-${idx}`} className="admin-page-ellipsis" aria-hidden="true">
+                  …
+                </span>
+              );
+            }
 
-          const isActive = p === safeCurrentPage;
-          return (
-            <button
-              key={`page-${p}`}
-              type="button"
-              onClick={() => onPageChange(p)}
-              disabled={loading}
-              className={`admin-page-number-btn ${isActive ? 'is-active' : ''}`}
-              aria-label={`Page ${p}`}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              {p}
-            </button>
-          );
-        })}
+            const isActive = p === safeCurrentPage;
+            return (
+              <button
+                key={`page-${p}`}
+                type="button"
+                onClick={() => onPageChange(p)}
+                disabled={loading}
+                className={`admin-page-number-btn ${isActive ? 'is-active' : ''}`}
+                aria-label={`Page ${p}`}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {p}
+              </button>
+            );
+          })}
+        </div>
 
         <button
           type="button"
@@ -149,7 +145,7 @@ export function AdminPaginationBar({
           aria-label="Next page"
         >
           <span>Next</span>
-          <ChevronRight size={14} />
+          <ChevronRight size={15} />
         </button>
       </div>
     </div>

@@ -981,19 +981,17 @@ export function UsersDirectoryView({
 
           {/* Seamlessly Integrated Connected Table Footer */}
           {total > 0 && (
-            <div className="admin-table-footer">
-              <AdminPaginationBar
-                currentPage={page}
-                totalItems={total}
-                pageSize={pageSize}
-                onPageChange={onPageChange}
-                onPageSizeChange={onPageSizeChange}
-                pageSizeOptions={[10, 20, 50, 100]}
-                variant="integrated"
-                itemName="users"
-                loading={loading}
-              />
-            </div>
+            <AdminPaginationBar
+              currentPage={page}
+              totalItems={total}
+              pageSize={pageSize}
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+              pageSizeOptions={[10, 20, 50, 100]}
+              variant="integrated"
+              itemName="users"
+              loading={loading}
+            />
           )}
         </div>
 
@@ -1253,26 +1251,17 @@ export function UsersDirectoryView({
 
             {/* Mobile Connected Pagination Card */}
             {total > 0 && (
-              <div
-                className="admin-card"
-                style={{
-                  padding: '0.85rem 1rem',
-                  borderRadius: 14,
-                  marginTop: '0.25rem',
-                }}
-              >
-                <AdminPaginationBar
-                  currentPage={page}
-                  totalItems={total}
-                  pageSize={pageSize}
-                  onPageChange={onPageChange}
-                  onPageSizeChange={onPageSizeChange}
-                  pageSizeOptions={[10, 20, 50, 100]}
-                  variant="integrated"
-                  itemName="users"
-                  loading={loading}
-                />
-              </div>
+              <AdminPaginationBar
+                currentPage={page}
+                totalItems={total}
+                pageSize={pageSize}
+                onPageChange={onPageChange}
+                onPageSizeChange={onPageSizeChange}
+                pageSizeOptions={[10, 20, 50, 100]}
+                variant="standalone"
+                itemName="users"
+                loading={loading}
+              />
             )}
           </div>
 
