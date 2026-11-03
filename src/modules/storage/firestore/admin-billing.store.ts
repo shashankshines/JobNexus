@@ -13,7 +13,8 @@ import {
   UtrReservationDocument,
 } from './collections';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
-import { getUserById, getAllUsers } from '@/modules/auth/server/session.store';
+import { getUserById, getAllUsers, SavedJobItem, UserAccountStatus } from '@/modules/auth/server/session.store';
+import { getSubscriptionByUserId } from '@/modules/billing/services/subscription.store';
 import {
   evaluateSubscriptionEntitlement,
   invalidateUserEntitlementCache,
@@ -72,10 +73,21 @@ export interface User360Identity {
   userId: string;
   email: string | null;
   name: string | null;
+  avatar?: string | null;
+  role?: string | null;
   provider: string | null;
   createdAt: string | null;
   isEmailVerified: boolean;
   status: string;
+  accountStatus: UserAccountStatus;
+  accountStatusReason?: string | null;
+  accountStatusUpdatedAt?: string | null;
+  accountStatusUpdatedBy?: string | null;
+  deactivatedAt?: string | null;
+  deletionRequestedAt?: string | null;
+  deletionScheduledFor?: string | null;
+  lastActiveAt?: string | null;
+  savedJobsCount: number;
 }
 
 export interface User360Subscription {
@@ -114,6 +126,7 @@ export interface User360Dossier {
   submissions: SubmissionWithOrder[];
   auditLogs: AdminAuditLogDocument[];
   timeline: User360TimelineEvent[];
+  savedJobs: SavedJobItem[];
 }
 
 export interface PaymentLedgerItem {
@@ -1897,14 +1910,26 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
     return a.id.localeCompare(b.id);
   });
 
+  const accountStatus: UserAccountStatus = user?.accountStatus || 'active';
   const identity: User360Identity = {
     userId: resolvedUserId,
     email: resolvedEmail,
     name: user?.name || null,
+    avatar: user?.avatar || null,
+    role: user?.role || null,
     provider: user?.provider || null,
     createdAt: user?.createdAt ? new Date(user.createdAt).toISOString() : null,
     isEmailVerified: user?.provider === 'google',
-    status: 'active',
+    status: accountStatus,
+    accountStatus,
+    accountStatusReason: user?.accountStatusReason || null,
+    accountStatusUpdatedAt: user?.accountStatusUpdatedAt || null,
+    accountStatusUpdatedBy: user?.accountStatusUpdatedBy || null,
+    deactivatedAt: user?.deactivatedAt || null,
+    deletionRequestedAt: user?.deletionRequestedAt || null,
+    deletionScheduledFor: user?.deletionScheduledFor || null,
+    lastActiveAt: user?.lastActiveAt || null,
+    savedJobsCount: user?.savedJobs?.length || 0,
   };
 
   return {
@@ -1914,6 +1939,216 @@ export async function getUser360Profile(userIdOrEmail: string): Promise<User360D
     submissions: submissionsWithOrders,
     auditLogs,
     timeline,
+    savedJobs: user?.savedJobs ? [...user.savedJobs] : [],
+  };
+}
+
+// ============================================================================
+// Admin Users Directory Query
+// ============================================================================
+
+export interface AdminUsersDirectoryFilter {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  accountStatus?: 'all' | UserAccountStatus;
+  provider?: 'all' | 'google' | 'credentials';
+  premiumStatus?: 'all' | 'free' | 'active' | 'expired' | 'suspended';
+  sortBy?: 'createdAt' | 'name' | 'email' | 'lastActiveAt';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface AdminUserDirectoryRecord {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  role: string;
+  provider: 'google' | 'credentials';
+  initials: string;
+  createdAt: string;
+  savedJobsCount: number;
+  accountStatus: UserAccountStatus;
+  accountStatusReason?: string;
+  accountStatusUpdatedAt?: string;
+  accountStatusUpdatedBy?: string;
+  deactivatedAt?: string;
+  deletionRequestedAt?: string;
+  deletionScheduledFor?: string;
+  lastActiveAt?: string;
+  subscription: {
+    status: string;
+    isPremium: boolean;
+    currentPeriodEnd: string | null;
+    planId: string;
+  };
+}
+
+export interface AdminUsersDirectoryResponse {
+  users: AdminUserDirectoryRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  summary: {
+    totalUsers: number;
+    activeUsers: number;
+    suspendedUsers: number;
+    deactivatedUsers: number;
+    deletionRequestedUsers: number;
+    googleUsers: number;
+    credentialsUsers: number;
+    premiumUsers: number;
+    freeUsers: number;
+  };
+}
+
+export async function getAdminUsersDirectory(
+  filter?: AdminUsersDirectoryFilter
+): Promise<AdminUsersDirectoryResponse> {
+  const page = Math.max(1, filter?.page || 1);
+  const pageSize = Math.min(100, Math.max(1, filter?.pageSize || 20));
+  const search = (filter?.search || '').trim().toLowerCase();
+  const accountStatusFilter = filter?.accountStatus || 'all';
+  const providerFilter = filter?.provider || 'all';
+  const premiumStatusFilter = filter?.premiumStatus || 'all';
+  const sortBy = filter?.sortBy || 'createdAt';
+  const sortOrder = filter?.sortOrder || 'desc';
+
+  const rawUsers = getAllUsers();
+
+  // Load subscriptions map from Firestore (and fallback store in testing)
+  const subscriptionsCol = getSubscriptionsCollection();
+  const subsSnap = await subscriptionsCol.get().catch(() => null);
+  const subsMap = new Map<string, SubscriptionDocument>();
+  if (subsSnap && !subsSnap.empty) {
+    for (const doc of subsSnap.docs) {
+      const data = doc.data() as SubscriptionDocument;
+      subsMap.set(doc.id, data);
+      if (data?.userId) {
+        subsMap.set(data.userId, data);
+      }
+    }
+  }
+
+  // Pre-process all users with evaluated subscription state
+  const allRecords: AdminUserDirectoryRecord[] = rawUsers.map((u) => {
+    let subDoc = subsMap.get(u.id);
+    if (!subDoc) {
+      const fallbackSub = getSubscriptionByUserId(u.id);
+      if (fallbackSub) {
+        subDoc = fallbackSub as SubscriptionDocument;
+      }
+    }
+    const entitlement = evaluateSubscriptionEntitlement(u.id, subDoc);
+    const status: UserAccountStatus = u.accountStatus || 'active';
+
+    return {
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      avatar: u.avatar,
+      role: u.role,
+      provider: u.provider,
+      initials: u.initials,
+      createdAt: u.createdAt,
+      savedJobsCount: u.savedJobs?.length || 0,
+      accountStatus: status,
+      accountStatusReason: u.accountStatusReason,
+      accountStatusUpdatedAt: u.accountStatusUpdatedAt,
+      accountStatusUpdatedBy: u.accountStatusUpdatedBy,
+      deactivatedAt: u.deactivatedAt,
+      deletionRequestedAt: u.deletionRequestedAt,
+      deletionScheduledFor: u.deletionScheduledFor,
+      lastActiveAt: u.lastActiveAt,
+      subscription: {
+        status: entitlement.status,
+        isPremium: entitlement.isPremium,
+        currentPeriodEnd: subDoc?.currentPeriodEnd || null,
+        planId: subDoc?.planId || 'free',
+      },
+    };
+  });
+
+  // Calculate summary counts across the entire user base
+  const summary = {
+    totalUsers: allRecords.length,
+    activeUsers: allRecords.filter((r) => r.accountStatus === 'active').length,
+    suspendedUsers: allRecords.filter((r) => r.accountStatus === 'suspended').length,
+    deactivatedUsers: allRecords.filter((r) => r.accountStatus === 'deactivated').length,
+    deletionRequestedUsers: allRecords.filter((r) => r.accountStatus === 'deletion_requested').length,
+    googleUsers: allRecords.filter((r) => r.provider === 'google').length,
+    credentialsUsers: allRecords.filter((r) => r.provider === 'credentials').length,
+    premiumUsers: allRecords.filter((r) => r.subscription.isPremium).length,
+    freeUsers: allRecords.filter((r) => !r.subscription.isPremium).length,
+  };
+
+  // Filter records
+  let filtered = allRecords;
+
+  if (search) {
+    filtered = filtered.filter(
+      (r) =>
+        r.name?.toLowerCase().includes(search) ||
+        r.email?.toLowerCase().includes(search) ||
+        r.id.toLowerCase().includes(search)
+    );
+  }
+
+  if (accountStatusFilter !== 'all') {
+    filtered = filtered.filter((r) => r.accountStatus === accountStatusFilter);
+  }
+
+  if (providerFilter !== 'all') {
+    filtered = filtered.filter((r) => r.provider === providerFilter);
+  }
+
+  if (premiumStatusFilter !== 'all') {
+    if (premiumStatusFilter === 'active') {
+      filtered = filtered.filter((r) => r.subscription.isPremium);
+    } else if (premiumStatusFilter === 'free') {
+      filtered = filtered.filter((r) => !r.subscription.isPremium && r.subscription.status === 'free');
+    } else if (premiumStatusFilter === 'expired') {
+      filtered = filtered.filter((r) => r.subscription.status === 'expired');
+    } else if (premiumStatusFilter === 'suspended') {
+      filtered = filtered.filter((r) => r.subscription.status === 'halted');
+    }
+  }
+
+  // Sort records
+  filtered.sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === 'name') {
+      cmp = (a.name || '').localeCompare(b.name || '');
+    } else if (sortBy === 'email') {
+      cmp = (a.email || '').localeCompare(b.email || '');
+    } else if (sortBy === 'lastActiveAt') {
+      const timeA = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
+      const timeB = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
+      cmp = timeA - timeB;
+    } else {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      cmp = timeA - timeB;
+    }
+    if (cmp === 0) {
+      cmp = a.id.localeCompare(b.id);
+    }
+    return sortOrder === 'asc' ? cmp : -cmp;
+  });
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const offset = (page - 1) * pageSize;
+  const pagedRecords = filtered.slice(offset, offset + pageSize);
+
+  return {
+    users: pagedRecords,
+    total,
+    page,
+    pageSize,
+    totalPages,
+    summary,
   };
 }
 

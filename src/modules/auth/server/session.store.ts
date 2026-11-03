@@ -7,6 +7,13 @@
 import crypto from 'node:crypto';
 import { DurableStore } from '@/modules/storage/durable.store';
 
+export type UserAccountStatus =
+  | 'active'
+  | 'suspended'
+  | 'deactivated'
+  | 'deletion_requested'
+  | 'deleted';
+
 export interface UserRecord {
   id: string;
   email: string;
@@ -17,6 +24,14 @@ export interface UserRecord {
   initials: string;
   createdAt: string;
   savedJobs: SavedJobItem[];
+  accountStatus?: UserAccountStatus;
+  accountStatusReason?: string;
+  accountStatusUpdatedAt?: string;
+  accountStatusUpdatedBy?: string;
+  deactivatedAt?: string;
+  deletionRequestedAt?: string;
+  deletionScheduledFor?: string;
+  lastActiveAt?: string;
 }
 
 export interface SavedJobItem {
@@ -203,6 +218,24 @@ export function validateSession(sessionId: string | null | undefined): {
     return { valid: false, error: 'User not found' };
   }
 
+  const status: UserAccountStatus = user.accountStatus || 'active';
+  if (status === 'suspended') {
+    return { valid: false, error: 'Account suspended by administrator' };
+  }
+  if (status === 'deactivated') {
+    return { valid: false, error: 'Account has been deactivated' };
+  }
+  if (status === 'deleted') {
+    return { valid: false, error: 'Account has been deleted' };
+  }
+
+  const now = Date.now();
+  const lastActiveMs = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+  if (now - lastActiveMs > 5 * 60 * 1000) {
+    user.lastActiveAt = new Date(now).toISOString();
+    users.set(user.id, user);
+  }
+
   return { valid: true, user };
 }
 
@@ -248,6 +281,16 @@ export function findOrCreateGoogleUser(profile: {
     // Security check: Never link to existing account if Google email is unverified
     if (profile.email_verified === false) {
       throw new Error('Google account email is not verified. Account linking rejected.');
+    }
+    const status: UserAccountStatus = existing.accountStatus || 'active';
+    if (status === 'suspended') {
+      throw new Error('This account has been suspended by an administrator.');
+    }
+    if (status === 'deactivated') {
+      throw new Error('This account has been deactivated.');
+    }
+    if (status === 'deleted') {
+      throw new Error('This account has been deleted.');
     }
     // Update profile fields
     existing.name = profile.name || existing.name;
@@ -338,6 +381,17 @@ export function verifyCredentialsUser(
     if (computedHash !== passwordHashes.get(userId)?.hash) {
       return { error: 'Invalid email/username or password. Please try again.' };
     }
+  }
+
+  const status: UserAccountStatus = user.accountStatus || 'active';
+  if (status === 'suspended') {
+    return { error: 'This account has been suspended by an administrator.' };
+  }
+  if (status === 'deactivated') {
+    return { error: 'This account has been deactivated.' };
+  }
+  if (status === 'deleted') {
+    return { error: 'This account has been deleted.' };
   }
 
   return { user };
@@ -476,6 +530,117 @@ export function getUserByEmail(email: string): UserRecord | null {
  */
 export function getAllUsers(): UserRecord[] {
   return Array.from(users.values());
+}
+
+/**
+ * Terminates all active sessions belonging to a specific user.
+ * Returns the exact count of sessions revoked.
+ */
+export function revokeAllSessionsForUser(userId: string): number {
+  if (!userId) return 0;
+  let count = 0;
+  const allSessions = sessions.entries();
+  for (const [sId, sess] of allSessions) {
+    if (sess.userId === userId) {
+      sessions.delete(sId);
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Updates a user's account lifecycle status with mandatory audit reason and operator metadata.
+ * If status changes to 'suspended', 'deactivated', 'deletion_requested', or 'deleted',
+ * all active sessions are immediately terminated.
+ */
+export function updateUserAccountStatus(
+  userId: string,
+  params: {
+    status: UserAccountStatus;
+    reason: string;
+    updatedBy: string;
+    retentionDays?: number;
+  }
+): { user: UserRecord; revokedSessionsCount: number } {
+  let user = getUserById(userId);
+  if (!user && userId.includes('@')) {
+    user = getUserByEmail(userId);
+  }
+  if (!user) {
+    throw new Error(`User with ID or email "${userId}" not found.`);
+  }
+
+  const previousStatus = user.accountStatus || 'active';
+  user.accountStatus = params.status;
+  user.accountStatusReason = params.reason;
+  user.accountStatusUpdatedAt = new Date().toISOString();
+  user.accountStatusUpdatedBy = params.updatedBy;
+
+  if (params.status === 'deactivated') {
+    user.deactivatedAt = new Date().toISOString();
+  } else if (params.status === 'active' && previousStatus === 'deactivated') {
+    user.deactivatedAt = undefined;
+  }
+
+  if (params.status === 'deletion_requested') {
+    user.deletionRequestedAt = new Date().toISOString();
+    const days = params.retentionDays && params.retentionDays > 0 ? params.retentionDays : 30;
+    user.deletionScheduledFor = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  } else if (params.status === 'active' && previousStatus === 'deletion_requested') {
+    user.deletionRequestedAt = undefined;
+    user.deletionScheduledFor = undefined;
+  }
+
+  users.set(user.id, user);
+
+  // Terminate all sessions if access is revoked or account is de-escalated
+  let revokedSessionsCount = 0;
+  if (['suspended', 'deactivated', 'deletion_requested', 'deleted'].includes(params.status)) {
+    revokedSessionsCount = revokeAllSessionsForUser(user.id);
+  }
+
+  return { user, revokedSessionsCount };
+}
+
+/**
+ * Executes controlled account deletion.
+ * Cleans up user credentials, password hashes, and active sessions.
+ * Preserves financial and immutable audit records for regulatory retention.
+ */
+export function deleteUserAccount(
+  userId: string,
+  _options: { retainFinancial?: boolean; preserveFinancialRecords?: boolean } = { retainFinancial: true }
+): { success: boolean; deletedUserId: string; email: string; credentialsDeleted: boolean; revokedSessionsCount: number } {
+  void _options;
+  let user = getUserById(userId);
+  if (!user && userId.includes('@')) {
+    user = getUserByEmail(userId);
+  }
+  if (!user) {
+    throw new Error(`User with ID or email "${userId}" not found.`);
+  }
+
+  const cleanEmail = user.email.trim().toLowerCase();
+  const deletedUserId = user.id;
+
+  // 1. Terminate all active sessions
+  const revokedSessionsCount = revokeAllSessionsForUser(deletedUserId);
+
+  // 2. Remove password hash and email mapping
+  passwordHashes.delete(deletedUserId);
+  usersByEmail.delete(cleanEmail);
+
+  // 3. Remove user identity from auth store
+  users.delete(deletedUserId);
+
+  return {
+    success: true,
+    deletedUserId,
+    email: cleanEmail,
+    credentialsDeleted: true,
+    revokedSessionsCount,
+  };
 }
 
 /**

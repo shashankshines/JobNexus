@@ -29,6 +29,12 @@ import {
   User,
   Activity,
   XCircle,
+  Download,
+  UserX,
+  LogOut,
+  Trash2,
+  Bookmark,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   SubmissionWithOrder,
@@ -36,15 +42,19 @@ import {
   User360Dossier,
   PaymentLedgerItem,
   PaymentLedgerSummary,
+  AdminUserDirectoryRecord,
+  AdminUsersDirectoryResponse,
 } from '@/modules/storage/firestore/admin-billing.store';
 import { SubscriptionDocument, AdminAuditLogDocument } from '@/modules/storage/firestore/collections';
 import { PaymentSettingsView } from '@/app/components/admin/PaymentSettingsView';
 import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
+import { UsersDirectoryView } from '@/app/components/admin/UsersDirectoryView';
+import { AccountLifecycleModal, AccountActionType } from '@/app/components/admin/AccountLifecycleModal';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 
 const ADMIN_PAGE_SIZE = 5;
 
-type AdminTab = 'overview' | 'verifications' | 'ledger' | 'subscriptions' | 'settings_preview' | 'audit_logs';
+type AdminTab = 'overview' | 'users' | 'verifications' | 'ledger' | 'subscriptions' | 'settings_preview' | 'audit_logs';
 type AdminSubscriptionAction = 'grant' | 'extend' | 'suspend' | 'reinstate' | 'terminate' | 'revoke';
 
 const ADMIN_SUBSCRIPTION_ACTIONS: Array<{
@@ -192,6 +202,31 @@ export default function AdminConsolePage() {
   const [user360Dossier, setUser360Dossier] = useState<User360Dossier | null>(null);
   const [user360Error, setUser360Error] = useState<string | null>(null);
   const user360RequestIdRef = useRef(0);
+
+  // Users Directory state
+  const [usersList, setUsersList] = useState<AdminUserDirectoryRecord[]>([]);
+  const [usersSummary, setUsersSummary] = useState<AdminUsersDirectoryResponse['summary'] | null>(null);
+  const [usersTotal, setUsersTotal] = useState<number>(0);
+  const [usersPage, setUsersPage] = useState<number>(1);
+  const [usersPageSize, setUsersPageSize] = useState<number>(20);
+  const [usersLoading, setUsersLoading] = useState<boolean>(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [usersSearchQuery, setUsersSearchQuery] = useState<string>('');
+  const [usersStatusFilter, setUsersStatusFilter] = useState<string>('all');
+  const [usersProviderFilter, setUsersProviderFilter] = useState<string>('all');
+  const [usersPremiumFilter, setUsersPremiumFilter] = useState<string>('all');
+  const [usersSortBy, setUsersSortBy] = useState<string>('createdAt');
+  const [usersSortOrder, setUsersSortOrder] = useState<string>('desc');
+
+  // Account Lifecycle Modal state
+  const [accountModalOpen, setAccountModalOpen] = useState<boolean>(false);
+  const [accountModalAction, setAccountModalAction] = useState<AccountActionType>('suspend');
+  const [accountModalTargetUser, setAccountModalTargetUser] = useState<{
+    id: string;
+    email: string;
+    name?: string;
+    status?: string;
+  } | null>(null);
 
   // Consolidated Payment Ledger state
   const [ledgerRecords, setLedgerRecords] = useState<PaymentLedgerItem[]>([]);
@@ -418,6 +453,103 @@ export default function AdminConsolePage() {
     setUser360Loading(false);
   };
 
+  // Load Users Directory
+  const fetchUsers = useCallback(
+    async (options?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      accountStatus?: string;
+      provider?: string;
+      premiumStatus?: string;
+      sortBy?: string;
+      sortOrder?: string;
+      silent?: boolean;
+    }) => {
+      if (!options?.silent) {
+        setUsersLoading(true);
+      }
+      setUsersError(null);
+      try {
+        const p = options?.page ?? usersPage;
+        const ps = options?.pageSize ?? usersPageSize;
+        const q = options?.search !== undefined ? options.search : usersSearchQuery;
+        const as = options?.accountStatus ?? usersStatusFilter;
+        const pv = options?.provider ?? usersProviderFilter;
+        const pr = options?.premiumStatus ?? usersPremiumFilter;
+        const sb = options?.sortBy ?? usersSortBy;
+        const so = options?.sortOrder ?? usersSortOrder;
+
+        const params = new URLSearchParams({
+          page: String(p),
+          pageSize: String(ps),
+          accountStatus: as,
+          provider: pv,
+          premiumStatus: pr,
+          sortBy: sb,
+          sortOrder: so,
+        });
+        if (q.trim()) {
+          params.set('search', q.trim());
+        }
+
+        const res = await fetch(`/api/admin/users?${params.toString()}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setUsersList(data.users || []);
+          setUsersTotal(typeof data.total === 'number' ? data.total : (data.users || []).length);
+          setUsersPage(data.page || 1);
+          setUsersSummary(data.summary || null);
+        } else {
+          setUsersError(data?.error || `Failed to load users directory (HTTP ${res.status}).`);
+        }
+      } catch (err) {
+        setUsersError(err instanceof Error ? err.message : 'Network error loading users directory.');
+      } finally {
+        if (!options?.silent) {
+          setUsersLoading(false);
+        }
+      }
+    },
+    [usersPage, usersPageSize, usersSearchQuery, usersStatusFilter, usersProviderFilter, usersPremiumFilter, usersSortBy, usersSortOrder]
+  );
+
+  const openAccountActionModal = (
+    action: AccountActionType,
+    user: { id: string; email: string; name?: string; status?: string }
+  ) => {
+    setAccountModalAction(action);
+    setAccountModalTargetUser(user);
+    setAccountModalOpen(true);
+  };
+
+  const handleExportUserData = async (userId: string, format: 'json' | 'csv') => {
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/export?format=${format}`);
+      if (!res.ok) {
+        throw new Error(`Export failed with HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `user_export_${userId}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setNotification({
+        type: 'success',
+        message: `User data export (${format.toUpperCase()}) downloaded successfully. Audit event recorded.`,
+      });
+    } catch (err) {
+      setNotification({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to export user data.',
+      });
+    }
+  };
+
   // Load Consolidated Payment Ledger
   const fetchLedger = useCallback(async (filterParams?: {
     status?: string;
@@ -542,7 +674,7 @@ export default function AdminConsolePage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['overview', 'verifications', 'ledger', 'subscriptions', 'settings_preview', 'audit_logs'].includes(tabParam)) {
+      if (tabParam && ['overview', 'users', 'verifications', 'ledger', 'subscriptions', 'settings_preview', 'audit_logs'].includes(tabParam)) {
         setActiveTab(tabParam as AdminTab);
         setTimeout(() => {
           if (tabContentRef.current) {
@@ -563,7 +695,9 @@ export default function AdminConsolePage() {
     const intervalId = window.setInterval(poll, 30_000);
     const handleFocus = () => {
       void fetchOverview({ silent: true });
-      if (activeTab === 'verifications') {
+      if (activeTab === 'users') {
+        void fetchUsers({ silent: true });
+      } else if (activeTab === 'verifications') {
         void fetchSubmissions({ silent: true });
       }
     };
@@ -572,10 +706,12 @@ export default function AdminConsolePage() {
       window.clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [authError, activeTab, fetchOverview, fetchSubmissions]);
+  }, [authError, activeTab, fetchOverview, fetchSubmissions, fetchUsers]);
 
   useEffect(() => {
-    if (activeTab === 'verifications') {
+    if (activeTab === 'users') {
+      fetchUsers({ page: usersPage });
+    } else if (activeTab === 'verifications') {
       fetchSubmissions({ status: submissionFilter, page: submissionPage, query: verificationSearchQuery });
     } else if (activeTab === 'ledger') {
       fetchLedger({ page: ledgerPage });
@@ -891,6 +1027,7 @@ export default function AdminConsolePage() {
           <nav className="admin-tab-nav" role="tablist" aria-label="Admin Navigation Tabs">
             {[
               { id: 'overview', label: 'Overview', fullTitle: 'Overview & Metrics', icon: ShieldCheck, badge: metrics?.pendingCount },
+              { id: 'users', label: 'Users', fullTitle: 'Users Directory & Account 360', icon: UserCheck, badge: usersSummary?.totalUsers },
               { id: 'verifications', label: 'Verification Queue', fullTitle: 'Payment Verification Queue', icon: CreditCard, badge: metrics?.pendingCount },
               { id: 'ledger', label: 'Payment Ledger', fullTitle: 'Consolidated Payment Ledger', icon: Receipt },
               { id: 'subscriptions', label: 'Subscribers', fullTitle: 'Subscribers & Entitlements', icon: Users, badge: metrics?.activeSubscribersCount },
@@ -951,6 +1088,7 @@ export default function AdminConsolePage() {
               <ArrowDown size={11} strokeWidth={2.5} />
               <span>
                 {activeTab === 'overview' && 'Overview & Metrics'}
+                {activeTab === 'users' && 'Users & Accounts Directory'}
                 {activeTab === 'verifications' && 'Verification Queue'}
                 {activeTab === 'ledger' && 'Payment Ledger'}
                 {activeTab === 'subscriptions' && 'Subscribers & Entitlements'}
@@ -1111,6 +1249,63 @@ export default function AdminConsolePage() {
               </Link>
             </div>
           </div>
+        )}
+
+        {/* TAB: USERS & ACCOUNTS DIRECTORY */}
+        {activeTab === 'users' && (
+          <UsersDirectoryView
+            users={usersList}
+            summary={usersSummary}
+            total={usersTotal}
+            page={usersPage}
+            pageSize={usersPageSize}
+            loading={usersLoading}
+            error={usersError}
+            searchQuery={usersSearchQuery}
+            statusFilter={usersStatusFilter}
+            providerFilter={usersProviderFilter}
+            premiumFilter={usersPremiumFilter}
+            sortBy={usersSortBy}
+            sortOrder={usersSortOrder}
+            onSearchChange={(q) => {
+              setUsersSearchQuery(q);
+              setUsersPage(1);
+              void fetchUsers({ search: q, page: 1 });
+            }}
+            onStatusFilterChange={(s) => {
+              setUsersStatusFilter(s);
+              setUsersPage(1);
+              void fetchUsers({ accountStatus: s, page: 1 });
+            }}
+            onProviderFilterChange={(p) => {
+              setUsersProviderFilter(p);
+              setUsersPage(1);
+              void fetchUsers({ provider: p, page: 1 });
+            }}
+            onPremiumFilterChange={(pr) => {
+              setUsersPremiumFilter(pr);
+              setUsersPage(1);
+              void fetchUsers({ premiumStatus: pr, page: 1 });
+            }}
+            onSortChange={(sb, so) => {
+              setUsersSortBy(sb);
+              setUsersSortOrder(so);
+              setUsersPage(1);
+              void fetchUsers({ sortBy: sb, sortOrder: so, page: 1 });
+            }}
+            onPageChange={(p) => {
+              setUsersPage(p);
+              void fetchUsers({ page: p });
+            }}
+            onPageSizeChange={(ps) => {
+              setUsersPageSize(ps);
+              setUsersPage(1);
+              void fetchUsers({ pageSize: ps, page: 1 });
+            }}
+            onRefresh={() => void fetchUsers()}
+            onOpenUser360={(userId) => void openUser360(userId)}
+            onOpenAccountAction={(action, user) => openAccountActionModal(action, user)}
+          />
         )}
 
         {/* TAB 2: PAYMENT VERIFICATION QUEUE */}
@@ -2736,11 +2931,17 @@ export default function AdminConsolePage() {
                     <div className="admin-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#818cf8' }}>
-                          User Identity
+                          User Identity & Account Status
                         </span>
-                        <span className="admin-badge-approved">
-                          {user360Dossier.identity.status.toUpperCase()}
-                        </span>
+                        {user360Dossier.identity.accountStatus === 'suspended' ? (
+                          <span className="admin-badge-rejected">SUSPENDED</span>
+                        ) : user360Dossier.identity.accountStatus === 'deactivated' ? (
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700, background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)' }}>DEACTIVATED</span>
+                        ) : user360Dossier.identity.accountStatus === 'deletion_requested' ? (
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700, background: 'rgba(225, 29, 72, 0.15)', color: '#f43f5e', border: '1px solid rgba(225, 29, 72, 0.3)' }}>DELETION PENDING</span>
+                        ) : (
+                          <span className="admin-badge-approved">ACTIVE</span>
+                        )}
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
@@ -2783,10 +2984,36 @@ export default function AdminConsolePage() {
                           </span>
                         </div>
                         <div>
-                          <span className="admin-text-label" style={{ fontSize: '0.7rem' }}>Total Orders Created:</span>
-                          <span className="admin-text-value" style={{ fontWeight: 700 }}>{user360Dossier.orders.length}</span>
+                          <span className="admin-text-label" style={{ fontSize: '0.7rem' }}>Account Status:</span>
+                          <span className="admin-text-value" style={{ fontWeight: 700, color: user360Dossier.identity.accountStatus === 'suspended' ? '#ef4444' : user360Dossier.identity.accountStatus === 'deactivated' ? '#f59e0b' : '#10b981' }}>
+                            {(user360Dossier.identity.accountStatus || 'active').toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="admin-text-label" style={{ fontSize: '0.7rem' }}>Saved Jobs:</span>
+                          <span className="admin-text-value" style={{ fontWeight: 700 }}>
+                            {user360Dossier.savedJobs?.length ?? user360Dossier.identity.savedJobsCount ?? 0}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="admin-text-label" style={{ fontSize: '0.7rem' }}>Last Active:</span>
+                          <span className="admin-text-value">
+                            {user360Dossier.identity.lastActiveAt ? new Date(user360Dossier.identity.lastActiveAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Never'}
+                          </span>
                         </div>
                       </div>
+
+                      {user360Dossier.identity.accountStatusReason && (
+                        <div className="admin-card-inner" style={{ padding: '0.65rem 0.75rem', borderRadius: 8, fontSize: '0.74rem', borderLeft: '3px solid #ef4444' }}>
+                          <strong className="admin-text-value">Status Note:</strong> {user360Dossier.identity.accountStatusReason}
+                          {user360Dossier.identity.accountStatusUpdatedAt && (
+                            <div className="admin-text-label" style={{ fontSize: '0.68rem', marginTop: 2 }}>
+                              Updated {new Date(user360Dossier.identity.accountStatusUpdatedAt).toLocaleString('en-IN')}
+                              {user360Dossier.identity.accountStatusUpdatedBy ? ` by ${user360Dossier.identity.accountStatusUpdatedBy}` : ''}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Authoritative Entitlement Card */}
@@ -2922,6 +3149,162 @@ export default function AdminConsolePage() {
                     </div>
                   </div>
 
+                  {/* Account Lifecycle & Session Controls */}
+                  <div className="admin-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.65rem' }}>
+                      <div>
+                        <h4 className="admin-text-value" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                          <ShieldCheck size={16} style={{ color: '#818cf8' }} />
+                          Account Lifecycle & Security Controls
+                        </h4>
+                        <span className="admin-text-label" style={{ fontSize: '0.72rem' }}>
+                          Independent account lifecycle governance (preserves Authoritative subscription status)
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {/* Suspend or Reinstate */}
+                        {user360Dossier.identity.accountStatus === 'suspended' || user360Dossier.identity.accountStatus === 'deactivated' ? (
+                          <button
+                            type="button"
+                            onClick={() => openAccountActionModal('reinstate', {
+                              id: user360Dossier.identity.userId,
+                              email: user360Dossier.identity.email || '',
+                              name: user360Dossier.identity.name || '',
+                              status: user360Dossier.identity.accountStatus,
+                            })}
+                            style={{ padding: '0.4rem 0.75rem', borderRadius: 8, background: '#10b981', border: 'none', color: '#ffffff', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                          >
+                            <UserCheck size={13} />
+                            <span>Reinstate Account</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openAccountActionModal('suspend', {
+                              id: user360Dossier.identity.userId,
+                              email: user360Dossier.identity.email || '',
+                              name: user360Dossier.identity.name || '',
+                              status: user360Dossier.identity.accountStatus,
+                            })}
+                            style={{ padding: '0.4rem 0.75rem', borderRadius: 8, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.35)', color: '#ef4444', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                          >
+                            <UserX size={13} />
+                            <span>Suspend Account</span>
+                          </button>
+                        )}
+
+                        {/* Force Sign-Out (Revoke Sessions) */}
+                        <button
+                          type="button"
+                          onClick={() => openAccountActionModal('revoke_sessions', {
+                            id: user360Dossier.identity.userId,
+                            email: user360Dossier.identity.email || '',
+                            name: user360Dossier.identity.name || '',
+                          })}
+                          style={{ padding: '0.4rem 0.75rem', borderRadius: 8, background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.35)', color: '#818cf8', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                        >
+                          <LogOut size={13} />
+                          <span>Force Sign-Out</span>
+                        </button>
+
+                        {/* Deactivate / Reactivate */}
+                        {user360Dossier.identity.accountStatus === 'deactivated' ? (
+                          <button
+                            type="button"
+                            onClick={() => openAccountActionModal('reactivate', {
+                              id: user360Dossier.identity.userId,
+                              email: user360Dossier.identity.email || '',
+                              name: user360Dossier.identity.name || '',
+                            })}
+                            className="admin-action-btn-secondary"
+                            style={{ padding: '0.4rem 0.75rem', fontSize: '0.76rem' }}
+                          >
+                            Reactivate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openAccountActionModal('deactivate', {
+                              id: user360Dossier.identity.userId,
+                              email: user360Dossier.identity.email || '',
+                              name: user360Dossier.identity.name || '',
+                            })}
+                            className="admin-action-btn-secondary"
+                            style={{ padding: '0.4rem 0.75rem', fontSize: '0.76rem' }}
+                          >
+                            Deactivate
+                          </button>
+                        )}
+
+                        {/* Export JSON */}
+                        <button
+                          type="button"
+                          onClick={() => void handleExportUserData(user360Dossier.identity.userId, 'json')}
+                          className="admin-action-btn-secondary"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.76rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                          title="Export user profile as JSON"
+                        >
+                          <Download size={13} />
+                          <span>Export JSON</span>
+                        </button>
+
+                        {/* Export CSV */}
+                        <button
+                          type="button"
+                          onClick={() => void handleExportUserData(user360Dossier.identity.userId, 'csv')}
+                          className="admin-action-btn-secondary"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.76rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                          title="Export user profile as CSV"
+                        >
+                          <FileSpreadsheet size={13} />
+                          <span>Export CSV</span>
+                        </button>
+
+                        {/* Deletion Workflow */}
+                        {user360Dossier.identity.accountStatus === 'deletion_requested' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openAccountActionModal('cancel_deletion', {
+                                id: user360Dossier.identity.userId,
+                                email: user360Dossier.identity.email || '',
+                                name: user360Dossier.identity.name || '',
+                              })}
+                              style={{ padding: '0.4rem 0.75rem', borderRadius: 8, background: '#10b981', border: 'none', color: '#ffffff', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                              Cancel Deletion
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openAccountActionModal('execute_deletion', {
+                                id: user360Dossier.identity.userId,
+                                email: user360Dossier.identity.email || '',
+                                name: user360Dossier.identity.name || '',
+                              })}
+                              style={{ padding: '0.4rem 0.75rem', borderRadius: 8, background: '#b91c1c', border: 'none', color: '#ffffff', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                              Execute Purge
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openAccountActionModal('request_deletion', {
+                              id: user360Dossier.identity.userId,
+                              email: user360Dossier.identity.email || '',
+                              name: user360Dossier.identity.name || '',
+                            })}
+                            style={{ padding: '0.4rem 0.75rem', borderRadius: 8, background: 'rgba(225, 29, 72, 0.15)', border: '1px solid rgba(225, 29, 72, 0.35)', color: '#f43f5e', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                          >
+                            <Trash2 size={13} />
+                            <span>Delete Account</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Chronological History Timeline */}
                   <div className="admin-card" style={{ padding: '1.25rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
@@ -3051,6 +3434,54 @@ export default function AdminConsolePage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Saved Jobs Dossier Section */}
+                  <div className="admin-card" style={{ padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                      <h4 className="admin-text-value" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <Bookmark size={16} style={{ color: '#818cf8' }} />
+                        Saved Jobs & Activity ({user360Dossier.savedJobs?.length || 0})
+                      </h4>
+                      <span className="admin-text-label" style={{ fontSize: '0.72rem' }}>
+                        User bookmarks & target opportunities
+                      </span>
+                    </div>
+                    {(!user360Dossier.savedJobs || user360Dossier.savedJobs.length === 0) ? (
+                      <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                        No saved jobs recorded for this user.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 240, overflowY: 'auto' }}>
+                        {user360Dossier.savedJobs.map((job, idx) => (
+                          <div
+                            key={job.id || idx}
+                            className="admin-card-inner"
+                            style={{ padding: '0.65rem 0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 8, gap: '0.5rem' }}
+                          >
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div className="admin-text-value" style={{ fontWeight: 600, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {job.title}
+                              </div>
+                              <div className="admin-text-label" style={{ fontSize: '0.72rem' }}>
+                                {job.company} • Saved: {job.date ? new Date(job.date).toLocaleDateString('en-IN') : 'N/A'}
+                              </div>
+                            </div>
+                            {job.url && (
+                              <a
+                                href={job.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="admin-action-btn-secondary"
+                                style={{ padding: '0.25rem 0.55rem', fontSize: '0.72rem', textDecoration: 'none' }}
+                              >
+                                View Job
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : null}
             </div>
@@ -3069,6 +3500,25 @@ export default function AdminConsolePage() {
           </div>
         </div>
       )}
+
+      {/* Account Lifecycle & Security Confirmation Modal */}
+      <AccountLifecycleModal
+        isOpen={accountModalOpen}
+        action={accountModalAction}
+        user={accountModalTargetUser}
+        onClose={() => setAccountModalOpen(false)}
+        onSuccess={(msg) => {
+          setNotification({ type: 'success', message: msg });
+          if (user360ModalOpen && accountModalTargetUser) {
+            void openUser360(accountModalTargetUser.id);
+          }
+          void fetchUsers({ silent: true });
+          void fetchOverview({ silent: true });
+        }}
+        onError={(err) => {
+          setNotification({ type: 'error', message: err });
+        }}
+      />
     </div>
   );
 }
