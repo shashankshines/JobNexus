@@ -4853,7 +4853,7 @@ html[data-theme="light"] .admin-table-container {
 .admin-users-table-wrap {
   display: block;
   width: 100%;
-  overflow-x: auto;
+  overflow: hidden;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #0d1321;
@@ -5226,6 +5226,15 @@ html[data-theme="light"] .admin-btn-secondary:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
 
+/* Light Mode Theme Overrides for Standalone Pagination Bar */
+:root[data-theme="light"] .admin-pagination-bar,
+[data-theme="light"] .admin-pagination-bar,
+html[data-theme="light"] .admin-pagination-bar {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
 .admin-pagination-info {
   font-size: 0.82rem;
   color: var(--text-secondary, #94a3b8);
@@ -5235,9 +5244,21 @@ html[data-theme="light"] .admin-btn-secondary:hover {
   gap: 0.35rem;
 }
 
+:root[data-theme="light"] .admin-pagination-info,
+[data-theme="light"] .admin-pagination-info,
+html[data-theme="light"] .admin-pagination-info {
+  color: #64748b !important;
+}
+
 .admin-pagination-info strong {
   color: var(--text-primary, #f8fafc);
   font-weight: 700;
+}
+
+:root[data-theme="light"] .admin-pagination-info strong,
+[data-theme="light"] .admin-pagination-info strong,
+html[data-theme="light"] .admin-pagination-info strong {
+  color: #0f172a !important;
 }
 
 .admin-pagination-controls {
@@ -5265,11 +5286,27 @@ html[data-theme="light"] .admin-btn-secondary:hover {
   user-select: none;
 }
 
+:root[data-theme="light"] .admin-pagination-btn,
+[data-theme="light"] .admin-pagination-btn,
+html[data-theme="light"] .admin-pagination-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
 .admin-pagination-btn:hover:not(:disabled) {
   background: rgba(99, 102, 241, 0.15);
   border-color: rgba(129, 140, 248, 0.4);
   color: #ffffff;
   transform: translateY(-1px);
+}
+
+:root[data-theme="light"] .admin-pagination-btn:hover:not(:disabled),
+[data-theme="light"] .admin-pagination-btn:hover:not(:disabled),
+html[data-theme="light"] .admin-pagination-btn:hover:not(:disabled) {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
 }
 
 .admin-pagination-btn:active:not(:disabled) {
@@ -5300,10 +5337,26 @@ html[data-theme="light"] .admin-btn-secondary:hover {
   user-select: none;
 }
 
+:root[data-theme="light"] .admin-page-number-btn,
+[data-theme="light"] .admin-page-number-btn,
+html[data-theme="light"] .admin-page-number-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #475569 !important;
+}
+
 .admin-page-number-btn:hover:not(.is-active) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary, #f8fafc);
   border-color: rgba(255, 255, 255, 0.18);
+}
+
+:root[data-theme="light"] .admin-page-number-btn:hover:not(.is-active),
+[data-theme="light"] .admin-page-number-btn:hover:not(.is-active),
+html[data-theme="light"] .admin-page-number-btn:hover:not(.is-active) {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
 }
 
 .admin-page-number-btn.is-active {
@@ -5312,6 +5365,15 @@ html[data-theme="light"] .admin-btn-secondary:hover {
   color: #ffffff;
   font-weight: 700;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+:root[data-theme="light"] .admin-page-number-btn.is-active,
+[data-theme="light"] .admin-page-number-btn.is-active,
+html[data-theme="light"] .admin-page-number-btn.is-active {
+  background: #4f46e5 !important;
+  border-color: #4338ca !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25) !important;
 }
 
 .admin-page-ellipsis {
@@ -5323,6 +5385,41 @@ html[data-theme="light"] .admin-btn-secondary:hover {
   color: var(--text-secondary, #64748b);
   font-size: 0.8rem;
   user-select: none;
+}
+
+/* ============================================================================
+   CONNECTED TABLE FOOTER
+   Seamlessly integrates directly at the bottom of the table container
+   ============================================================================ */
+.admin-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.015);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+:root[data-theme="light"] .admin-table-footer,
+[data-theme="light"] .admin-table-footer,
+html[data-theme="light"] .admin-table-footer {
+  border-top: 1px solid #e2e8f0 !important;
+  background: #fbfcfe !important;
+}
+
+/* Reset standalone box styling when pagination bar is inside an integrated footer */
+.admin-table-footer .admin-pagination-bar,
+.admin-pagination-bar.is-integrated {
+  margin-top: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  width: 100% !important;
 }
 
 @media (max-width: 640px) {

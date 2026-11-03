@@ -10,6 +10,10 @@ export interface AdminPaginationBarProps {
   onPageChange: (newPage: number) => void;
   itemName?: string;
   loading?: boolean;
+  onPageSizeChange?: (newPageSize: number) => void;
+  pageSizeOptions?: number[];
+  variant?: 'standalone' | 'integrated';
+  className?: string;
 }
 
 export function AdminPaginationBar({
@@ -19,6 +23,10 @@ export function AdminPaginationBar({
   onPageChange,
   itemName = 'records',
   loading = false,
+  onPageSizeChange,
+  pageSizeOptions = [10, 20, 50, 100],
+  variant = 'standalone',
+  className = '',
 }: AdminPaginationBarProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
@@ -45,15 +53,53 @@ export function AdminPaginationBar({
 
   const pages = getPageNumbers();
 
+  const containerClasses = [
+    'admin-pagination-bar',
+    variant === 'integrated' ? 'is-integrated' : '',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="admin-pagination-bar" role="navigation" aria-label={`Pagination for ${itemName}`}>
-      {/* Range Info */}
-      <div className="admin-pagination-info">
-        Showing <strong>{startItem}–{endItem}</strong> of <strong>{totalItems}</strong> {itemName}
-        {totalPages > 1 && (
-          <span style={{ opacity: 0.65, marginLeft: '0.35rem' }}>
-            (Page {safeCurrentPage} of {totalPages})
-          </span>
+    <div className={containerClasses} role="navigation" aria-label={`Pagination for ${itemName}`}>
+      {/* Range Info & Page Size */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+        <div className="admin-pagination-info">
+          Showing <strong>{startItem}–{endItem}</strong> of <strong>{totalItems}</strong> {itemName}
+          {totalPages > 1 && (
+            <span style={{ opacity: 0.7, marginLeft: '0.35rem' }}>
+              (Page {safeCurrentPage} of {totalPages})
+            </span>
+          )}
+        </div>
+
+        {onPageSizeChange && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span className="admin-text-label" style={{ fontSize: '0.76rem' }}>Show:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(parseInt(e.target.value, 10))}
+              aria-label="Select items per page"
+              style={{
+                padding: '0.25rem 0.55rem',
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-secondary, rgba(255, 255, 255, 0.05))',
+                color: 'var(--text-primary)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                minHeight: '32px',
+              }}
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt} per page
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
 
@@ -109,4 +155,3 @@ export function AdminPaginationBar({
     </div>
   );
 }
-

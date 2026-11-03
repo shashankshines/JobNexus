@@ -524,10 +524,11 @@ export function UsersDirectoryView({
         <>
           {/* 3A. DESKTOP VIEW: FULL TABLE (Hidden on tablet/mobile via CSS) */}
           <div className="admin-users-table-wrap">
-            <table
-              className="admin-table"
-              style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}
-            >
+            <div style={{ overflowX: 'auto' }}>
+              <table
+                className="admin-table"
+                style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}
+              >
               <thead>
                 <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '0.85rem 1rem' }}>User Identity</th>
@@ -978,6 +979,24 @@ export function UsersDirectoryView({
             </table>
           </div>
 
+          {/* Seamlessly Integrated Connected Table Footer */}
+          {total > 0 && (
+            <div className="admin-table-footer">
+              <AdminPaginationBar
+                currentPage={page}
+                totalItems={total}
+                pageSize={pageSize}
+                onPageChange={onPageChange}
+                onPageSizeChange={onPageSizeChange}
+                pageSizeOptions={[10, 20, 50, 100]}
+                variant="integrated"
+                itemName="users"
+                loading={loading}
+              />
+            </div>
+          )}
+        </div>
+
           {/* 3B. TABLET & MOBILE VIEW: RESPONSIVE TOUCH CARDS (Hidden on desktop via CSS) */}
           <div className="admin-users-cards-wrap">
             {users.map((u) => {
@@ -1231,6 +1250,30 @@ export function UsersDirectoryView({
                 </div>
               );
             })}
+
+            {/* Mobile Connected Pagination Card */}
+            {total > 0 && (
+              <div
+                className="admin-card"
+                style={{
+                  padding: '0.85rem 1rem',
+                  borderRadius: 14,
+                  marginTop: '0.25rem',
+                }}
+              >
+                <AdminPaginationBar
+                  currentPage={page}
+                  totalItems={total}
+                  pageSize={pageSize}
+                  onPageChange={onPageChange}
+                  onPageSizeChange={onPageSizeChange}
+                  pageSizeOptions={[10, 20, 50, 100]}
+                  variant="integrated"
+                  itemName="users"
+                  loading={loading}
+                />
+              </div>
+            )}
           </div>
 
           {/* MOBILE ACTION SHEET MODAL */}
@@ -1657,52 +1700,6 @@ export function UsersDirectoryView({
             </div>
           )}
         </>
-      )}
-
-      {/* SECTION 4: SERVER PAGINATION BAR */}
-      {total > 0 && (
-        <div
-          className="admin-card"
-          style={{
-            padding: '0.85rem 1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="admin-text-label" style={{ fontSize: '0.78rem' }}>Page size:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => onPageSizeChange(parseInt(e.target.value, 10))}
-              style={{
-                padding: '0.35rem 0.55rem',
-                borderRadius: 6,
-                border: '1px solid var(--border)',
-                background: 'var(--bg-secondary, rgba(255, 255, 255, 0.03))',
-                color: 'var(--text-primary)',
-                fontSize: '0.78rem',
-                minHeight: '36px',
-              }}
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-
-          <AdminPaginationBar
-            currentPage={page}
-            totalItems={total}
-            pageSize={pageSize}
-            onPageChange={onPageChange}
-            itemName="users"
-            loading={loading}
-          />
-        </div>
       )}
     </div>
   );
