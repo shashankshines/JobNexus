@@ -239,17 +239,13 @@ export default function LandingView() {
   const [activeLandingWorkplace, setActiveLandingWorkplace] = useState('');
 
   const displayLandingJobs = useMemo(() => {
-    if (typeof totalCount === 'number' && totalCount >= 5000) {
-      return `${(Math.floor(totalCount / 1000) * 1000).toLocaleString()}+`;
+    if (typeof totalCount === 'number' && totalCount > 0) {
+      return totalCount.toLocaleString();
     }
     if (formattedCount && formattedCount !== 'Loading' && formattedCount !== 'Unavailable') {
-      const parsed = parseInt(formattedCount.replace(/,/g, ''), 10);
-      if (!isNaN(parsed) && parsed >= 5000) {
-        return `${(Math.floor(parsed / 1000) * 1000).toLocaleString()}+`;
-      }
       return formattedCount;
     }
-    return '5,000+';
+    return 'Loading';
   }, [totalCount, formattedCount]);
 
   const displayedPreviewJobs = useMemo(() => {

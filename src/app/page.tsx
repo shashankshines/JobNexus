@@ -431,39 +431,6 @@ export default function Home() {
     sourcesCount,
     error: inventoryStatsError,
   } = useJobStats();
-
-  const displayTotalJobs = useMemo(() => {
-    if (process.env.NODE_ENV === 'test') {
-      return totalCount !== null && totalCount !== undefined
-        ? totalCount.toLocaleString()
-        : formattedCount !== 'Loading' && formattedCount !== 'Unavailable'
-          ? formattedCount
-          : '2';
-    }
-    if (typeof totalCount === 'number' && totalCount >= 5000) {
-      const rounded = Math.floor(totalCount / 1000) * 1000;
-      return `${rounded.toLocaleString()}+`;
-    }
-    if (typeof totalCount === 'number' && totalCount > 0) {
-      return totalCount >= 1000 ? `${(Math.floor(totalCount / 500) * 500).toLocaleString()}+` : '5,000+';
-    }
-    if (formattedCount && formattedCount !== 'Loading' && formattedCount !== 'Unavailable') {
-      const parsed = parseInt(formattedCount.replace(/,/g, ''), 10);
-      if (!isNaN(parsed) && parsed >= 5000) {
-        return `${(Math.floor(parsed / 1000) * 1000).toLocaleString()}+`;
-      }
-      if (!isNaN(parsed) && parsed > 0) {
-        return `${parsed.toLocaleString()}+`;
-      }
-    }
-    return '5,000+';
-  }, [totalCount, formattedCount]);
-
-  const globalInventorySummary = inventoryStatsError
-    ? formattedCount === 'Unavailable'
-      ? 'Job feed unavailable'
-      : `Last available feed snapshot: ${displayTotalJobs} jobs (refresh failed)`
-    : `${displayTotalJobs} Across All Integrations`;
   const [activeView, setActiveView] = useState<'all' | 'saved'>('all');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -642,6 +609,53 @@ export default function Home() {
   const [matchingCount, setMatchingCount] = useState(0);
   const [totalAvailableJobs, setTotalAvailableJobs] = useState(0);
   const [searchTruncated, setSearchTruncated] = useState(false);
+
+  // Authoritative, synchronized total count across all integrations
+  const resolvedTotalJobs = useMemo(() => {
+    // 1. Authoritative total returned from the job search/feed response
+    if (typeof totalAvailableJobs === 'number' && totalAvailableJobs > 0) {
+      return totalAvailableJobs;
+    }
+    // 2. Initial unsearched feed count matches total catalog
+    if (!searched && typeof matchingCount === 'number' && matchingCount > 0) {
+      return matchingCount;
+    }
+    // 3. Fallback to /api/jobs/stats totalCount
+    if (typeof totalCount === 'number' && totalCount > 0) {
+      return totalCount;
+    }
+    // 4. Fallback to parsed formattedCount string if valid
+    if (formattedCount && formattedCount !== 'Loading' && formattedCount !== 'Unavailable') {
+      const parsed = parseInt(formattedCount.replace(/,/g, ''), 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return null;
+  }, [totalAvailableJobs, searched, matchingCount, totalCount, formattedCount]);
+
+  const displayTotalJobs = useMemo(() => {
+    if (process.env.NODE_ENV === 'test') {
+      return resolvedTotalJobs !== null
+        ? resolvedTotalJobs.toLocaleString()
+        : formattedCount !== 'Loading' && formattedCount !== 'Unavailable'
+          ? formattedCount
+          : '2';
+    }
+    if (resolvedTotalJobs !== null) {
+      return resolvedTotalJobs.toLocaleString();
+    }
+    if (formattedCount && formattedCount !== 'Loading' && formattedCount !== 'Unavailable') {
+      return formattedCount;
+    }
+    return 'Loading';
+  }, [resolvedTotalJobs, formattedCount]);
+
+  const globalInventorySummary = inventoryStatsError
+    ? formattedCount === 'Unavailable'
+      ? 'Job feed unavailable'
+      : `Last available feed snapshot: ${displayTotalJobs} jobs (refresh failed)`
+    : `${displayTotalJobs} Across All Integrations`;
   const [searchPage, setSearchPage] = useState(0);
   const [appliedSearchCriteria, setAppliedSearchCriteria] = useState<SearchCriteria>({
     query: '',

@@ -70,27 +70,22 @@ describe('Homepage Header Total Jobs & Multi-Provider Invariants', () => {
     );
   });
 
-  it('formats displayTotalJobs accurately with + suffix for 5,000+ available inventory', () => {
-    // Verify formatting logic matches specification
+  it('formats displayTotalJobs accurately with exact synchronized inventory numbers', () => {
+    // Verify formatting logic matches synchronized exact count specification
     const formatCount = (count: number | null | undefined, env: string = 'production'): string => {
       if (env === 'test') {
         return count !== null && count !== undefined ? count.toLocaleString() : '2';
       }
-      if (typeof count === 'number' && count >= 5000) {
-        const rounded = Math.floor(count / 1000) * 1000;
-        return `${rounded.toLocaleString()}+`;
-      }
       if (typeof count === 'number' && count > 0) {
-        return count >= 1000 ? `${(Math.floor(count / 500) * 500).toLocaleString()}+` : '5,000+';
+        return count.toLocaleString();
       }
-      return '5,000+';
+      return 'Loading';
     };
 
-    assert.strictEqual(formatCount(5035, 'production'), '5,000+');
-    assert.strictEqual(formatCount(5246, 'production'), '5,000+');
-    assert.strictEqual(formatCount(6100, 'production'), '6,000+');
-    assert.strictEqual(formatCount(724, 'production'), '5,000+'); // Prevents momentary drops below 5k
-    assert.strictEqual(formatCount(null, 'production'), '5,000+'); // Default high-attraction baseline
+    assert.strictEqual(formatCount(3734, 'production'), '3,734'); // Matches exact 3,734 feed results
+    assert.strictEqual(formatCount(5037, 'production'), '5,037'); // Matches exact 5,037 full provider inventory
+    assert.strictEqual(formatCount(724, 'production'), '724'); // Exact provider fallback
+    assert.strictEqual(formatCount(null, 'production'), 'Loading');
     assert.strictEqual(formatCount(42, 'test'), '42'); // Preserves exact test numbers in test mode
   });
 });
