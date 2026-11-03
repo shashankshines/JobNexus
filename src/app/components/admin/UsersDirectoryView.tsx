@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   RefreshCw,
@@ -60,6 +60,14 @@ export interface UsersDirectoryViewProps {
   ) => void;
 }
 
+interface ActionMenuState {
+  user: AdminUserDirectoryRecord;
+  top?: number;
+  bottom?: number;
+  right: number;
+  placement: 'top' | 'bottom';
+}
+
 export function UsersDirectoryView({
   users,
   summary,
@@ -85,8 +93,62 @@ export function UsersDirectoryView({
   onOpenUser360,
   onOpenAccountAction,
 }: UsersDirectoryViewProps) {
-  // Desktop 3-dots action menu state
-  const [activeActionMenuUserId, setActiveActionMenuUserId] = useState<string | null>(null);
+  // Desktop 3-dots action menu state (smart placement anchored top or bottom)
+  const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
+
+  // Close floating desktop menu on scroll or resize so it stays anchored cleanly
+  useEffect(() => {
+    if (!actionMenu) return;
+    const handleDismiss = () => setActionMenu(null);
+    window.addEventListener('scroll', handleDismiss, true);
+    window.addEventListener('resize', handleDismiss);
+    return () => {
+      window.removeEventListener('scroll', handleDismiss, true);
+      window.removeEventListener('resize', handleDismiss);
+    };
+  }, [actionMenu]);
+
+  const handleToggleActionMenu = (
+    userRecord: AdminUserDirectoryRecord,
+    e: React.MouseEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    e.stopPropagation();
+    if (actionMenu?.user.id === userRecord.id) {
+      setActionMenu(null);
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const menuHeight = 280;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    // Open upward if space below is limited OR row is near the bottom of the table,
+    // provided there is sufficient room above (or more room above than below).
+    const isNearBottom = users.length >= 2 ? index >= users.length - 2 : false;
+    const shouldOpenUp =
+      (spaceBelow < menuHeight + 20 || isNearBottom) &&
+      (spaceAbove >= menuHeight || spaceAbove > spaceBelow);
+
+    const right = Math.max(12, window.innerWidth - rect.right);
+
+    if (shouldOpenUp) {
+      setActionMenu({
+        user: userRecord,
+        bottom: window.innerHeight - rect.top + 6,
+        right,
+        placement: 'top',
+      });
+    } else {
+      setActionMenu({
+        user: userRecord,
+        top: rect.bottom + 6,
+        right,
+        placement: 'bottom',
+      });
+    }
+  };
   
   // Mobile / Touch action sheet drawer state
   const [mobileActionUser, setMobileActionUser] = useState<AdminUserDirectoryRecord | null>(null);
@@ -543,7 +605,7 @@ export function UsersDirectoryView({
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => {
+                {users.map((u, index) => {
                   const status = u.accountStatus || 'active';
                   const isSuspended = status === 'suspended';
                   const isDeactivated = status === 'deactivated';
@@ -762,214 +824,19 @@ export function UsersDirectoryView({
                           {/* Quick Actions Dropdown Toggle */}
                           <button
                             type="button"
-                            onClick={() =>
-                              setActiveActionMenuUserId(
-                                activeActionMenuUserId === u.id ? null : u.id
-                              )
-                            }
+                            onClick={(e) => handleToggleActionMenu(u, e, index)}
                             className="admin-action-btn-secondary"
-                            style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
+                            style={{
+                              padding: '0.35rem 0.45rem',
+                              fontSize: '0.75rem',
+                              background: actionMenu?.user.id === u.id ? 'var(--bg-secondary, rgba(255, 255, 255, 0.1))' : undefined,
+                            }}
                             title="Account actions"
+                            aria-haspopup="true"
+                            aria-expanded={actionMenu?.user.id === u.id}
                           >
                             <MoreVertical size={13} />
                           </button>
-
-                          {/* Dropdown Menu (Theme-adaptive with click-outside backdrop) */}
-                          {activeActionMenuUserId === u.id && (
-                            <>
-                              <div
-                                style={{
-                                  position: 'fixed',
-                                  inset: 0,
-                                  zIndex: 90,
-                                }}
-                                onClick={() => setActiveActionMenuUserId(null)}
-                              />
-                              <div
-                                className="admin-dropdown-menu"
-                                style={{ zIndex: 100 }}
-                              >
-                                {/* Suspend or Reinstate */}
-                                {isSuspended || isDeactivated ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveActionMenuUserId(null);
-                                      onOpenAccountAction('reinstate', {
-                                        id: u.id,
-                                        email: u.email,
-                                        name: u.name,
-                                        status: u.accountStatus,
-                                      });
-                                    }}
-                                    className="admin-dropdown-item"
-                                    style={{ color: '#10b981', fontWeight: 600 }}
-                                  >
-                                    <UserCheck size={14} />
-                                    <span>Reinstate Account</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveActionMenuUserId(null);
-                                      onOpenAccountAction('suspend', {
-                                        id: u.id,
-                                        email: u.email,
-                                        name: u.name,
-                                        status: u.accountStatus,
-                                      });
-                                    }}
-                                    className="admin-dropdown-item"
-                                    style={{ color: '#ef4444', fontWeight: 600 }}
-                                  >
-                                    <UserX size={14} />
-                                    <span>Suspend Account</span>
-                                  </button>
-                                )}
-
-                                {/* Force Sign-Out / Revoke Sessions */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveActionMenuUserId(null);
-                                    onOpenAccountAction('revoke_sessions', {
-                                      id: u.id,
-                                      email: u.email,
-                                      name: u.name,
-                                    });
-                                  }}
-                                  className="admin-dropdown-item"
-                                  style={{ color: '#818cf8' }}
-                                >
-                                  <LogOut size={14} />
-                                  <span>Force Sign-Out (All Sessions)</span>
-                                </button>
-
-                                {/* Deactivate / Reactivate */}
-                                {isDeactivated ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveActionMenuUserId(null);
-                                      onOpenAccountAction('reactivate', {
-                                        id: u.id,
-                                        email: u.email,
-                                        name: u.name,
-                                      });
-                                    }}
-                                    className="admin-dropdown-item"
-                                    style={{ color: '#10b981' }}
-                                  >
-                                    <UserCheck size={14} />
-                                    <span>Reactivate Account</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveActionMenuUserId(null);
-                                      onOpenAccountAction('deactivate', {
-                                        id: u.id,
-                                        email: u.email,
-                                        name: u.name,
-                                      });
-                                    }}
-                                    className="admin-dropdown-item"
-                                    style={{ color: '#f59e0b' }}
-                                  >
-                                    <Lock size={14} />
-                                    <span>Deactivate Account</span>
-                                  </button>
-                                )}
-
-                                <div style={{ height: 1, background: 'var(--border)', margin: '0.35rem 0' }} />
-
-                                {/* Export JSON */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveActionMenuUserId(null);
-                                    void handleExportUser(u.id, 'json');
-                                  }}
-                                  className="admin-dropdown-item"
-                                >
-                                  <Download size={14} />
-                                  <span>Export Data (JSON)</span>
-                                </button>
-
-                                {/* Export CSV */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveActionMenuUserId(null);
-                                    void handleExportUser(u.id, 'csv');
-                                  }}
-                                  className="admin-dropdown-item"
-                                >
-                                  <FileSpreadsheet size={14} />
-                                  <span>Export Data (CSV)</span>
-                                </button>
-
-                                <div style={{ height: 1, background: 'var(--border)', margin: '0.35rem 0' }} />
-
-                                {/* Deletion Workflow */}
-                                {isDeletionRequested ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveActionMenuUserId(null);
-                                        onOpenAccountAction('cancel_deletion', {
-                                          id: u.id,
-                                          email: u.email,
-                                          name: u.name,
-                                        });
-                                      }}
-                                      className="admin-dropdown-item"
-                                      style={{ color: '#10b981' }}
-                                    >
-                                      <UserCheck size={14} />
-                                      <span>Cancel Deletion</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveActionMenuUserId(null);
-                                        onOpenAccountAction('execute_deletion', {
-                                          id: u.id,
-                                          email: u.email,
-                                          name: u.name,
-                                        });
-                                      }}
-                                      className="admin-dropdown-item"
-                                      style={{ color: '#ef4444', fontWeight: 700 }}
-                                    >
-                                      <Trash2 size={14} />
-                                      <span>Execute Permanent Purge</span>
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveActionMenuUserId(null);
-                                      onOpenAccountAction('request_deletion', {
-                                        id: u.id,
-                                        email: u.email,
-                                        name: u.name,
-                                      });
-                                    }}
-                                    className="admin-dropdown-item"
-                                    style={{ color: '#f43f5e' }}
-                                  >
-                                    <Trash2 size={14} />
-                                    <span>Request Deletion Workflow</span>
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -1688,6 +1555,212 @@ export function UsersDirectoryView({
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {/* FLOATING DESKTOP ACTION MENU (Viewport-aware, opens top or bottom without clipping or distortion) */}
+      {actionMenu && (
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9998,
+            }}
+            onClick={() => setActionMenu(null)}
+          />
+          <div
+            className={`admin-dropdown-menu is-floating ${actionMenu.placement === 'top' ? 'open-up' : ''}`}
+            style={{
+              position: 'fixed',
+              top: actionMenu.top !== undefined ? `${actionMenu.top}px` : 'auto',
+              bottom: actionMenu.bottom !== undefined ? `${actionMenu.bottom}px` : 'auto',
+              right: `${actionMenu.right}px`,
+              zIndex: 9999,
+              margin: 0,
+            }}
+          >
+            {/* Suspend or Reinstate */}
+            {actionMenu.user.accountStatus === 'suspended' || actionMenu.user.accountStatus === 'deactivated' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUser = actionMenu.user;
+                  setActionMenu(null);
+                  onOpenAccountAction('reinstate', {
+                    id: targetUser.id,
+                    email: targetUser.email,
+                    name: targetUser.name,
+                    status: targetUser.accountStatus,
+                  });
+                }}
+                className="admin-dropdown-item action-reinstate"
+              >
+                <UserCheck size={14} />
+                <span>Reinstate Account</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUser = actionMenu.user;
+                  setActionMenu(null);
+                  onOpenAccountAction('suspend', {
+                    id: targetUser.id,
+                    email: targetUser.email,
+                    name: targetUser.name,
+                    status: targetUser.accountStatus,
+                  });
+                }}
+                className="admin-dropdown-item action-suspend"
+              >
+                <UserX size={14} />
+                <span>Suspend Account</span>
+              </button>
+            )}
+
+            {/* Force Sign-Out / Revoke Sessions */}
+            <button
+              type="button"
+              onClick={() => {
+                const targetUser = actionMenu.user;
+                setActionMenu(null);
+                onOpenAccountAction('revoke_sessions', {
+                  id: targetUser.id,
+                  email: targetUser.email,
+                  name: targetUser.name,
+                });
+              }}
+              className="admin-dropdown-item action-sessions"
+            >
+              <LogOut size={14} />
+              <span>Force Sign-Out (All Sessions)</span>
+            </button>
+
+            {/* Deactivate / Reactivate */}
+            {actionMenu.user.accountStatus === 'deactivated' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUser = actionMenu.user;
+                  setActionMenu(null);
+                  onOpenAccountAction('reactivate', {
+                    id: targetUser.id,
+                    email: targetUser.email,
+                    name: targetUser.name,
+                  });
+                }}
+                className="admin-dropdown-item action-reinstate"
+              >
+                <UserCheck size={14} />
+                <span>Reactivate Account</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUser = actionMenu.user;
+                  setActionMenu(null);
+                  onOpenAccountAction('deactivate', {
+                    id: targetUser.id,
+                    email: targetUser.email,
+                    name: targetUser.name,
+                  });
+                }}
+                className="admin-dropdown-item action-deactivate"
+              >
+                <Lock size={14} />
+                <span>Deactivate Account</span>
+              </button>
+            )}
+
+            <div className="admin-dropdown-divider" />
+
+            {/* Export JSON */}
+            <button
+              type="button"
+              onClick={() => {
+                const uid = actionMenu.user.id;
+                setActionMenu(null);
+                void handleExportUser(uid, 'json');
+              }}
+              className="admin-dropdown-item"
+            >
+              <Download size={14} />
+              <span>Export Data (JSON)</span>
+            </button>
+
+            {/* Export CSV */}
+            <button
+              type="button"
+              onClick={() => {
+                const uid = actionMenu.user.id;
+                setActionMenu(null);
+                void handleExportUser(uid, 'csv');
+              }}
+              className="admin-dropdown-item"
+            >
+              <FileSpreadsheet size={14} />
+              <span>Export Data (CSV)</span>
+            </button>
+
+            <div className="admin-dropdown-divider" />
+
+            {/* Deletion Workflow */}
+            {actionMenu.user.accountStatus === 'deletion_requested' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetUser = actionMenu.user;
+                    setActionMenu(null);
+                    onOpenAccountAction('cancel_deletion', {
+                      id: targetUser.id,
+                      email: targetUser.email,
+                      name: targetUser.name,
+                    });
+                  }}
+                  className="admin-dropdown-item action-reinstate"
+                >
+                  <UserCheck size={14} />
+                  <span>Cancel Deletion</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetUser = actionMenu.user;
+                    setActionMenu(null);
+                    onOpenAccountAction('execute_deletion', {
+                      id: targetUser.id,
+                      email: targetUser.email,
+                      name: targetUser.name,
+                    });
+                  }}
+                  className="admin-dropdown-item action-purge"
+                >
+                  <Trash2 size={14} />
+                  <span>Execute Permanent Purge</span>
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUser = actionMenu.user;
+                  setActionMenu(null);
+                  onOpenAccountAction('request_deletion', {
+                    id: targetUser.id,
+                    email: targetUser.email,
+                    name: targetUser.name,
+                  });
+                }}
+                className="admin-dropdown-item action-delete"
+              >
+                <Trash2 size={14} />
+                <span>Request Deletion Workflow</span>
+              </button>
+            )}
+          </div>
         </>
       )}
     </div>

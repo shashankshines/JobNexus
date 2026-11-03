@@ -4897,9 +4897,15 @@ html[data-theme="light"] .admin-users-table-wrap {
   background: #0d1424;
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 12px 30px -6px rgba(0, 0, 0, 0.65);
-  z-index: 100;
+  z-index: 9999;
   padding: 0.4rem 0;
   text-align: left;
+}
+
+.admin-dropdown-menu.is-floating {
+  margin: 0 !important;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
 }
 
 :root[data-theme="light"] .admin-dropdown-menu,
@@ -4908,6 +4914,18 @@ html[data-theme="light"] .admin-dropdown-menu {
   background: #ffffff !important;
   border: 1px solid #cbd5e1 !important;
   box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.12) !important;
+}
+
+.admin-dropdown-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0.35rem 0;
+}
+
+:root[data-theme="light"] .admin-dropdown-divider,
+[data-theme="light"] .admin-dropdown-divider,
+html[data-theme="light"] .admin-dropdown-divider {
+  background: #e2e8f0 !important;
 }
 
 .admin-dropdown-item {
@@ -4929,10 +4947,74 @@ html[data-theme="light"] .admin-dropdown-menu {
   background: rgba(255, 255, 255, 0.05);
 }
 
+:root[data-theme="light"] .admin-dropdown-item,
+[data-theme="light"] .admin-dropdown-item,
+html[data-theme="light"] .admin-dropdown-item {
+  color: #1e293b !important;
+}
+
 :root[data-theme="light"] .admin-dropdown-item:hover,
 [data-theme="light"] .admin-dropdown-item:hover,
 html[data-theme="light"] .admin-dropdown-item:hover {
   background: #f1f5f9 !important;
+}
+
+/* Specific Action Color Variants with light/dark contrast preservation */
+.admin-dropdown-item.action-suspend {
+  color: #ef4444;
+  font-weight: 600;
+}
+:root[data-theme="light"] .admin-dropdown-item.action-suspend,
+[data-theme="light"] .admin-dropdown-item.action-suspend,
+html[data-theme="light"] .admin-dropdown-item.action-suspend {
+  color: #dc2626 !important;
+}
+
+.admin-dropdown-item.action-reinstate {
+  color: #10b981;
+  font-weight: 600;
+}
+:root[data-theme="light"] .admin-dropdown-item.action-reinstate,
+[data-theme="light"] .admin-dropdown-item.action-reinstate,
+html[data-theme="light"] .admin-dropdown-item.action-reinstate {
+  color: #059669 !important;
+}
+
+.admin-dropdown-item.action-sessions {
+  color: #818cf8;
+}
+:root[data-theme="light"] .admin-dropdown-item.action-sessions,
+[data-theme="light"] .admin-dropdown-item.action-sessions,
+html[data-theme="light"] .admin-dropdown-item.action-sessions {
+  color: #4f46e5 !important;
+}
+
+.admin-dropdown-item.action-deactivate {
+  color: #f59e0b;
+}
+:root[data-theme="light"] .admin-dropdown-item.action-deactivate,
+[data-theme="light"] .admin-dropdown-item.action-deactivate,
+html[data-theme="light"] .admin-dropdown-item.action-deactivate {
+  color: #d97706 !important;
+}
+
+.admin-dropdown-item.action-delete {
+  color: #f43f5e;
+}
+:root[data-theme="light"] .admin-dropdown-item.action-delete,
+[data-theme="light"] .admin-dropdown-item.action-delete,
+html[data-theme="light"] .admin-dropdown-item.action-delete {
+  color: #e11d48 !important;
+}
+
+.admin-dropdown-item.action-purge {
+  color: #ef4444;
+  font-weight: 700;
+}
+:root[data-theme="light"] .admin-dropdown-item.action-purge,
+[data-theme="light"] .admin-dropdown-item.action-purge,
+html[data-theme="light"] .admin-dropdown-item.action-purge {
+  color: #b91c1c !important;
 }
 
 /* Ledger Desktop Table vs Tablet/Mobile Card Display */
