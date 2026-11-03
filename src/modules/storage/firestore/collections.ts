@@ -118,7 +118,16 @@ export interface AdminAuditLogDocument {
     | 'subscription_reinstated'
     | 'subscription_terminated'
     | 'subscription_revoked'
-    | 'subscription_permanently_revoked';
+    | 'subscription_permanently_revoked'
+    | 'account_suspended'
+    | 'account_reinstated'
+    | 'account_deactivated'
+    | 'account_reactivated'
+    | 'sessions_revoked'
+    | 'account_deletion_requested'
+    | 'account_deletion_cancelled'
+    | 'account_deletion_completed'
+    | 'user_data_exported';
   targetUserId: string;
   targetUserEmail?: string;
   targetEntityId: string;
