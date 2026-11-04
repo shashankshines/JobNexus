@@ -910,6 +910,7 @@ export default function Home() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const headerWrapperRef = useRef<HTMLDivElement>(null);
   const headerBackdropRef = useRef<HTMLDivElement>(null);
+  const [headerSpacerHeight, setHeaderSpacerHeight] = useState<number>(0);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
   const roleDropdownMenuRef = useRef<HTMLDivElement>(null);
   const companyDropdownRef = useRef<HTMLDivElement>(null);
@@ -2462,6 +2463,36 @@ export default function Home() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isHydrated]);
 
+  // Dynamic header spacer & backdrop height synchronization: guarantees zero overlap across all devices
+  useEffect(() => {
+    if (!isHydrated) return;
+    const el = headerWrapperRef.current;
+    if (!el) return;
+
+    const syncHeaderHeight = () => {
+      if (headerWrapperRef.current) {
+        const rect = headerWrapperRef.current.getBoundingClientRect();
+        // Total coverage from top of viewport: top position + element height + safety padding
+        const topOffset = rect.top > 0 ? rect.top : 8;
+        const totalHeight = Math.ceil(rect.height + topOffset + 6);
+        setHeaderSpacerHeight(totalHeight);
+        document.documentElement.style.setProperty('--header-actual-height', `${totalHeight}px`);
+        if (headerBackdropRef.current) {
+          headerBackdropRef.current.style.height = `${totalHeight}px`;
+        }
+      }
+    };
+
+    syncHeaderHeight();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHeaderHeight) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', syncHeaderHeight);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', syncHeaderHeight);
+    };
+  }, [isHydrated]);
+
   if (!isHydrated) {
     return (
       <div
@@ -3007,7 +3038,11 @@ export default function Home() {
             </div>
           </header>
         </div>
-        <div className="site-header-spacer" aria-hidden="true" />
+        <div
+          className="site-header-spacer"
+          style={headerSpacerHeight ? { height: `${headerSpacerHeight}px` } : undefined}
+          aria-hidden="true"
+        />
 
         {/* Live In-App Admin Payment Approval Banner (strictly visible only to designated admin) */}
         {isDesignatedAdmin &&

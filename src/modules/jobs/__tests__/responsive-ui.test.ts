@@ -349,4 +349,23 @@ describe('Mobile & Standard Resolutions Responsive UI Validation', () => {
       assert.ok(!cssContent.includes('.industry-showcase-container'), 'Removed industry slider must not retain layout styles');
     });
   });
+
+  describe('Mobile Header Collision Elimination & Dynamic Spacer Synchronization Suite', () => {
+    it('defines responsive fallbacks for .site-header-spacer and .site-header-backdrop that account for 2-row wrapped mobile headers', () => {
+      assert.ok(cssContent.includes('--header-actual-height'), 'globals.css must support --header-actual-height custom property');
+      assert.ok(cssContent.includes('height: var(--header-actual-height, 122px) !important;'), 'Must allocate at least 122px on narrow mobile screens');
+    });
+
+    it('implements dynamic ResizeObserver header height synchronization in page.tsx', () => {
+      assert.ok(pageContent.includes('syncHeaderHeight'), 'page.tsx must implement syncHeaderHeight');
+      assert.ok(pageContent.includes('headerSpacerHeight'), 'page.tsx must manage headerSpacerHeight state');
+      assert.ok(pageContent.includes('ResizeObserver'), 'page.tsx must monitor header size changes via ResizeObserver');
+      assert.ok(pageContent.includes('--header-actual-height'), 'page.tsx must write to --header-actual-height custom property');
+    });
+
+    it('defines responsive padding and wrap rules for hero ATS badge and trust strip', () => {
+      assert.ok(cssContent.includes('.hero-ats-badge {\n    font-size: 0.76rem;'), 'globals.css must size hero ATS badge for mobile screens');
+      assert.ok(cssContent.includes('.hero-trust-seal-strip {\n    border-radius: 14px;'), 'globals.css must provide proportional radius for wrapped trust seal strip');
+    });
+  });
 });
