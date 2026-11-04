@@ -52,6 +52,8 @@ import { UsersDirectoryView } from '@/app/components/admin/UsersDirectoryView';
 import { AccountLifecycleModal, AccountActionType } from '@/app/components/admin/AccountLifecycleModal';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 import { AdminNotificationCenter } from '@/app/components/admin/AdminNotificationCenter';
+import { AdminNotificationBell } from '@/app/components/admin/AdminNotificationBell';
+import { AdminNotificationProvider } from '@/modules/notifications/AdminNotificationContext';
 
 const ADMIN_PAGE_SIZE = 5;
 
@@ -887,34 +889,36 @@ export default function AdminConsolePage() {
   // Render: Main Admin Console
   // ==========================================================================
   return (
-    <div className="admin-shell">
-      {/* Top Header (Fixed, non-scrolling) */}
-      <header className="admin-header">
-        <div style={{ width: '85%', maxWidth: '85vw', margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', boxShadow: '0 0 16px rgba(99, 102, 241, 0.4)' }}>
-              <ShieldCheck size={22} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <h1 className="admin-header-title">JobNexus Admin Console</h1>
-                <span style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem', borderRadius: 6, background: 'rgba(99, 102, 241, 0.25)', border: '1.5px solid #818cf8', color: 'var(--primary-start, #a5b4fc)', fontWeight: 800 }}>
-                  Phase 2B.3D
-                </span>
+    <AdminNotificationProvider>
+      <div className="admin-shell">
+        {/* Top Header (Fixed, non-scrolling) */}
+        <header className="admin-header">
+          <div style={{ width: '85%', maxWidth: '85vw', margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', boxShadow: '0 0 16px rgba(99, 102, 241, 0.4)' }}>
+                <ShieldCheck size={22} />
               </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #cbd5e1)', margin: '0.15rem 0 0 0' }}>
-                User 360° Profile, Consolidated Ledger, Payment Verification Queue & Authoritative Entitlement Controls
-              </p>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <h1 className="admin-header-title">JobNexus Admin Console</h1>
+                  <span style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem', borderRadius: 6, background: 'rgba(99, 102, 241, 0.25)', border: '1.5px solid #818cf8', color: 'var(--primary-start, #a5b4fc)', fontWeight: 800 }}>
+                    Phase 2B.3D
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #cbd5e1)', margin: '0.15rem 0 0 0' }}>
+                  User 360° Profile, Consolidated Ledger, Payment Verification Queue & Authoritative Entitlement Controls
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Link
-              href="/"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.5rem 0.85rem', borderRadius: 10, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
-            >
-              Back to Job Search
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <AdminNotificationBell />
+              <Link
+                href="/"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.5rem 0.85rem', borderRadius: 10, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
+              >
+                Back to Job Search
+              </Link>
             <button
               onClick={() => {
                 fetchOverview();
@@ -3522,5 +3526,6 @@ export default function AdminConsolePage() {
         }}
       />
     </div>
+    </AdminNotificationProvider>
   );
 }

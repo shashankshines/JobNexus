@@ -6,6 +6,10 @@ import {
   InvalidSubmissionStateError,
   MandatoryReasonMissingError,
 } from '@/modules/storage/firestore/admin-billing.store';
+import {
+  createAdminNotification,
+  markAdminNotification,
+} from '@/modules/notifications/admin-notifications.service';
 
 /**
  * POST /api/admin/billing/submissions/reject
@@ -61,6 +65,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       adminUserId: auth.adminUserId,
       reason,
     });
+
+    if (!result.idempotent) {
+      try {
+        await markAdminNotification(`payment_submitted_${submissionId}`, 'resolved', auth.adminEmail);
+        await createAdminNotification({
+          eventKey: `payment_rejected_${submissionId}`,
+          type: 'payment_rejected',
+          priority: 'normal',
+          status: 'resolved',
+          title: 'Payment submission rejected',
+          message: `Submission ${submissionId} (₹${result.submission.declaredAmount}) rejected. Reason: ${reason}`,
+          actionLabel: 'View Rejection',
+          actionUrl: '/admin?tab=verifications',
+          userId: result.submission.userId,
+          userEmail: result.submission.userEmail,
+          submissionId,
+          orderId: result.submission.orderId,
+          actorUserId: auth.adminUserId,
+          actorEmail: auth.adminEmail,
+          metadata: { reason },
+        });
+      } catch (notifErr) {
+        console.error('[Admin Reject] Notification update failed:', notifErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

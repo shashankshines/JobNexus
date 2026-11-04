@@ -140,10 +140,33 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
               (d) =>
                 ({
                   id: d.id,
+                  ref: {
+                    id: d.id,
+                    path: `${collectionName}/${d.id}`,
+                  },
                   data: () => ({ ...d }),
                 } as unknown as DocumentSnapshot)
             ),
           } as unknown as QuerySnapshot;
+        },
+        onSnapshot: (onNext: (snapshot: unknown) => void, onError?: (err: Error) => void) => {
+          void Promise.resolve().then(async () => {
+            try {
+              const queryObj = makeQuery(predicate, limitCount, offsetCount, orderings, startAfterValues);
+              const snap = await queryObj.get();
+              onNext({
+                ...snap,
+                docChanges: () =>
+                  snap.docs.map((d: DocumentSnapshot) => ({
+                    type: 'added',
+                    doc: d,
+                  })),
+              });
+            } catch (e) {
+              if (onError) onError(e as Error);
+            }
+          });
+          return () => {};
         },
       });
 
@@ -204,6 +227,7 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
         offset: rootQuery.offset,
         count: rootQuery.count,
         get: rootQuery.get,
+        onSnapshot: rootQuery.onSnapshot,
       };
 
       return colRef as unknown as CollectionReference;
@@ -280,6 +304,47 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
       }
 
       return result;
+    },
+
+    batch: () => {
+      const operations: Array<() => void> = [];
+      const batchObj = {
+        set: (ref: DocumentReference, data: DocumentData, options?: { merge?: boolean }) => {
+          operations.push(() => {
+            const colName = ref.path.split('/')[0];
+            const colData = store.getCollectionData(colName);
+            if (options?.merge) {
+              const existing = colData.get(ref.id) || {};
+              colData.set(ref.id, { ...existing, ...data });
+            } else {
+              colData.set(ref.id, { ...data });
+            }
+          });
+          return batchObj;
+        },
+        update: (ref: DocumentReference, data: DocumentData) => {
+          operations.push(() => {
+            const colName = ref.path.split('/')[0];
+            const colData = store.getCollectionData(colName);
+            const existing = colData.get(ref.id) || {};
+            colData.set(ref.id, { ...existing, ...data });
+          });
+          return batchObj;
+        },
+        delete: (ref: DocumentReference) => {
+          operations.push(() => {
+            const colName = ref.path.split('/')[0];
+            const colData = store.getCollectionData(colName);
+            colData.delete(ref.id);
+          });
+          return batchObj;
+        },
+        commit: async () => {
+          for (const op of operations) op();
+          return [];
+        },
+      };
+      return batchObj;
     },
   };
 

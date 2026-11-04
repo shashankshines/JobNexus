@@ -8,6 +8,7 @@ import {
 } from '@/modules/auth/server/session.store';
 import { recordAdminAuditLog } from '@/modules/storage/firestore/audit.store';
 import { AdminAuditLogDocument } from '@/modules/storage/firestore/collections';
+import { createAdminNotification } from '@/modules/notifications/admin-notifications.service';
 
 /**
  * POST /api/admin/users/[userId]/status
@@ -134,6 +135,31 @@ export async function POST(
       },
       reason,
     });
+
+    if (newStatus === 'suspended' || newStatus === 'active') {
+      try {
+        const notifType = newStatus === 'suspended' ? 'account_suspended' : 'account_reinstated';
+        await createAdminNotification({
+          eventKey: `${notifType}_${user.id}_${Date.now()}`,
+          type: notifType,
+          priority: newStatus === 'suspended' ? 'critical' : 'normal',
+          status: 'resolved',
+          title: newStatus === 'suspended' ? 'Account suspended' : 'Account reinstated',
+          message: `User account "${user.email || user.id}" status changed from "${previousStatus}" to "${newStatus}". Reason: ${reason}`,
+          actionLabel: 'View Account',
+          actionUrl: `/admin?tab=users&userId=${encodeURIComponent(user.id)}`,
+          userId: user.id,
+          userEmail: user.email,
+          targetUserId: user.id,
+          targetEmail: user.email,
+          actorUserId: auth.adminUserId,
+          actorEmail: auth.adminEmail,
+          metadata: { previousStatus, newStatus, reason },
+        });
+      } catch (notifErr) {
+        console.error('[Admin User Status] Notification failed:', notifErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

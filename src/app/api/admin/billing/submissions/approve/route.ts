@@ -6,6 +6,10 @@ import {
   InvalidSubmissionStateError,
   OrderValidationError,
 } from '@/modules/storage/firestore/admin-billing.store';
+import {
+  createAdminNotification,
+  markAdminNotification,
+} from '@/modules/notifications/admin-notifications.service';
 
 /**
  * POST /api/admin/billing/submissions/approve
@@ -68,6 +72,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       adminUserId: auth.adminUserId,
       verificationNotes,
     });
+
+    if (!result.idempotent) {
+      try {
+        await markAdminNotification(`payment_submitted_${submissionId}`, 'resolved', auth.adminEmail);
+        await createAdminNotification({
+          eventKey: `payment_approved_${submissionId}`,
+          type: 'payment_approved',
+          priority: 'normal',
+          status: 'resolved',
+          title: 'Payment approved',
+          message: `Submission ${submissionId} (₹${result.submission.declaredAmount}) approved. Premium activated for ${result.submission.userEmail || result.submission.userId}.`,
+          actionLabel: 'View Subscription',
+          actionUrl: `/admin?tab=subscriptions&userId=${result.submission.userId}`,
+          userId: result.submission.userId,
+          userEmail: result.submission.userEmail,
+          submissionId,
+          orderId: result.submission.orderId,
+          actorUserId: auth.adminUserId,
+          actorEmail: auth.adminEmail,
+        });
+      } catch (notifErr) {
+        console.error('[Admin Approve] Notification update failed:', notifErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

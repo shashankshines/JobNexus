@@ -166,6 +166,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     } catch (err) {
       if (err instanceof UtrCollisionError) {
+        try {
+          await createAdminNotification({
+            eventKey: `utr_collision_${err.utr}_${Date.now()}`,
+            type: 'duplicate_utr_detected',
+            priority: 'critical',
+            title: 'Duplicate UTR collision detected',
+            message: `User ${auth.user.email || auth.user.id} attempted to submit an already reserved or verified UTR (${err.utr}). Conflict: ${err.conflictReason}`,
+            actionLabel: 'Investigate',
+            actionUrl: '/admin?tab=verifications',
+            userId: auth.user.id,
+            userEmail: auth.user.email,
+            orderId,
+            metadata: { utr: err.utr, conflictReason: err.conflictReason },
+          });
+        } catch (notifErr) {
+          console.error('[BillingSubmit] Collision notification error:', notifErr);
+        }
+
         return NextResponse.json(
           {
             error: `This UPI transaction reference (${err.utr}) has already been submitted or verified.`,
