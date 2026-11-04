@@ -500,6 +500,9 @@ const TYPE_OPTIONS = [
   { value: 'part time', label: 'Part Time' },
   { value: 'freelance', label: 'Freelance' },
   { value: 'internship', label: 'Internship' },
+  { value: 'apprenticeship', label: 'Apprenticeship' },
+  { value: 'trainee', label: 'Trainee / Fresher' },
+  { value: 'temporary', label: 'Temporary' },
 ];
 
 const LEVEL_OPTIONS = [
@@ -523,7 +526,7 @@ const HERO_ROTATING_WORDS = [
   {
     text: 'Career Opportunity',
     words: ['Career', 'Opportunity'],
-    sector: '15+ Sectors',
+    sector: '30+ Sectors',
     icon: '✨',
     color: '#818cf8',
     gradient: 'linear-gradient(135deg, #818cf8 0%, #c084fc 45%, #f472b6 100%)',

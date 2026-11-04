@@ -695,14 +695,26 @@ export function matchesType(job: NormalizedJob, filterType?: string): boolean {
       jobType.includes('regular')
     );
   }
-  if (filter === 'contract' || filter === 'freelance') {
-    return jobType.includes('contract') || jobType.includes('freelance') || jobType.includes('consult');
+  if (filter === 'contract') {
+    return jobType.includes('contract') || jobType.includes('consult');
+  }
+  if (filter === 'freelance') {
+    return jobType.includes('freelance') || jobType.includes('contract');
   }
   if (filter === 'part-time' || filter === 'part time') {
     return jobType.includes('part');
   }
   if (filter === 'internship' || filter === 'intern') {
     return jobType.includes('intern') || jobType.includes('trainee');
+  }
+  if (filter === 'apprenticeship' || filter === 'apprentice') {
+    return jobType.includes('apprentice');
+  }
+  if (filter === 'trainee' || filter === 'fresher' || filter === 'graduate trainee') {
+    return jobType.includes('trainee') || jobType.includes('fresher') || jobType.includes('graduate');
+  }
+  if (filter === 'temporary' || filter === 'temp') {
+    return jobType.includes('temp') || jobType.includes('contract');
   }
 
   return jobType.includes(filter);
