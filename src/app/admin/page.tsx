@@ -51,6 +51,7 @@ import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
 import { UsersDirectoryView } from '@/app/components/admin/UsersDirectoryView';
 import { AccountLifecycleModal, AccountActionType } from '@/app/components/admin/AccountLifecycleModal';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
+import { AdminNotificationCenter } from '@/app/components/admin/AdminNotificationCenter';
 
 const ADMIN_PAGE_SIZE = 5;
 
@@ -937,6 +938,7 @@ export default function AdminConsolePage() {
 
       {/* Main Container */}
       <main className="admin-main-container">
+        <AdminNotificationCenter />
         {/* Notification Banner */}
         {notification && (
           <div className={notification.type === 'success' ? 'admin-success-banner' : 'admin-error-banner'} style={{ marginBottom: '1.25rem', justifyContent: 'space-between' }}>

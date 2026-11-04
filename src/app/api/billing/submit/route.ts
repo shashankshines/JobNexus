@@ -18,6 +18,7 @@ import {
   sendSubmissionAcknowledgement,
   sendAdminSubmissionAlert,
 } from '@/modules/email/email.service';
+import { createAdminNotification } from '@/modules/notifications/admin-notifications.service';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const sessionId = extractSessionId(request);
@@ -90,6 +91,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         verificationNotes,
       });
 
+      // Durable admin inbox event. A deterministic key prevents duplicate alerts on retries.
+      try {
+        await createAdminNotification({
+          eventKey: `payment_submitted_${submission.submissionId}`,
+          type: 'payment_submitted',
+          title: 'Premium payment submitted',
+          message: `${auth.user.name || auth.user.email || 'A user'} submitted a ₹${submission.declaredAmount} UPI payment reference for verification.`,
+          actionLabel: 'Review payment',
+          actionUrl: '/admin?tab=verifications',
+          userId: auth.user.id,
+          userEmail: auth.user.email,
+          orderId: submission.orderId,
+          submissionId: submission.submissionId,
+        });
+      } catch (notificationError) {
+        // Payment state remains authoritative; log separately so monitoring can detect inbox write failures.
+        console.error('[BillingSubmit] Admin notification persistence failed:', notificationError);
+      }
+
       // Transactional acknowledgement email (Event A: Subscriber) + Admin Approval Alert (Event A2: Admin)
       const sharedEmailParams = {
         userId: auth.user.id,
@@ -108,7 +128,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         sendSubmissionAcknowledgement(sharedEmailParams),
         sendAdminSubmissionAlert(sharedEmailParams),
       ]);
-
       let emailStatus: 'sent' | 'pending' | 'failed' | 'retryable_failure' | 'skipped_missing_email' = 'pending';
       if (customerEmailOutcome.status === 'fulfilled') {
         emailStatus = customerEmailOutcome.value.status;

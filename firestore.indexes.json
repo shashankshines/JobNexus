@@ -16,8 +16,15 @@
         { "fieldPath": "submittedAt", "order": "DESCENDING" },
         { "fieldPath": "submissionId", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "admin_notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "recipientEmail", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
 }
-

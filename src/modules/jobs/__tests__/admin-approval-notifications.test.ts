@@ -359,9 +359,9 @@ describe('Admin Payment Approval Notifications & Verification Queue Resilience',
       const indexesPath = path.resolve(process.cwd(), 'firestore.indexes.json');
       assert.ok(fs.existsSync(indexesPath), 'firestore.indexes.json must exist in repository root');
       const parsed = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
-      assert.ok(Array.isArray(parsed.indexes) && parsed.indexes.length >= 2);
-      const collectionGroups = parsed.indexes.map((idx: { collectionGroup: string }) => idx.collectionGroup);
-      assert.ok(collectionGroups.every((cg: string) => cg === 'upi_submissions'));
+      assert.ok(Array.isArray(parsed.indexes));
+      const upiIndexes = parsed.indexes.filter((idx: { collectionGroup: string }) => idx.collectionGroup === 'upi_submissions');
+      assert.ok(upiIndexes.length >= 2, 'Must contain required upi_submissions composite indexes');
     });
   });
 });
