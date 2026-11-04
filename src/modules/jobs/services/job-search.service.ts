@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { JobProvider } from '../providers/provider.types';
 import { ProviderRegistry } from '../providers/provider.registry';
 import {
@@ -114,6 +117,55 @@ export class JobSearchService {
     JobSearchService.rankedQueryCache.clear();
     globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
     globalJobNexusCache.__JOBNEXUS_PROVIDER_CACHE__?.clear();
+  }
+
+  static loadDiskSnapshot(): { allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[]; timestamp: number } | null {
+    if (process.env.NODE_ENV === 'test') return null;
+    const paths = [
+      path.resolve(process.cwd(), '.catalog-snapshot.json'),
+      path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json'),
+    ];
+
+    for (const filePath of paths) {
+      try {
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const data = JSON.parse(content);
+          if (Array.isArray(data.allJobs) && data.allJobs.length > 0) {
+            return {
+              allJobs: data.allJobs,
+              diagnostics: Array.isArray(data.diagnostics) ? data.diagnostics : [],
+              timestamp: typeof data.timestamp === 'number' ? data.timestamp : 0,
+            };
+          }
+        }
+      } catch {
+        // Continue to fallback
+      }
+    }
+    return null;
+  }
+
+  static saveDiskSnapshot(allJobs: NormalizedJob[], diagnostics: ProviderDiagnostic[]): void {
+    if (process.env.NODE_ENV === 'test') return;
+    if (!Array.isArray(allJobs) || allJobs.length === 0) return;
+
+    try {
+      const payload = JSON.stringify({
+        allJobs,
+        diagnostics,
+        timestamp: Date.now(),
+      });
+      const primaryPath = path.resolve(process.cwd(), '.catalog-snapshot.json');
+      fs.writeFile(primaryPath, payload, 'utf-8', (err) => {
+        if (err) {
+          const tmpPath = path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json');
+          fs.writeFile(tmpPath, payload, 'utf-8', () => {});
+        }
+      });
+    } catch {
+      // Non-fatal if disk write fails
+    }
   }
 
   constructor(customProviders?: JobProvider[]) {
@@ -285,6 +337,7 @@ export class JobSearchService {
           JobSearchService.searchCache.clear();
           JobSearchService.rankedQueryCache.clear();
           globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
+          JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
           return { allJobs: [...allJobs], diagnostics };
         })
         .finally(() => {
@@ -320,6 +373,8 @@ export class JobSearchService {
             JobSearchService.cacheTimestamp = Date.now();
             JobSearchService.searchCache.clear();
             JobSearchService.rankedQueryCache.clear();
+            globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
+            JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
             return { allJobs, diagnostics };
           })
           .catch((err) => {
@@ -340,7 +395,47 @@ export class JobSearchService {
       };
     }
 
-    // 3. Cold start: Cache is empty. Fetch from providers, sharing promise among concurrent requests.
+    // 3. Cold start with persistent disk snapshot: Load in <50ms, revalidate asynchronously
+    const diskSnapshot = JobSearchService.loadDiskSnapshot();
+    if (diskSnapshot && diskSnapshot.allJobs.length > 0) {
+      JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
+      JobSearchService.cachedUniqueJobs = deduplicateJobs(diskSnapshot.allJobs);
+      JobSearchService.cachedDiagnostics = diskSnapshot.diagnostics || [];
+      JobSearchService.cacheTimestamp = diskSnapshot.timestamp || Date.now();
+
+      // Trigger background revalidation without blocking this user request
+      if (!JobSearchService.inFlightFetchPromise) {
+        JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
+          .then(({ allJobs, diagnostics }) => {
+            JobSearchService.cachedRawJobs = allJobs;
+            JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
+            JobSearchService.cachedDiagnostics = diagnostics;
+            JobSearchService.cacheTimestamp = Date.now();
+            JobSearchService.searchCache.clear();
+            JobSearchService.rankedQueryCache.clear();
+            globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
+            JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
+            return { allJobs, diagnostics };
+          })
+          .catch((err) => {
+            console.error('[JobSearchService] Background refresh failed:', err);
+            return {
+              allJobs: JobSearchService.cachedRawJobs || [],
+              diagnostics: JobSearchService.cachedDiagnostics || [],
+            };
+          })
+          .finally(() => {
+            JobSearchService.inFlightFetchPromise = null;
+          });
+      }
+
+      return {
+        allJobs: [...JobSearchService.cachedRawJobs],
+        diagnostics: JobSearchService.cachedDiagnostics || [],
+      };
+    }
+
+    // 4. Cold start without disk snapshot: Fetch from providers, sharing promise among concurrent requests.
     if (JobSearchService.inFlightFetchPromise) {
       return JobSearchService.inFlightFetchPromise;
     }
@@ -353,6 +448,8 @@ export class JobSearchService {
         JobSearchService.cacheTimestamp = Date.now();
         JobSearchService.searchCache.clear();
         JobSearchService.rankedQueryCache.clear();
+        globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
+        JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
         return { allJobs: [...allJobs], diagnostics };
       })
       .finally(() => {
