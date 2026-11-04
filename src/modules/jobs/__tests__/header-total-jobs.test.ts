@@ -22,15 +22,15 @@ describe('Homepage Header Total Jobs & Multi-Provider Invariants', () => {
     );
   });
 
-  it('replaces old technical "Provider Snapshot" with user-attracting "Across All Integrations"', () => {
+  it('replaces old technical "Provider Snapshot" with user-attracting "Across All Sectors"', () => {
     assert.strictEqual(
       pageContent.includes('Provider Snapshot'),
       false,
       'page.tsx must NOT contain the developer-centric "Provider Snapshot"'
     );
     assert.ok(
-      pageContent.includes('Across All Integrations'),
-      'page.tsx must highlight "Across All Integrations"'
+      pageContent.includes('Across All Sectors'),
+      'page.tsx must highlight "Across All Sectors"'
     );
   });
 

@@ -826,7 +826,7 @@ export default function Home() {
     ? formattedCount === 'Unavailable'
       ? 'Job feed unavailable'
       : `Last available feed snapshot: ${displayTotalJobs} jobs (refresh failed)`
-    : `${displayTotalJobs} Across All Integrations`;
+    : `${displayTotalJobs} Across All Sectors`;
   const [searchPage, setSearchPage] = useState(0);
   const [appliedSearchCriteria, setAppliedSearchCriteria] = useState<SearchCriteria>({
     query: '',
@@ -2589,12 +2589,12 @@ export default function Home() {
                 pendingSearchCriteria
                   ? `Refreshing results for ${getSearchCriteriaSummary(pendingSearchCriteria) || 'all industries'}; prior applied results are hidden.`
                   : isScrollingCards
-                    ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches). ${displayTotalJobs} jobs across all API integrations.`
+                    ? `Scrolled through ${animatedElapsedCount} of ${displayedJobs.length.toLocaleString()} loaded matches (${Math.round(progressPercent)} viewed; ${matchingCount.toLocaleString()} total matches). ${displayTotalJobs} jobs across all sectors.`
                     : searched
-                      ? `${matchingCount.toLocaleString()} matches for the current search; ${displayedJobs.length.toLocaleString()} matching jobs loaded. ${displayTotalJobs} jobs across all API integrations.`
+                      ? `${matchingCount.toLocaleString()} matches for the current search; ${displayedJobs.length.toLocaleString()} matching jobs loaded. ${displayTotalJobs} jobs across all sectors.`
                       : activeView === 'saved'
-                        ? `${savedJobs.length} bookmarked tech opportunities. ${displayTotalJobs} jobs across all API integrations.`
-                        : `${displayTotalJobs} verified jobs available across all API integrations.`
+                        ? `${savedJobs.length} bookmarked tech opportunities. ${displayTotalJobs} jobs across all sectors.`
+                        : `${displayTotalJobs} verified jobs available across all sectors.`
               }
             >
               <span className={`site-header-radar ${isScrollingCards ? (isAllViewed ? 'is-complete' : 'is-scrolling') : ''}`} />
@@ -2649,7 +2649,7 @@ export default function Home() {
                     <span className="elapsed-counter-status">
                       <span className="elapsed-counter-num">{displayTotalJobs}</span>
                       <span className="elapsed-counter-label">Jobs</span>
-                      <span className="count-secondary">Across All Integrations</span>
+                      <span className="count-secondary">Across All Sectors</span>
                     </span>
                   )}
                 </span>
@@ -2693,7 +2693,7 @@ export default function Home() {
                   ) : (
                     <span className="elapsed-counter-status">
                       <span className="elapsed-counter-num">{displayTotalJobs}</span>
-                      <span className="elapsed-counter-label">Jobs Across Integrations</span>
+                      <span className="elapsed-counter-label">Jobs Across All Sectors</span>
                     </span>
                   )}
                 </span>
