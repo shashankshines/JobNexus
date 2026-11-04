@@ -35,7 +35,7 @@ import {
   sendSubscriptionExpiredNotification,
 } from '@/modules/email/email.service';
 import { invalidateUserEntitlementCache } from './entitlement.service';
-import { createAdminNotification } from '@/modules/notifications/admin-notifications.service';
+import { createAdminNotificationWithRecovery } from '@/modules/notifications/admin-notifications.service';
 
 /**
  * Read-only check whether a given renewal email idempotency key has already been
@@ -406,23 +406,19 @@ export async function sweepAllSubscriptionRenewalNotifications(
       else if (result.milestone === 'expired') summary.expiredSent++;
 
       if (result.milestone === 'expiring_5d' || result.milestone === 'expiring_24h') {
-        try {
-          await createAdminNotification({
-            eventKey: `sub_expiring_${sub.userId}_${result.milestone}`,
-            type: 'subscription_expiring',
-            priority: result.milestone === 'expiring_24h' ? 'high' : 'normal',
-            status: 'unread',
-            title: 'Subscription expiring soon',
-            message: `Subscriber ${sub.userEmail || sub.userId} has ${result.milestone === 'expiring_24h' ? 'less than 24 hours' : '5 days'} remaining on their Premium membership.`,
-            actionLabel: 'View Subscriber',
-            actionUrl: `/admin?tab=users&userId=${encodeURIComponent(sub.userId)}`,
-            userId: sub.userId,
-            userEmail: sub.userEmail,
-            metadata: { milestone: result.milestone, currentPeriodEnd: sub.currentPeriodEnd },
-          });
-        } catch (notifErr) {
-          console.error('[RenewalNotifications] Admin notification failed:', notifErr);
-        }
+        await createAdminNotificationWithRecovery({
+          eventKey: `sub_expiring_${sub.userId}_${result.milestone}`,
+          type: 'subscription_expiring',
+          priority: result.milestone === 'expiring_24h' ? 'high' : 'normal',
+          status: 'unread',
+          title: 'Subscription expiring soon',
+          message: `Subscriber ${sub.userEmail || sub.userId} has ${result.milestone === 'expiring_24h' ? 'less than 24 hours' : '5 days'} remaining on their Premium membership.`,
+          actionLabel: 'View Subscriber',
+          actionUrl: `/admin?tab=users&userId=${encodeURIComponent(sub.userId)}`,
+          userId: sub.userId,
+          userEmail: sub.userEmail,
+          metadata: { milestone: result.milestone, currentPeriodEnd: sub.currentPeriodEnd },
+        });
       }
     } else if (
       result.deliveryStatus === 'failed' ||

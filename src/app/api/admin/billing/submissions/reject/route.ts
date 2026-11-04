@@ -7,7 +7,7 @@ import {
   MandatoryReasonMissingError,
 } from '@/modules/storage/firestore/admin-billing.store';
 import {
-  createAdminNotification,
+  createAdminNotificationWithRecovery,
   markAdminNotification,
 } from '@/modules/notifications/admin-notifications.service';
 
@@ -69,26 +69,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!result.idempotent) {
       try {
         await markAdminNotification(`payment_submitted_${submissionId}`, 'resolved', auth.adminEmail);
-        await createAdminNotification({
-          eventKey: `payment_rejected_${submissionId}`,
-          type: 'payment_rejected',
-          priority: 'normal',
-          status: 'resolved',
-          title: 'Payment submission rejected',
-          message: `Submission ${submissionId} (₹${result.submission.declaredAmount}) rejected. Reason: ${reason}`,
-          actionLabel: 'View Rejection',
-          actionUrl: '/admin?tab=verifications',
-          userId: result.submission.userId,
-          userEmail: result.submission.userEmail,
-          submissionId,
-          orderId: result.submission.orderId,
-          actorUserId: auth.adminUserId,
-          actorEmail: auth.adminEmail,
-          metadata: { reason },
-        });
       } catch (notifErr) {
-        console.error('[Admin Reject] Notification update failed:', notifErr);
+        console.error('[Admin Reject] Notification mark resolved failed:', notifErr);
       }
+      await createAdminNotificationWithRecovery({
+        eventKey: `payment_rejected_${submissionId}`,
+        type: 'payment_rejected',
+        priority: 'normal',
+        status: 'resolved',
+        title: 'Payment submission rejected',
+        message: `Submission ${submissionId} (₹${result.submission.declaredAmount}) rejected. Reason: ${reason}`,
+        actionLabel: 'View Rejection',
+        actionUrl: '/admin?tab=verifications',
+        userId: result.submission.userId,
+        userEmail: result.submission.userEmail,
+        submissionId,
+        orderId: result.submission.orderId,
+        actorUserId: auth.adminUserId,
+        actorEmail: auth.adminEmail,
+        metadata: { reason },
+      });
     }
 
     return NextResponse.json({

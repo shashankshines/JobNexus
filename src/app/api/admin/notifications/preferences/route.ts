@@ -46,6 +46,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: true, preferences: updated });
   } catch (error) {
     console.error('[Admin Notifications] Preferences update error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to save preferences.' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Failed to save preferences.';
+    return NextResponse.json({ success: false, error: msg }, { status: 400 });
   }
 }
+

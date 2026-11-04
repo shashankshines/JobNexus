@@ -7,6 +7,8 @@ import {
   AdminNotificationPreferences,
   AdminNotificationType,
   DEFAULT_NOTIFICATION_PREFERENCES,
+  NotificationPriority,
+  isValidAdminActionUrl,
 } from '@/modules/notifications/notification.types';
 
 export interface ToastItem {
@@ -93,21 +95,155 @@ export function generateVoiceAnnouncement(
   }
 }
 
+export interface VoiceQueueItem {
+  id: string;
+  text: string;
+  priority: NotificationPriority;
+  volume: number;
+}
+
+export class VoiceAnnouncementQueue {
+  private queue: VoiceQueueItem[] = [];
+  private isSpeaking = false;
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private announcedIds = new Set<string>();
+  private readonly maxQueueSize = 10;
+
+  public enqueue(item: VoiceQueueItem): void {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (this.announcedIds.has(item.id)) return;
+    this.announcedIds.add(item.id);
+
+    // Keep bounded set of announced ids
+    if (this.announcedIds.size > 200) {
+      const arr = Array.from(this.announcedIds);
+      this.announcedIds = new Set(arr.slice(arr.length - 100));
+    }
+
+    if (item.priority === 'critical') {
+      // Preempt in-flight speech cleanly for critical alerts
+      if (this.isSpeaking && this.currentUtterance) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+        this.isSpeaking = false;
+        this.currentUtterance = null;
+      }
+      this.queue.unshift(item);
+    } else if (item.priority === 'high') {
+      const insertIdx = this.queue.findIndex(
+        (q) => q.priority === 'normal' || q.priority === 'low'
+      );
+      if (insertIdx !== -1) {
+        this.queue.splice(insertIdx, 0, item);
+      } else {
+        this.queue.push(item);
+      }
+    } else {
+      this.queue.push(item);
+    }
+
+    // Drop oldest non-critical if queue exceeds limit
+    while (this.queue.length > this.maxQueueSize) {
+      const dropIndex =
+        this.queue.map((q) => q.priority).lastIndexOf('low') !== -1
+          ? this.queue.map((q) => q.priority).lastIndexOf('low')
+          : this.queue.map((q) => q.priority).lastIndexOf('normal');
+      if (dropIndex !== -1) {
+        this.queue.splice(dropIndex, 1);
+      } else {
+        break;
+      }
+    }
+
+    this.processNext();
+  }
+
+  private processNext(): void {
+    if (this.isSpeaking || this.queue.length === 0) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const nextItem = this.queue.shift();
+    if (!nextItem) return;
+
+    this.isSpeaking = true;
+    try {
+      const UtteranceCtor =
+        typeof SpeechSynthesisUtterance !== 'undefined'
+          ? SpeechSynthesisUtterance
+          : (typeof window !== 'undefined' &&
+              (window as unknown as { SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance })
+                ?.SpeechSynthesisUtterance);
+
+      if (!UtteranceCtor) {
+        this.isSpeaking = false;
+        this.currentUtterance = null;
+        this.processNext();
+        return;
+      }
+
+      const utterance = new UtteranceCtor(nextItem.text);
+      utterance.volume = Math.max(0, Math.min(1, nextItem.volume ?? 0.8));
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+      this.currentUtterance = utterance;
+
+      utterance.onend = () => {
+        this.isSpeaking = false;
+        this.currentUtterance = null;
+        this.processNext();
+      };
+
+      utterance.onerror = () => {
+        this.isSpeaking = false;
+        this.currentUtterance = null;
+        this.processNext();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      this.isSpeaking = false;
+      this.currentUtterance = null;
+      this.processNext();
+    }
+  }
+
+  public clear(): void {
+    this.queue = [];
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // ignore
+      }
+    }
+    this.isSpeaking = false;
+    this.currentUtterance = null;
+  }
+
+  public hasAnnounced(id: string): boolean {
+    return this.announcedIds.has(id);
+  }
+
+  public getQueueLength(): number {
+    return this.queue.length;
+  }
+}
+
+export const voiceAnnouncementQueue = new VoiceAnnouncementQueue();
+
 export function speakNotificationText(
   text: string,
-  options: { volume?: number } = {}
+  options: { volume?: number; priority?: NotificationPriority; id?: string } = {}
 ): void {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-  try {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.volume = options.volume ?? 0.8;
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-    window.speechSynthesis.speak(utterance);
-  } catch {
-    // Speech synthesis error ignored
-  }
+  voiceAnnouncementQueue.enqueue({
+    id: options.id || `adhoc_${Date.now()}_${Math.random()}`,
+    text,
+    priority: options.priority || 'normal',
+    volume: options.volume ?? 0.8,
+  });
 }
 
 export function useAdminNotifications() {
@@ -165,6 +301,9 @@ export function useAdminNotifications() {
     async (partial: Partial<AdminNotificationPreferences>) => {
       const next = { ...prefsRef.current, ...partial };
       setPreferences(next);
+      if (partial.quietMode === true || partial.voiceEnabled === false) {
+        voiceAnnouncementQueue.clear();
+      }
       if (typeof window !== 'undefined') {
         localStorage.setItem('jobnexus_admin_notif_prefs', JSON.stringify(next));
       }
@@ -213,10 +352,15 @@ export function useAdminNotifications() {
         playNativeNotificationChime(prefs.volume);
       }
 
-      // Voice Alert
+      // Voice Alert via sequential in-memory queue
       if (prefs.voiceEnabled && !prefs.quietMode) {
         const text = generateVoiceAnnouncement(notification, prefs.voiceVerbosity);
-        speakNotificationText(text, { volume: prefs.volume });
+        voiceAnnouncementQueue.enqueue({
+          id: notification.id,
+          text,
+          priority: notification.priority || 'normal',
+          volume: prefs.volume,
+        });
       }
     },
     [dismissToast]
@@ -230,7 +374,11 @@ export function useAdminNotifications() {
       const data = await res.json();
       if (data.success && Array.isArray(data.notifications)) {
         setItems(data.notifications);
-        setUnreadCount(data.unreadCount ?? data.notifications.filter((n: AdminNotificationDocument) => n.status === 'unread').length);
+        if (typeof data.unreadCount === 'number') {
+          setUnreadCount(data.unreadCount);
+        } else {
+          setUnreadCount(data.notifications.filter((n: AdminNotificationDocument) => n.status === 'unread').length);
+        }
       }
     } catch {
       // ignore
@@ -269,7 +417,11 @@ export function useAdminNotifications() {
             const data = JSON.parse(e.data);
             const list: AdminNotificationDocument[] = Array.isArray(data.items) ? data.items : [];
             setItems(list);
-            setUnreadCount(list.filter((i) => i.status === 'unread').length);
+            if (typeof data.unreadCount === 'number') {
+              setUnreadCount(data.unreadCount);
+            } else {
+              setUnreadCount(list.filter((i) => i.status === 'unread').length);
+            }
             list.forEach((i) => seenIdsRef.current.add(i.id));
             initialLoadCompletedRef.current = true;
           } catch (parseErr) {
@@ -284,7 +436,11 @@ export function useAdminNotifications() {
             const data = JSON.parse(e.data);
             const list: AdminNotificationDocument[] = Array.isArray(data.items) ? data.items : [];
             setItems(list);
-            setUnreadCount(list.filter((i) => i.status === 'unread').length);
+            if (typeof data.unreadCount === 'number') {
+              setUnreadCount(data.unreadCount);
+            } else {
+              setUnreadCount(list.filter((i) => i.status === 'unread').length);
+            }
 
             // Announce newly added documents that haven't been seen yet
             const newItems: AdminNotificationDocument[] = Array.isArray(data.newItems)
@@ -300,6 +456,27 @@ export function useAdminNotifications() {
             }
           } catch (parseErr) {
             console.error('[SSE sync error]:', parseErr);
+          }
+        });
+
+        // Structured error event handling
+        eventSource.addEventListener('error', (e: MessageEvent) => {
+          if (isCancelled) return;
+          try {
+            if (e.data) {
+              const errData = JSON.parse(e.data);
+              if (errData.code === 'SESSION_EXPIRED') {
+                setError('Admin session expired. Please sign in again.');
+                if (eventSource) {
+                  eventSource.close();
+                  eventSource = null;
+                }
+                setConnected(false);
+                return;
+              }
+            }
+          } catch {
+            // ignore JSON parse
           }
         });
 
@@ -337,9 +514,7 @@ export function useAdminNotifications() {
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (pollInterval) clearInterval(pollInterval);
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      voiceAnnouncementQueue.clear();
     };
   }, [handleNewNotification, pollFallback]);
 
@@ -367,13 +542,19 @@ export function useAdminNotifications() {
   const acknowledge = useCallback(async (id: string) => {
     try {
       const now = new Date().toISOString();
+      let wasUnread = false;
       setItems((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? { ...item, status: 'acknowledged', acknowledgedAt: now, readAt: item.readAt || now }
-            : item
-        )
+        prev.map((item) => {
+          if (item.id === id) {
+            if (item.status === 'unread') wasUnread = true;
+            return { ...item, status: 'acknowledged', acknowledgedAt: now, readAt: item.readAt || now };
+          }
+          return item;
+        })
       );
+      if (wasUnread) {
+        setUnreadCount((c) => Math.max(c - 1, 0));
+      }
       await fetch('/api/admin/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -387,19 +568,25 @@ export function useAdminNotifications() {
   const resolve = useCallback(async (id: string) => {
     try {
       const now = new Date().toISOString();
+      let wasUnread = false;
       setItems((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: 'resolved',
-                resolvedAt: now,
-                readAt: item.readAt || now,
-                actionedAt: now,
-              }
-            : item
-        )
+        prev.map((item) => {
+          if (item.id === id) {
+            if (item.status === 'unread') wasUnread = true;
+            return {
+              ...item,
+              status: 'resolved',
+              resolvedAt: now,
+              readAt: item.readAt || now,
+              actionedAt: now,
+            };
+          }
+          return item;
+        })
       );
+      if (wasUnread) {
+        setUnreadCount((c) => Math.max(c - 1, 0));
+      }
       await fetch('/api/admin/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -434,7 +621,7 @@ export function useAdminNotifications() {
   const executeAction = useCallback(
     async (notification: AdminNotificationDocument) => {
       void markAsRead(notification.id);
-      if (notification.actionUrl) {
+      if (notification.actionUrl && isValidAdminActionUrl(notification.actionUrl)) {
         router.push(notification.actionUrl);
       }
     },
@@ -475,3 +662,4 @@ export function useAdminNotifications() {
     refresh: pollFallback,
   };
 }
+

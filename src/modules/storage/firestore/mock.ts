@@ -35,6 +35,8 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
 
     collection: (collectionName: string) => {
       const colData = store.getCollectionData(collectionName);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let colRef: any;
 
       interface OrderSpec {
         field: string;
@@ -140,10 +142,7 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
               (d) =>
                 ({
                   id: d.id,
-                  ref: {
-                    id: d.id,
-                    path: `${collectionName}/${d.id}`,
-                  },
+                  ref: colRef.doc(d.id),
                   data: () => ({ ...d }),
                 } as unknown as DocumentSnapshot)
             ),
@@ -172,7 +171,7 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
 
       const rootQuery = makeQuery();
 
-      const colRef = {
+      colRef = {
         id: collectionName,
 
         doc: (docId?: string) => {
@@ -190,6 +189,17 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
                 ref: docRef as unknown as DocumentReference,
                 data: () => (data ? { ...data } : undefined),
               } as unknown as DocumentSnapshot;
+            },
+
+            create: async (data: DocumentData): Promise<unknown> => {
+              const existing = colData.get(id);
+              if (existing !== undefined) {
+                const err = new Error(`ALREADY_EXISTS: Document ${collectionName}/${id} already exists.`);
+                (err as { code?: number }).code = 6;
+                throw err;
+              }
+              colData.set(id, { ...data });
+              return { writeTime: new Date() };
             },
 
             set: async (data: DocumentData, options?: { merge?: boolean }): Promise<unknown> => {

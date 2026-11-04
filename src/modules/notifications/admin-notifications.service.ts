@@ -1,23 +1,30 @@
+import crypto from 'node:crypto';
 import { getFirestoreDb } from '@/modules/storage/firestore/client';
 import type { Query, DocumentData } from 'firebase-admin/firestore';
 import {
   ADMIN_NOTIFICATION_EMAIL,
   ADMIN_NOTIFICATIONS_COLLECTION,
+  ADMIN_NOTIFICATION_FAILURES_COLLECTION,
   AdminNotificationDocument,
+  AdminNotificationFailureRecord,
   AdminNotificationPreferences,
   AdminNotificationType,
   DEFAULT_NOTIFICATION_PREFERENCES,
   NotificationPriority,
   NotificationStatus,
+  parseCompoundCursor,
+  serializeCompoundCursor,
 } from './notification.types';
 
 export {
   ADMIN_NOTIFICATION_EMAIL,
   ADMIN_NOTIFICATIONS_COLLECTION,
+  ADMIN_NOTIFICATION_FAILURES_COLLECTION,
   DEFAULT_NOTIFICATION_PREFERENCES,
 };
 export type {
   AdminNotificationDocument,
+  AdminNotificationFailureRecord,
   AdminNotificationPreferences,
   AdminNotificationType,
   NotificationPriority,
@@ -28,14 +35,23 @@ const COLLECTION = ADMIN_NOTIFICATIONS_COLLECTION;
 const PREFERENCES_COLLECTION = 'admin_preferences';
 const PREFERENCES_DOC_ID = 'notifications';
 
-function safeIdempotencyId(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 180);
+/**
+ * Computes a stable, collision-resistant document ID using SHA-256 of the event key.
+ * Validates that eventKey is non-empty.
+ */
+export function generateNotificationId(eventKey: string): string {
+  if (!eventKey || typeof eventKey !== 'string' || !eventKey.trim()) {
+    throw new Error('Notification eventKey is required and cannot be empty.');
+  }
+  const normalized = eventKey.trim();
+  const hash = crypto.createHash('sha256').update(normalized).digest('hex');
+  return `notif_${hash.slice(0, 32)}`;
 }
 
 /**
  * Determines default priority based on event type if not explicitly supplied.
  */
-function getDefaultPriority(type: AdminNotificationType): NotificationPriority {
+export function getDefaultPriority(type: AdminNotificationType): NotificationPriority {
   switch (type) {
     case 'account_suspended':
     case 'subscription_revoked':
@@ -60,8 +76,8 @@ function getDefaultPriority(type: AdminNotificationType): NotificationPriority {
 }
 
 /**
- * Durable admin inbox. Deterministic IDs make event retries idempotent.
- * Notifications are addressed only to the explicitly designated admin account.
+ * Durable admin inbox. Deterministic SHA-256 document IDs and atomic create-if-absent
+ * guarantee that concurrent invocations produce exactly one notification.
  */
 export async function createAdminNotification(
   input: Omit<
@@ -73,21 +89,20 @@ export async function createAdminNotification(
     status?: NotificationStatus;
   }
 ): Promise<AdminNotificationDocument> {
-  const id = safeIdempotencyId(input.eventKey);
-  const ref = getFirestoreDb().collection(COLLECTION).doc(id);
-  const existing = await ref.get();
-  if (existing.exists) {
-    return existing.data() as AdminNotificationDocument;
+  if (!input.eventKey || typeof input.eventKey !== 'string' || !input.eventKey.trim()) {
+    throw new Error('Notification event key is required.');
   }
 
-  const { eventKey, priority, status, ...data } = input;
-  if (!eventKey) throw new Error('Notification event key is required.');
+  const id = generateNotificationId(input.eventKey);
+  const ref = getFirestoreDb().collection(COLLECTION).doc(id);
 
+  const { eventKey, priority, status, ...data } = input;
   const now = new Date().toISOString();
   const doc: AdminNotificationDocument = {
     ...data,
     id,
-    eventId: eventKey,
+    eventId: eventKey.trim(),
+    eventKey: eventKey.trim(),
     recipientEmail: ADMIN_NOTIFICATION_EMAIL,
     priority: priority || getDefaultPriority(data.type),
     status: status || 'unread',
@@ -98,8 +113,113 @@ export async function createAdminNotification(
     resolvedBy: null,
   };
 
-  await ref.set(doc);
-  return doc;
+  try {
+    // Atomic create in Firestore: throws ALREADY_EXISTS / code 6 if document exists
+    await ref.create(doc);
+    return doc;
+  } catch (err: unknown) {
+    const isAlreadyExists =
+      (err as { code?: number | string })?.code === 6 ||
+      (err as { code?: number | string })?.code === 'already-exists' ||
+      (err as Error)?.message?.includes('ALREADY_EXISTS');
+
+    if (isAlreadyExists) {
+      const existing = await ref.get();
+      if (existing.exists) {
+        return existing.data() as AdminNotificationDocument;
+      }
+    }
+    throw err;
+  }
+}
+
+/**
+ * Lightweight recovery wrapper for business operations:
+ * - Retries transient failures with bounded exponential backoff.
+ * - On exhaustion, persists failure record into `admin_notification_failures` for observability.
+ * - NEVER rolls back or throws in a way that blocks the caller's business transaction.
+ */
+export async function createAdminNotificationWithRecovery(
+  input: Parameters<typeof createAdminNotification>[0],
+  options: { maxRetries?: number; retryDelayMs?: number } = {}
+): Promise<{ success: boolean; document?: AdminNotificationDocument; error?: string }> {
+  const maxRetries = options.maxRetries ?? 3;
+  let delay = options.retryDelayMs ?? 40;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const doc = await createAdminNotification(input);
+      return { success: true, document: doc };
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (attempt === maxRetries) {
+        console.warn(`[AdminNotification Recovery] Exhausted ${maxRetries} attempts for event "${input.eventKey}": ${errorMsg}`);
+        try {
+          const failureId = `fail_${generateNotificationId(input.eventKey).slice(6)}`;
+          const failureDoc: AdminNotificationFailureRecord = {
+            id: failureId,
+            eventKey: input.eventKey,
+            input: input as unknown as Record<string, unknown>,
+            attempts: maxRetries,
+            lastAttemptAt: new Date().toISOString(),
+            lastError: errorMsg,
+            status: 'pending_recovery',
+            createdAt: new Date().toISOString(),
+          };
+          await getFirestoreDb().collection(ADMIN_NOTIFICATION_FAILURES_COLLECTION).doc(failureId).set(failureDoc);
+        } catch (failStoreErr) {
+          console.error('[AdminNotification Recovery] Failed to persist dead-letter record:', failStoreErr);
+        }
+        return { success: false, error: errorMsg };
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
+    }
+  }
+
+  return { success: false, error: 'Retry attempts exhausted.' };
+}
+
+/**
+ * Reconciles pending failed notifications from the recovery collection.
+ */
+export async function reconcilePendingNotificationFailures(): Promise<{
+  reconciledCount: number;
+  exhaustedCount: number;
+}> {
+  const db = getFirestoreDb();
+  const snap = await db
+    .collection(ADMIN_NOTIFICATION_FAILURES_COLLECTION)
+    .where('status', '==', 'pending_recovery')
+    .limit(20)
+    .get();
+
+  let reconciledCount = 0;
+  let exhaustedCount = 0;
+
+  for (const doc of snap.docs) {
+    const failure = doc.data() as AdminNotificationFailureRecord;
+    try {
+      await createAdminNotification(failure.input as Parameters<typeof createAdminNotification>[0]);
+      await doc.ref.update({
+        status: 'recovered',
+        recoveredAt: new Date().toISOString(),
+      });
+      reconciledCount++;
+    } catch (err: unknown) {
+      const newAttempts = failure.attempts + 1;
+      const status = newAttempts >= 5 ? 'exhausted' : 'pending_recovery';
+      if (status === 'exhausted') exhaustedCount++;
+      await doc.ref.update({
+        attempts: newAttempts,
+        lastAttemptAt: new Date().toISOString(),
+        lastError: err instanceof Error ? err.message : String(err),
+        status,
+      });
+    }
+  }
+
+  return { reconciledCount, exhaustedCount };
 }
 
 export interface ListAdminNotificationOptions {
@@ -107,7 +227,7 @@ export interface ListAdminNotificationOptions {
   unreadOnly?: boolean;
   status?: NotificationStatus | 'all';
   priority?: NotificationPriority | 'all';
-  cursor?: string; // createdAt ISO timestamp for pagination
+  cursor?: string; // Compound cursor `${createdAt}__${id}` or legacy timestamp
 }
 
 export async function listAdminNotifications(
@@ -123,7 +243,8 @@ export async function listAdminNotifications(
   let query: Query = db
     .collection(COLLECTION)
     .where('recipientEmail', '==', ADMIN_NOTIFICATION_EMAIL)
-    .orderBy('createdAt', 'desc');
+    .orderBy('createdAt', 'desc')
+    .orderBy('id', 'desc');
 
   if (options.status && options.status !== 'all') {
     query = query.where('status', '==', options.status);
@@ -136,7 +257,12 @@ export async function listAdminNotifications(
   }
 
   if (options.cursor) {
-    query = query.startAfter(options.cursor);
+    const compound = parseCompoundCursor(options.cursor);
+    if (compound) {
+      query = query.startAfter(compound.createdAt, compound.id);
+    } else {
+      query = query.startAfter(options.cursor);
+    }
   }
 
   const snapshot = await query.limit(limit + 1).get();
@@ -146,39 +272,66 @@ export async function listAdminNotifications(
 
   const notifications = resultDocs.map((doc) => {
     const data = doc.data() as DocumentData;
-    // Normalize status for backward compatibility with documents created before status enum
-    const status: NotificationStatus = data.status || (data.readAt ? (data.actionedAt ? 'resolved' : 'read') : 'unread');
+    const status: NotificationStatus =
+      data.status || (data.readAt ? (data.actionedAt ? 'resolved' : 'read') : 'unread');
     return {
       ...data,
       id: doc.id,
+      eventKey: data.eventKey || data.eventId || doc.id,
       status,
       priority: data.priority || getDefaultPriority(data.type),
     } as AdminNotificationDocument;
   });
 
-  const nextCursor = hasMore && resultDocs.length > 0
-    ? resultDocs[resultDocs.length - 1].data().createdAt
-    : null;
+  const nextCursor =
+    hasMore && resultDocs.length > 0
+      ? serializeCompoundCursor(
+          resultDocs[resultDocs.length - 1].data().createdAt,
+          resultDocs[resultDocs.length - 1].id
+        )
+      : null;
 
-  // Unread count
-  let totalUnread = 0;
-  try {
-    const unreadSnap = await db
-      .collection(COLLECTION)
-      .where('recipientEmail', '==', ADMIN_NOTIFICATION_EMAIL)
-      .where('status', '==', 'unread')
-      .count()
-      .get();
-    totalUnread = unreadSnap.data().count;
-  } catch {
-    totalUnread = notifications.filter((n) => n.status === 'unread').length;
-  }
+  // Authoritative server-side unread count
+  const totalUnread = await getAdminUnreadNotificationCount(ADMIN_NOTIFICATION_EMAIL);
 
   return {
     notifications,
     nextCursor,
     totalUnread,
   };
+}
+
+export async function getAdminUnreadNotificationCount(
+  adminEmail: string = ADMIN_NOTIFICATION_EMAIL
+): Promise<number> {
+  const db = getFirestoreDb();
+  try {
+    const query = db
+      .collection(COLLECTION)
+      .where('recipientEmail', '==', adminEmail)
+      .where('status', '==', 'unread');
+
+    if (
+      typeof (
+        query as unknown as {
+          count?: () => { get: () => Promise<{ data: () => { count: number } }> };
+        }
+      ).count === 'function'
+    ) {
+      const snap = await (
+        query as unknown as {
+          count: () => { get: () => Promise<{ data: () => { count: number } }> };
+        }
+      )
+        .count()
+        .get();
+      return snap.data().count;
+    }
+    const snap = await query.get();
+    return snap.size;
+  } catch {
+    return 0;
+  }
 }
 
 export async function markAdminNotification(
@@ -251,6 +404,43 @@ export async function markAllAdminNotificationsRead(
   return unreadSnap.docs.length;
 }
 
+export function validateNotificationPreferences(
+  input: Partial<AdminNotificationPreferences>
+): { valid: boolean; error?: string; validated?: Partial<AdminNotificationPreferences> } {
+  const validated: Partial<AdminNotificationPreferences> = {};
+
+  if (input.voiceEnabled !== undefined) {
+    if (typeof input.voiceEnabled !== 'boolean') return { valid: false, error: 'voiceEnabled must be a boolean.' };
+    validated.voiceEnabled = input.voiceEnabled;
+  }
+  if (input.soundEnabled !== undefined) {
+    if (typeof input.soundEnabled !== 'boolean') return { valid: false, error: 'soundEnabled must be a boolean.' };
+    validated.soundEnabled = input.soundEnabled;
+  }
+  if (input.quietMode !== undefined) {
+    if (typeof input.quietMode !== 'boolean') return { valid: false, error: 'quietMode must be a boolean.' };
+    validated.quietMode = input.quietMode;
+  }
+  if (input.priorityOnly !== undefined) {
+    if (typeof input.priorityOnly !== 'boolean') return { valid: false, error: 'priorityOnly must be a boolean.' };
+    validated.priorityOnly = input.priorityOnly;
+  }
+  if (input.voiceVerbosity !== undefined) {
+    if (input.voiceVerbosity !== 'brief' && input.voiceVerbosity !== 'detailed') {
+      return { valid: false, error: 'voiceVerbosity must be either "brief" or "detailed".' };
+    }
+    validated.voiceVerbosity = input.voiceVerbosity;
+  }
+  if (input.volume !== undefined) {
+    if (typeof input.volume !== 'number' || isNaN(input.volume)) {
+      return { valid: false, error: 'volume must be a number.' };
+    }
+    validated.volume = Math.max(0, Math.min(1, input.volume));
+  }
+
+  return { valid: true, validated };
+}
+
 export async function getAdminNotificationPreferences(
   adminEmail: string = ADMIN_NOTIFICATION_EMAIL
 ): Promise<AdminNotificationPreferences> {
@@ -273,11 +463,16 @@ export async function updateAdminNotificationPreferences(
   prefs: Partial<AdminNotificationPreferences>,
   adminEmail: string = ADMIN_NOTIFICATION_EMAIL
 ): Promise<AdminNotificationPreferences> {
+  const check = validateNotificationPreferences(prefs);
+  if (!check.valid) {
+    throw new Error(check.error || 'Invalid notification preferences.');
+  }
+
   const ref = getFirestoreDb().collection(PREFERENCES_COLLECTION).doc(PREFERENCES_DOC_ID);
   const current = await getAdminNotificationPreferences(adminEmail);
   const updated: AdminNotificationPreferences = {
     ...current,
-    ...prefs,
+    ...check.validated,
     updatedAt: new Date().toISOString(),
   };
 
