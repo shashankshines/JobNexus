@@ -3,6 +3,7 @@ import {
   findOrCreateGoogleUser,
   createSession,
   checkAuthRateLimit,
+  clearAuthRateLimit,
 } from '@/modules/auth/server/session.store';
 
 interface GoogleTokenPayload {
@@ -198,6 +199,7 @@ export async function POST(request: Request) {
       );
     }
 
+    clearAuthRateLimit(`auth_google_${clientIp}`);
     const { cookieHeader } = createSession(user.id);
 
     const response = NextResponse.json({
@@ -228,8 +230,9 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+export async function GET(request: Request) {
+  const origin = new URL(request.url).origin;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || origin || 'http://localhost:3000').replace(/\/$/, '');
   const clientId = (process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '').trim();
   const isClientConfigured = Boolean(
     clientId &&

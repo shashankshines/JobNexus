@@ -375,12 +375,27 @@ export function verifyCredentialsUser(
   }
 
   const user = users.get(userId)!;
-  if (passwordHashes.has(userId)) {
-    const salt = userId;
-    const computedHash = hashPassword(password, salt);
-    if (computedHash !== passwordHashes.get(userId)?.hash) {
-      return { error: 'Invalid email/username or password. Please try again.' };
+  if (!passwordHashes.has(userId)) {
+    if (user.provider === 'google') {
+      return { error: 'This account was registered with Google. Please use Continue with Google.' };
     }
+    return { error: 'No password is set for this account. Please use password recovery or continue with your original sign-in method.' };
+  }
+
+  const storedEntry = passwordHashes.get(userId);
+  const storedHash = storedEntry?.hash || '';
+  const salt = userId;
+  const computedHash = hashPassword(password, salt);
+
+  const storedBuffer = Buffer.from(storedHash, 'hex');
+  const computedBuffer = Buffer.from(computedHash, 'hex');
+
+  if (
+    storedBuffer.length === 0 ||
+    storedBuffer.length !== computedBuffer.length ||
+    !crypto.timingSafeEqual(storedBuffer, computedBuffer)
+  ) {
+    return { error: 'Invalid email/username or password. Please try again.' };
   }
 
   const status: UserAccountStatus = user.accountStatus || 'active';
@@ -435,6 +450,10 @@ export function checkAuthRateLimit(
 
   entry.count += 1;
   return { allowed: true, remaining: maxAttempts - entry.count };
+}
+
+export function clearAuthRateLimit(key: string): void {
+  rateLimitMap.delete(key);
 }
 
 export function resetRateLimits(): void {

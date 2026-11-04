@@ -5,6 +5,7 @@ import {
   updateUserPassword,
   createSession,
   checkAuthRateLimit,
+  clearAuthRateLimit,
 } from '@/modules/auth/server/session.store';
 import {
   validateCredentialsSignIn,
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       }
 
       // Avoid leaking whether account exists: return generic confirmation
+      clearAuthRateLimit(rateLimitKey);
       return NextResponse.json({
         success: true,
         message: `If an account exists for ${val.normalizedIdentifier}, a recovery code has been dispatched.`,
@@ -75,6 +77,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Unable to reset password. Please verify your details.' }, { status: 400 });
       }
 
+      clearAuthRateLimit(rateLimitKey);
       return NextResponse.json({
         success: true,
         message: 'Password successfully reset. You can now sign in with your new password.',
@@ -106,6 +109,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: regResult.error || 'Unable to create account.' }, { status: 409 });
       }
 
+      clearAuthRateLimit(rateLimitKey);
       const { cookieHeader } = createSession(regResult.user.id);
       const response = NextResponse.json({
         success: true,
@@ -139,6 +143,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: verifyResult.error || 'Invalid credentials.' }, { status: 401 });
     }
 
+    clearAuthRateLimit(rateLimitKey);
     const { cookieHeader } = createSession(verifyResult.user.id);
     const response = NextResponse.json({
       success: true,

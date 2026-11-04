@@ -316,7 +316,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (urlParams.get('auth_success') === 'google') {
                 showToast(`Welcome back, ${data.user.name}!`, 'success');
                 window.history.replaceState({}, document.title, window.location.pathname);
-                if (!userEntitlement?.isPremium) {
+                const hasPendingIntent = Boolean(sessionStorage.getItem('jn_pending_intent'));
+                if (!userEntitlement?.isPremium && !hasPendingIntent) {
                   setIsPremiumOfferOpen(true);
                 }
               }
@@ -534,7 +535,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // The Home page consumes and resumes apply intents so there is only one navigation path.
       if (expectedEpoch === authEpochRef.current) {
-        if (!userEntitlement?.isPremium) {
+        if (!userEntitlement?.isPremium && !action) {
           setIsPremiumOfferOpen(true);
         } else {
           setIsPremiumOfferOpen(false);

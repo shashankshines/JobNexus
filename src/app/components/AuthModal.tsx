@@ -83,6 +83,19 @@ export default function AuthModal() {
       setIsSubmitting(false);
       setIsGoogleLoading(false);
       setForgotStep('request');
+      setSignInPassword('');
+      setSignUpPassword('');
+      setSignUpConfirmPassword('');
+      setRecoveryCode('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } else {
+      setSignInPassword('');
+      setSignUpPassword('');
+      setSignUpConfirmPassword('');
+      setRecoveryCode('');
+      setNewPassword('');
+      setConfirmNewPassword('');
     }
   }, [isAuthModalOpen, authMode]);
 
@@ -130,7 +143,7 @@ export default function AuthModal() {
     }
 
     return () => cancelAnimationFrame(rafId);
-  }, [isAuthModalOpen, activeTab, error, successMessage, signUpPassword]);
+  }, [isAuthModalOpen, activeTab, error, successMessage, signUpPassword, signUpConfirmPassword]);
 
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
   const isGoogleOAuthConfigured = Boolean(
@@ -177,6 +190,7 @@ export default function AuthModal() {
   // Credentials Sign In handler
   const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
     setSuccessMessage(null);
 
@@ -203,6 +217,7 @@ export default function AuthModal() {
   // Credentials Sign Up handler
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
     setSuccessMessage(null);
 
@@ -237,6 +252,7 @@ export default function AuthModal() {
   // Forgot password request handler
   const handleForgotRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
     setSuccessMessage(null);
 
@@ -261,6 +277,7 @@ export default function AuthModal() {
   // Reset password execution handler
   const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
     setSuccessMessage(null);
 
@@ -765,9 +782,17 @@ export default function AuthModal() {
                           <input
                             id="signin-email"
                             type="text"
+                            name="username"
+                            autoComplete="username"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
                             required
                             value={signInEmail}
-                            onChange={(e) => setSignInEmail(e.target.value)}
+                            onChange={(e) => {
+                              setSignInEmail(e.target.value);
+                              if (error) setError(null);
+                            }}
                             placeholder="you@domain.com or username"
                             style={{
                               width: '100%',
@@ -807,9 +832,17 @@ export default function AuthModal() {
                             <input
                               id="signin-password"
                               type={showSignInPassword ? 'text' : 'password'}
+                              name="password"
+                              autoComplete="current-password"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
                               required
                               value={signInPassword}
-                              onChange={(e) => setSignInPassword(e.target.value)}
+                              onChange={(e) => {
+                                setSignInPassword(e.target.value);
+                                if (error) setError(null);
+                              }}
                               placeholder="••••••••"
                               style={{
                                 width: '100%',
@@ -893,8 +926,13 @@ export default function AuthModal() {
                           <input
                             id="signup-name"
                             type="text"
+                            name="name"
+                            autoComplete="name"
                             value={signUpName}
-                            onChange={(e) => setSignUpName(e.target.value)}
+                            onChange={(e) => {
+                              setSignUpName(e.target.value);
+                              if (error) setError(null);
+                            }}
                             placeholder="Alex Rivera"
                             style={{
                               width: '100%',
@@ -916,9 +954,17 @@ export default function AuthModal() {
                           <input
                             id="signup-email"
                             type="text"
+                            name="username"
+                            autoComplete="username"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
                             required
                             value={signUpEmail}
-                            onChange={(e) => setSignUpEmail(e.target.value)}
+                            onChange={(e) => {
+                              setSignUpEmail(e.target.value);
+                              if (error) setError(null);
+                            }}
                             placeholder="you@domain.com or username"
                             style={{
                               width: '100%',
@@ -941,9 +987,17 @@ export default function AuthModal() {
                             <input
                               id="signup-password"
                               type={showSignUpPassword ? 'text' : 'password'}
+                              name="new-password"
+                              autoComplete="new-password"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
                               required
                               value={signUpPassword}
-                              onChange={(e) => setSignUpPassword(e.target.value)}
+                              onChange={(e) => {
+                                setSignUpPassword(e.target.value);
+                                if (error) setError(null);
+                              }}
                               placeholder="••••••••"
                               style={{
                                 width: '100%',
@@ -1010,9 +1064,17 @@ export default function AuthModal() {
                             <input
                               id="signup-confirm-password"
                               type={showSignUpConfirmPassword ? 'text' : 'password'}
+                              name="confirm-password"
+                              autoComplete="new-password"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
                               required
                               value={signUpConfirmPassword}
-                              onChange={(e) => setSignUpConfirmPassword(e.target.value)}
+                              onChange={(e) => {
+                                setSignUpConfirmPassword(e.target.value);
+                                if (error) setError(null);
+                              }}
                               placeholder="••••••••"
                               style={{
                                 width: '100%',
@@ -1044,6 +1106,21 @@ export default function AuthModal() {
                               {showSignUpConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                             </button>
                           </div>
+                          {signUpConfirmPassword.length > 0 && (
+                            <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem' }}>
+                              {signUpPassword === signUpConfirmPassword ? (
+                                <>
+                                  <CheckCircle2 size={13} style={{ color: '#10b981', flexShrink: 0 }} />
+                                  <span style={{ color: '#10b981', fontWeight: 600 }}>Passwords match</span>
+                                </>
+                              ) : (
+                                <>
+                                  <AlertCircle size={13} style={{ color: '#ef4444', flexShrink: 0 }} />
+                                  <span style={{ color: '#ef4444', fontWeight: 500 }}>Passwords do not match yet</span>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <button
@@ -1092,9 +1169,17 @@ export default function AuthModal() {
                       <input
                         id="forgot-email"
                         type="text"
+                        name="email"
+                        autoComplete="email"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         required
                         value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
+                        onChange={(e) => {
+                          setForgotEmail(e.target.value);
+                          if (error) setError(null);
+                        }}
                         placeholder="you@domain.com"
                         style={{
                           width: '100%',
@@ -1139,10 +1224,17 @@ export default function AuthModal() {
                       <input
                         id="recovery-code"
                         type="text"
+                        name="one-time-code"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="one-time-code"
                         maxLength={6}
                         required
                         value={recoveryCode}
-                        onChange={(e) => setRecoveryCode(e.target.value)}
+                        onChange={(e) => {
+                          setRecoveryCode(e.target.value.replace(/[^0-9]/g, ''));
+                          if (error) setError(null);
+                        }}
                         placeholder="123456"
                         style={{
                           width: '100%',
@@ -1167,9 +1259,17 @@ export default function AuthModal() {
                         <input
                           id="reset-new-password"
                           type={showNewPassword ? 'text' : 'password'}
+                          name="new-password"
+                          autoComplete="new-password"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
                           required
                           value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
+                          onChange={(e) => {
+                            setNewPassword(e.target.value);
+                            if (error) setError(null);
+                          }}
                           placeholder="••••••••"
                           style={{
                             width: '100%',
@@ -1210,9 +1310,17 @@ export default function AuthModal() {
                         <input
                           id="reset-confirm-password"
                           type={showConfirmNewPassword ? 'text' : 'password'}
+                          name="confirm-password"
+                          autoComplete="new-password"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
                           required
                           value={confirmNewPassword}
-                          onChange={(e) => setConfirmNewPassword(e.target.value)}
+                          onChange={(e) => {
+                            setConfirmNewPassword(e.target.value);
+                            if (error) setError(null);
+                          }}
                           placeholder="••••••••"
                           style={{
                             width: '100%',
@@ -1243,6 +1351,21 @@ export default function AuthModal() {
                           {showConfirmNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
+                      {confirmNewPassword.length > 0 && (
+                        <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem' }}>
+                          {newPassword === confirmNewPassword ? (
+                            <>
+                              <CheckCircle2 size={13} style={{ color: '#10b981', flexShrink: 0 }} />
+                              <span style={{ color: '#10b981', fontWeight: 600 }}>Passwords match</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle size={13} style={{ color: '#ef4444', flexShrink: 0 }} />
+                              <span style={{ color: '#ef4444', fontWeight: 500 }}>Passwords do not match yet</span>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <button

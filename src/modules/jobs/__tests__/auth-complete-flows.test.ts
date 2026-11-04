@@ -198,6 +198,52 @@ describe('JobNexus — Complete Sign In, Sign Up, and Google Login Flow Test Sui
       assert.ok(data.error.includes('Too many attempts'));
       assert.ok(lastRes.headers.get('Retry-After'));
     });
+
+    it('strictly rejects credentials sign-in for accounts registered via Google and advises Google sign-in', async () => {
+      findOrCreateGoogleUser({
+        sub: 'google_user_sub_999',
+        email: 'google.only@gmail.com',
+        name: 'Google Explorer',
+        email_verified: true,
+      });
+
+      const req = createMockRequest('http://localhost:3000/api/auth/credentials', {
+        method: 'POST',
+        body: {
+          mode: 'signin',
+          usernameOrEmail: 'google.only@gmail.com',
+          password: 'AnyPasswordAttempt123!',
+        },
+      });
+
+      const res = await credentialsHandler(req);
+      assert.strictEqual(res.status, 401);
+      const data = await res.json();
+      assert.strictEqual(data.error, 'This account was registered with Google. Please use Continue with Google.');
+      assert.strictEqual(res.headers.get('set-cookie'), null);
+    });
+
+    it('clears rate limit count upon successful authentication so valid logins are never throttled', async () => {
+      registerCredentialsUser({
+        email: 'poweruser@jobnexus.io',
+        password: 'ValidPassword123!',
+      });
+
+      // User performs 10 consecutive successful sign-ins without being throttled
+      for (let i = 0; i < 10; i++) {
+        const req = createMockRequest('http://localhost:3000/api/auth/credentials', {
+          method: 'POST',
+          body: {
+            mode: 'signin',
+            usernameOrEmail: 'poweruser@jobnexus.io',
+            password: 'ValidPassword123!',
+          },
+          headers: { 'x-forwarded-for': '198.51.100.99' },
+        });
+        const res = await credentialsHandler(req);
+        assert.strictEqual(res.status, 200, `Sign-in ${i + 1} should succeed without 429`);
+      }
+    });
   });
 
   // =========================================================================
