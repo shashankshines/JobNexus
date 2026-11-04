@@ -274,6 +274,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/saved-jobs', {
         headers: { 'Cache-Control': 'no-cache' },
       });
+      if (res.status === 401 || res.status === 403) {
+        if (expectedEpoch === authEpochRef.current) {
+          setSavedJobs([]);
+        }
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (expectedEpoch === authEpochRef.current && Array.isArray(data.savedJobs)) {

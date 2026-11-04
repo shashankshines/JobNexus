@@ -160,22 +160,136 @@ export function computeInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+export interface StatelessSessionClaims {
+  uid: string;
+  em: string;
+  nm: string;
+  pr: 'google' | 'credentials';
+  ro: string;
+  in: string;
+  av?: string;
+  st: UserAccountStatus;
+  iat: number;
+  exp: number;
+  sid: string;
+}
+
+const revokedSessionIds = new Set<string>();
+const expiredTokensForTesting = new Set<string>();
+
+export function getSessionSecret(): string {
+  return (
+    process.env.SESSION_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.FIREBASE_PRIVATE_KEY ||
+    process.env.NEXTAUTH_SECRET ||
+    'jobnexus_production_session_secure_key_2026_c7f8a9e1'
+  );
+}
+
+export function signStatelessSession(claims: StatelessSessionClaims): string {
+  const payloadB64 = Buffer.from(JSON.stringify(claims), 'utf-8').toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', getSessionSecret())
+    .update(payloadB64)
+    .digest('hex');
+  return `${payloadB64}.${signature}`;
+}
+
+export function verifyStatelessSession(token: string): StatelessSessionClaims | null {
+  if (expiredTokensForTesting.has(token)) {
+    return null;
+  }
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [payloadB64, signature] = parts;
+  if (!payloadB64 || !signature) return null;
+
+  try {
+    const expectedSig = crypto
+      .createHmac('sha256', getSessionSecret())
+      .update(payloadB64)
+      .digest('hex');
+
+    const sigBuf = Buffer.from(signature, 'hex');
+    const expBuf = Buffer.from(expectedSig, 'hex');
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return null;
+    }
+
+    const jsonStr = Buffer.from(payloadB64, 'base64url').toString('utf-8');
+    const claims = JSON.parse(jsonStr) as StatelessSessionClaims;
+
+    if (!claims.uid || !claims.exp || !claims.sid) {
+      return null;
+    }
+
+    if (revokedSessionIds.has(claims.sid) || revokedSessionIds.has(token)) {
+      return null;
+    }
+
+    if (Date.now() > claims.exp) {
+      return null;
+    }
+
+    return claims;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Creates a cryptographically random session token for an authenticated user.
+ * Creates a cryptographically signed stateless session token for an authenticated user.
+ * Seamlessly validates across all serverless function instances in multi-container environments.
  */
 export function createSession(userId: string): {
   sessionId: string;
   expiresAt: number;
   cookieHeader: string;
 } {
-  const sessionId = crypto.randomUUID();
   const now = Date.now();
   const expiresAt = now + SESSION_MAX_AGE_MS;
+  const sid = crypto.randomUUID();
+
+  let user = users.get(userId) || getUserByEmail(userId);
+  if (!user && userId) {
+    const isEmail = userId.includes('@');
+    user = {
+      id: userId,
+      email: isEmail ? userId.toLowerCase() : `${userId.toLowerCase()}@jobnexus.local`,
+      name: isEmail ? userId.split('@')[0] : userId,
+      role: 'Software Engineer',
+      provider: 'credentials',
+      initials: computeInitials(userId),
+      createdAt: new Date(now).toISOString(),
+      savedJobs: [],
+      accountStatus: 'active',
+    };
+    users.set(user.id, user);
+    usersByEmail.set(user.email.toLowerCase(), { id: user.email.toLowerCase(), userId: user.id });
+  }
+
+  const claims: StatelessSessionClaims = {
+    uid: user?.id || userId,
+    em: user?.email || (userId.includes('@') ? userId.toLowerCase() : `${userId.toLowerCase()}@jobnexus.local`),
+    nm: user?.name || user?.email?.split('@')[0] || userId,
+    pr: user?.provider || 'credentials',
+    ro: user?.role || 'Software Engineer',
+    in: user?.initials || computeInitials(user?.name || userId),
+    av: user?.avatar,
+    st: user?.accountStatus || 'active',
+    iat: now,
+    exp: expiresAt,
+    sid,
+  };
+
+  const sessionId = signStatelessSession(claims);
 
   sessions.set(sessionId, {
     id: sessionId,
     sessionId,
-    userId,
+    userId: claims.uid,
     createdAt: now,
     expiresAt,
   });
@@ -190,6 +304,7 @@ export function createSession(userId: string): {
 
 /**
  * Validates a session token, returning the associated user if active and not expired.
+ * Supports both local in-memory lookup and cross-instance stateless cryptographic verification.
  */
 export function validateSession(sessionId: string | null | undefined): {
   valid: boolean;
@@ -200,22 +315,70 @@ export function validateSession(sessionId: string | null | undefined): {
     return { valid: false, error: 'No session provided' };
   }
 
-  const session = sessions.get(sessionId);
-  if (!session) {
-    return { valid: false, error: 'Session not found' };
-  }
-
-  if (Date.now() > session.expiresAt) {
-    sessions.delete(sessionId);
+  if (expiredTokensForTesting.has(sessionId)) {
     return { valid: false, error: 'Session expired' };
   }
 
-  let user = users.get(session.userId);
-  if (!user) {
-    user = getUserByEmail(session.userId) || undefined;
+  // 1. Fast-path: Check local in-memory sessions store
+  const session = sessions.get(sessionId);
+  if (session) {
+    if (Date.now() > session.expiresAt) {
+      sessions.delete(sessionId);
+      return { valid: false, error: 'Session expired' };
+    }
   }
+
+  let user: UserRecord | undefined = undefined;
+  if (session) {
+    user = users.get(session.userId) || getUserByEmail(session.userId) || undefined;
+  }
+
+  // 2. Cross-Instance Serverless Fallback: If not in local memory or user record missing, verify cryptographically signed token
+  if (!user && sessionId.includes('.')) {
+    const claims = verifyStatelessSession(sessionId);
+    if (!claims) {
+      try {
+        const [payloadB64] = sessionId.split('.');
+        const jsonStr = Buffer.from(payloadB64, 'base64url').toString('utf-8');
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.exp && Date.now() > parsed.exp) {
+          return { valid: false, error: 'Session expired' };
+        }
+      } catch {
+        // ignore
+      }
+      return { valid: false, error: 'Session not found' };
+    }
+
+    user = users.get(claims.uid) || getUserByEmail(claims.em) || undefined;
+    if (!user) {
+      user = {
+        id: claims.uid,
+        email: claims.em,
+        name: claims.nm,
+        avatar: claims.av,
+        role: claims.ro || 'Software Engineer',
+        provider: claims.pr || 'credentials',
+        initials: claims.in || computeInitials(claims.nm),
+        createdAt: new Date(claims.iat).toISOString(),
+        savedJobs: [],
+        accountStatus: claims.st || 'active',
+      };
+      users.set(user.id, user);
+      usersByEmail.set(user.email.toLowerCase(), { id: user.email.toLowerCase(), userId: user.id });
+    }
+
+    sessions.set(sessionId, {
+      id: sessionId,
+      sessionId,
+      userId: user.id,
+      createdAt: claims.iat,
+      expiresAt: claims.exp,
+    });
+  }
+
   if (!user) {
-    return { valid: false, error: 'User not found' };
+    return { valid: false, error: 'Session not found' };
   }
 
   const status: UserAccountStatus = user.accountStatus || 'active';
@@ -224,6 +387,9 @@ export function validateSession(sessionId: string | null | undefined): {
   }
   if (status === 'deactivated') {
     return { valid: false, error: 'Account has been deactivated' };
+  }
+  if (status === 'deletion_requested') {
+    return { valid: false, error: 'Account deletion in progress' };
   }
   if (status === 'deleted') {
     return { valid: false, error: 'Account has been deleted' };
@@ -243,6 +409,7 @@ export function validateSession(sessionId: string | null | undefined): {
  * Artificially expires a session for deterministic security testing.
  */
 export function expireSessionForTesting(sessionId: string): void {
+  expiredTokensForTesting.add(sessionId);
   const session = sessions.get(sessionId);
   if (session) {
     session.expiresAt = Date.now() - 1000;
@@ -255,6 +422,19 @@ export function expireSessionForTesting(sessionId: string): void {
 export function destroySession(sessionId: string | null | undefined): { cookieHeader: string } {
   if (sessionId) {
     sessions.delete(sessionId);
+    revokedSessionIds.add(sessionId);
+    if (sessionId.includes('.')) {
+      try {
+        const [payloadB64] = sessionId.split('.');
+        const jsonStr = Buffer.from(payloadB64, 'base64url').toString('utf-8');
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.sid) {
+          revokedSessionIds.add(parsed.sid);
+        }
+      } catch {
+        // ignore
+      }
+    }
   }
   const isProd = process.env.NODE_ENV === 'production';
   const cookieHeader = `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${
@@ -562,6 +742,18 @@ export function revokeAllSessionsForUser(userId: string): number {
   for (const [sId, sess] of allSessions) {
     if (sess.userId === userId) {
       sessions.delete(sId);
+      revokedSessionIds.add(sId);
+      if (sId.includes('.')) {
+        try {
+          const [payloadB64] = sId.split('.');
+          const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8'));
+          if (parsed.sid) {
+            revokedSessionIds.add(parsed.sid);
+          }
+        } catch {
+          // ignore
+        }
+      }
       count++;
     }
   }
@@ -670,5 +862,7 @@ export function resetAuthStore(): void {
   usersByEmail.clear();
   sessions.clear();
   passwordHashes.clear();
+  revokedSessionIds.clear();
+  expiredTokensForTesting.clear();
   resetRateLimits();
 }

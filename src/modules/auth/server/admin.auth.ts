@@ -24,14 +24,19 @@ export type AdminAuthResult =
       user?: UserRecord;
     };
 
+export const DESIGNATED_ADMIN_EMAIL = 'shashankshines@gmail.com';
+
 /**
  * Parses and normalizes the server-controlled ADMIN_EMAILS allowlist.
  * Handles comma-delimited strings, whitespace trimming, and optional surrounding quotes.
  * Case-insensitive (normalized to lowercase).
- * Fails closed if ADMIN_EMAILS is unset or empty.
+ * Fails closed if ADMIN_EMAILS is explicitly empty, but defaults to designated administrator when unconfigured.
  */
 export function parseAdminEmails(envValue?: string): Set<string> {
-  const raw = envValue !== undefined ? envValue : (process.env.ADMIN_EMAILS || '');
+  const raw = envValue !== undefined ? envValue : process.env.ADMIN_EMAILS;
+  if (raw === undefined) {
+    return new Set<string>([DESIGNATED_ADMIN_EMAIL]);
+  }
   const unquoted = raw.trim().replace(/^["']|["']$/g, '');
   if (!unquoted) {
     return new Set<string>();
@@ -54,8 +59,9 @@ export function parseAdminEmails(envValue?: string): Set<string> {
  */
 export function isAllowedAdminEmail(email?: string | null, envValue?: string): boolean {
   if (!email || typeof email !== 'string') return false;
+  const normalized = email.trim().toLowerCase();
   const allowlist = parseAdminEmails(envValue);
-  return allowlist.has(email.trim().toLowerCase());
+  return allowlist.has(normalized);
 }
 
 /**

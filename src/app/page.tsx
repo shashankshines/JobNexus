@@ -682,10 +682,25 @@ export default function Home() {
     }
 
     let isMounted = true;
+    let isPollingStopped = false;
+    let intervalId: number | undefined = undefined;
+
     const pollAdminApprovals = async () => {
+      if (!isMounted || isPollingStopped) return;
       try {
         const res = await fetch('/api/admin/overview', { cache: 'no-store' });
-        if (!res.ok || !isMounted) return;
+        if (!isMounted) return;
+        if (res.status === 401 || res.status === 403) {
+          isPollingStopped = true;
+          if (intervalId !== undefined) {
+            window.clearInterval(intervalId);
+          }
+          setAdminPendingCount(0);
+          setAdminSlaBreachCount(0);
+          setAdminPendingPreview([]);
+          return;
+        }
+        if (!res.ok) return;
         const data = await res.json();
         if (!isMounted || !data?.success || !data?.metrics) return;
 
@@ -716,12 +731,14 @@ export default function Home() {
     };
 
     void pollAdminApprovals();
-    const intervalId = window.setInterval(pollAdminApprovals, 45_000);
+    intervalId = window.setInterval(pollAdminApprovals, 45_000);
     const handleFocus = () => {
-      void pollAdminApprovals();
+      if (!isPollingStopped) {
+        void pollAdminApprovals();
+      }
     };
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !isPollingStopped) {
         void pollAdminApprovals();
       }
     };
@@ -730,7 +747,9 @@ export default function Home() {
 
     return () => {
       isMounted = false;
-      window.clearInterval(intervalId);
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+      }
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
