@@ -13,7 +13,7 @@ import {
   evaluateRenewalWindow,
   isAdministrativelyRestrictedSubscription,
 } from '@/modules/billing/domain/renewal-window';
-import { createAdminNotification } from '@/modules/notifications/admin-notifications.service';
+import { createAdminNotificationWithRecovery } from '@/modules/notifications/admin-notifications.service';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const sessionId = extractSessionId(request);
@@ -145,21 +145,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         userId: auth.user.id,
         userEmail: auth.user.email,
       });
-      try {
-        await createAdminNotification({
-          eventKey: `premium_order_created_${newOrder.orderId}`,
-          type: 'premium_order_created',
-          title: 'New Premium checkout started',
-          message: `${auth.user.name || auth.user.email || 'A user'} created a ₹${newOrder.amountInr} Premium payment order. Awaiting UPI payment reference.`,
-          actionLabel: 'View payment queue',
-          actionUrl: '/admin?tab=ledger',
-          userId: auth.user.id,
-          userEmail: auth.user.email,
-          orderId: newOrder.orderId,
-        });
-      } catch (notificationError) {
-        console.error('[BillingOrder] Admin notification persistence failed:', notificationError);
-      }
+      await createAdminNotificationWithRecovery({
+        eventKey: `premium_order_created_${newOrder.orderId}`,
+        type: 'premium_order_created',
+        title: 'New Premium checkout started',
+        message: `${auth.user.name || auth.user.email || 'A user'} created a ₹${newOrder.amountInr} Premium payment order. Awaiting UPI payment reference.`,
+        actionLabel: 'View payment queue',
+        actionUrl: '/admin?tab=ledger',
+        userId: auth.user.id,
+        userEmail: auth.user.email,
+        orderId: newOrder.orderId,
+      });
       return NextResponse.json(
         {
           success: true,

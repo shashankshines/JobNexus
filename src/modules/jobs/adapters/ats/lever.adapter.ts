@@ -15,6 +15,7 @@ import {
   globalEmployerRegistry,
   isValidEmployerSlug,
 } from '../../providers/employer.registry';
+import { executeSettledWithConcurrencyLimit } from '../../services/concurrency';
 
 export interface LeverPostingRaw {
   id: string;
@@ -57,8 +58,9 @@ export class LeverAdapter implements JobProvider {
     const employers = this.getActiveEmployers();
     const allJobs: NormalizedJob[] = [];
 
-    const results = await Promise.allSettled(
-      employers.map((emp) => this.fetchBoardJobs(emp, params?.signal))
+    const results = await executeSettledWithConcurrencyLimit(
+      employers.map((emp) => () => this.fetchBoardJobs(emp, params?.signal)),
+      6
     );
 
     for (const res of results) {

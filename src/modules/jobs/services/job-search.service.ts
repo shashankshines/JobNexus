@@ -20,6 +20,7 @@ import {
   normalizeIndustryFilter,
   resolveJobIndustry,
 } from '../domain/job.taxonomy';
+import { executeWithConcurrencyLimit } from './concurrency';
 
 interface CachedSearchResult {
   response: JobSearchResponse;
@@ -197,7 +198,7 @@ export class JobSearchService {
     const diagnostics: ProviderDiagnostic[] = [];
     const allJobs: NormalizedJob[] = [];
 
-    const fetchPromises = this.providers.map(async (provider) => {
+    const providerTasks = this.providers.map((provider) => async () => {
       const startTime = Date.now();
       // Cap provider timeout to 6000ms max so that multi-board ATS adapters (Greenhouse, Ashby, Lever)
       // have sufficient time to complete aggregation across all employer boards, avoiding premature drop-offs.
@@ -282,9 +283,11 @@ export class JobSearchService {
       }
     });
 
-    const results = await Promise.all(fetchPromises);
+    const results = await executeWithConcurrencyLimit(providerTasks, 8);
     for (const jobBatch of results) {
-      allJobs.push(...jobBatch);
+      if (Array.isArray(jobBatch)) {
+        allJobs.push(...jobBatch);
+      }
     }
 
     // Resolve every provider value to the shared taxonomy before filtering.

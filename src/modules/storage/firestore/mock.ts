@@ -35,6 +35,8 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
 
     collection: (collectionName: string) => {
       const colData = store.getCollectionData(collectionName);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let colRef: any;
 
       interface OrderSpec {
         field: string;
@@ -140,16 +142,36 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
               (d) =>
                 ({
                   id: d.id,
+                  ref: colRef.doc(d.id),
                   data: () => ({ ...d }),
                 } as unknown as DocumentSnapshot)
             ),
           } as unknown as QuerySnapshot;
         },
+        onSnapshot: (onNext: (snapshot: unknown) => void, onError?: (err: Error) => void) => {
+          void Promise.resolve().then(async () => {
+            try {
+              const queryObj = makeQuery(predicate, limitCount, offsetCount, orderings, startAfterValues);
+              const snap = await queryObj.get();
+              onNext({
+                ...snap,
+                docChanges: () =>
+                  snap.docs.map((d: DocumentSnapshot) => ({
+                    type: 'added',
+                    doc: d,
+                  })),
+              });
+            } catch (e) {
+              if (onError) onError(e as Error);
+            }
+          });
+          return () => {};
+        },
       });
 
       const rootQuery = makeQuery();
 
-      const colRef = {
+      colRef = {
         id: collectionName,
 
         doc: (docId?: string) => {
@@ -167,6 +189,17 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
                 ref: docRef as unknown as DocumentReference,
                 data: () => (data ? { ...data } : undefined),
               } as unknown as DocumentSnapshot;
+            },
+
+            create: async (data: DocumentData): Promise<unknown> => {
+              const existing = colData.get(id);
+              if (existing !== undefined) {
+                const err = new Error(`ALREADY_EXISTS: Document ${collectionName}/${id} already exists.`);
+                (err as { code?: number }).code = 6;
+                throw err;
+              }
+              colData.set(id, { ...data });
+              return { writeTime: new Date() };
             },
 
             set: async (data: DocumentData, options?: { merge?: boolean }): Promise<unknown> => {
@@ -204,6 +237,7 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
         offset: rootQuery.offset,
         count: rootQuery.count,
         get: rootQuery.get,
+        onSnapshot: rootQuery.onSnapshot,
       };
 
       return colRef as unknown as CollectionReference;
@@ -280,6 +314,47 @@ export function createMockFirestoreDb(store = new InMemoryFirestoreStore()): Fir
       }
 
       return result;
+    },
+
+    batch: () => {
+      const operations: Array<() => void> = [];
+      const batchObj = {
+        set: (ref: DocumentReference, data: DocumentData, options?: { merge?: boolean }) => {
+          operations.push(() => {
+            const colName = ref.path.split('/')[0];
+            const colData = store.getCollectionData(colName);
+            if (options?.merge) {
+              const existing = colData.get(ref.id) || {};
+              colData.set(ref.id, { ...existing, ...data });
+            } else {
+              colData.set(ref.id, { ...data });
+            }
+          });
+          return batchObj;
+        },
+        update: (ref: DocumentReference, data: DocumentData) => {
+          operations.push(() => {
+            const colName = ref.path.split('/')[0];
+            const colData = store.getCollectionData(colName);
+            const existing = colData.get(ref.id) || {};
+            colData.set(ref.id, { ...existing, ...data });
+          });
+          return batchObj;
+        },
+        delete: (ref: DocumentReference) => {
+          operations.push(() => {
+            const colName = ref.path.split('/')[0];
+            const colData = store.getCollectionData(colName);
+            colData.delete(ref.id);
+          });
+          return batchObj;
+        },
+        commit: async () => {
+          for (const op of operations) op();
+          return [];
+        },
+      };
+      return batchObj;
     },
   };
 

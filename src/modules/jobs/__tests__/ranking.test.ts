@@ -128,6 +128,33 @@ describe('Job Ranking & Filtering Unit Tests', () => {
     const resultsLevel = filterAndRankJobs([leadJob, internJob], { level: 'lead' });
     assert.strictEqual(resultsLevel.length, 1);
     assert.strictEqual(resultsLevel[0].id, 'lead-job');
+
+    const apprenticeJob = makeJob({
+      id: 'apprentice-job',
+      title: 'Plumbing Apprentice',
+      employmentType: 'Apprenticeship',
+    });
+    const traineeJob = makeJob({
+      id: 'trainee-job',
+      title: 'Graduate Trainee Engineer',
+      employmentType: 'Trainee / Fresher',
+    });
+    const freelanceJob = makeJob({
+      id: 'freelance-job',
+      title: 'Freelance Technical Writer',
+      employmentType: 'Freelance',
+    });
+    const tempJob = makeJob({
+      id: 'temp-job',
+      title: 'Temporary Data Entry Clerk',
+      employmentType: 'Temporary',
+    });
+
+    const pool = [leadJob, internJob, apprenticeJob, traineeJob, freelanceJob, tempJob];
+    assert.strictEqual(filterAndRankJobs(pool, { type: 'apprenticeship' })[0]?.id, 'apprentice-job');
+    assert.strictEqual(filterAndRankJobs(pool, { type: 'trainee' })[0]?.id, 'trainee-job');
+    assert.strictEqual(filterAndRankJobs(pool, { type: 'freelance' })[0]?.id, 'freelance-job');
+    assert.strictEqual(filterAndRankJobs(pool, { type: 'temporary' })[0]?.id, 'temp-job');
   });
 
   it('applies freshness boost to recently published jobs', () => {

@@ -66,6 +66,7 @@ interface ActionMenuState {
   bottom?: number;
   right: number;
   placement: 'top' | 'bottom';
+  maxHeight?: number;
 }
 
 export function UsersDirectoryView({
@@ -124,12 +125,12 @@ export function UsersDirectoryView({
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
 
-    // Open upward if space below is limited OR row is near the bottom of the table,
-    // provided there is sufficient room above (or more room above than below).
+    // Prefer opening upward if the row is near the bottom of the table or space below is tight,
+    // as long as there is reasonable room above.
     const isNearBottom = users.length >= 2 ? index >= users.length - 2 : false;
     const shouldOpenUp =
-      (spaceBelow < menuHeight + 20 || isNearBottom) &&
-      (spaceAbove >= menuHeight || spaceAbove > spaceBelow);
+      (isNearBottom || spaceBelow < menuHeight + 20) &&
+      (spaceAbove >= 120 || spaceAbove > spaceBelow);
 
     const right = Math.max(12, window.innerWidth - rect.right);
 
@@ -139,6 +140,7 @@ export function UsersDirectoryView({
         bottom: window.innerHeight - rect.top + 6,
         right,
         placement: 'top',
+        maxHeight: Math.min(320, Math.max(140, spaceAbove - 16)),
       });
     } else {
       setActionMenu({
@@ -146,6 +148,7 @@ export function UsersDirectoryView({
         top: rect.bottom + 6,
         right,
         placement: 'bottom',
+        maxHeight: Math.min(320, Math.max(140, spaceBelow - 16)),
       });
     }
   };
@@ -1576,6 +1579,8 @@ export function UsersDirectoryView({
               top: actionMenu.top !== undefined ? `${actionMenu.top}px` : 'auto',
               bottom: actionMenu.bottom !== undefined ? `${actionMenu.bottom}px` : 'auto',
               right: `${actionMenu.right}px`,
+              maxHeight: actionMenu.maxHeight ? `${actionMenu.maxHeight}px` : 'calc(100vh - 24px)',
+              overflowY: 'auto',
               zIndex: 9999,
               margin: 0,
             }}

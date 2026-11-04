@@ -8,6 +8,7 @@ import { WeWorkRemotelyAdapter } from '../adapters/weworkremotely/weworkremotely
 import { GreenhouseAdapter } from '../adapters/ats/greenhouse.adapter';
 import { AshbyAdapter } from '../adapters/ats/ashby.adapter';
 import { LeverAdapter } from '../adapters/ats/lever.adapter';
+import { SmartRecruitersAdapter } from '../adapters/ats/smartrecruiters.adapter';
 import { NcsAdapter } from '../adapters/ncs/ncs.adapter';
 import { TeachingAdapter } from '../adapters/teaching/teaching.adapter';
 import { ReliefWebAdapter } from '../adapters/reliefweb/reliefweb.adapter';
@@ -23,6 +24,7 @@ export class ProviderRegistry {
     new GreenhouseAdapter(),
     new AshbyAdapter(),
     new LeverAdapter(),
+    new SmartRecruitersAdapter(),
     new NcsAdapter(),
     new TeachingAdapter(),
     new ReliefWebAdapter(),

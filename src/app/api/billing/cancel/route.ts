@@ -9,7 +9,7 @@ import {
   saveFirestoreSubscription,
 } from '@/modules/storage/firestore/subscription.store';
 import type { SubscriptionRecord } from '@/modules/billing/domain/subscription.types';
-import { createAdminNotification } from '@/modules/notifications/admin-notifications.service';
+import { createAdminNotificationWithRecovery } from '@/modules/notifications/admin-notifications.service';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -69,20 +69,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    try {
-      await createAdminNotification({
-        eventKey: `subscription_cancel_requested_${auth.user.id}_${now}`,
-        type: 'subscription_cancel_requested',
-        title: 'Premium cancellation requested',
-        message: `${auth.user.name || auth.user.email || 'A user'} scheduled Premium cancellation at the end of the current billing period.`,
-        actionLabel: 'Review subscription',
-        actionUrl: '/admin?tab=subscriptions',
-        userId: auth.user.id,
-        userEmail: auth.user.email,
-      });
-    } catch (notificationError) {
-      console.error('[BillingCancel] Admin notification persistence failed:', notificationError);
-    }
+    await createAdminNotificationWithRecovery({
+      eventKey: `subscription_cancel_requested_${auth.user.id}_${now}`,
+      type: 'subscription_cancel_requested',
+      title: 'Premium cancellation requested',
+      message: `${auth.user.name || auth.user.email || 'A user'} scheduled Premium cancellation at the end of the current billing period.`,
+      actionLabel: 'Review subscription',
+      actionUrl: '/admin?tab=subscriptions',
+      userId: auth.user.id,
+      userEmail: auth.user.email,
+    });
 
     const entitlement = await getAuthoritativeUserEntitlement(auth.user.id);
 

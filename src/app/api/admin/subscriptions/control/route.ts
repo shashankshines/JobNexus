@@ -10,6 +10,10 @@ import {
   MandatoryReasonMissingError,
 } from '@/modules/storage/firestore/admin-billing.store';
 import { getUserByEmail } from '@/modules/auth/server/session.store';
+import {
+  createAdminNotificationWithRecovery,
+  AdminNotificationType,
+} from '@/modules/notifications/admin-notifications.service';
 
 /**
  * POST /api/admin/subscriptions/control
@@ -141,6 +145,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           },
           { status: 400 }
         );
+    }
+
+    const notifTypeMap: Record<string, AdminNotificationType> = {
+      suspend: 'subscription_suspended',
+      reinstate: 'subscription_reinstated',
+      terminate: 'subscription_terminated',
+      revoke: 'subscription_revoked',
+    };
+    if (notifTypeMap[action]) {
+      const stableKeyTimestamp = result.updatedAt || new Date().toISOString();
+      await createAdminNotificationWithRecovery({
+        eventKey: `sub_${action}_${targetUserId}_${stableKeyTimestamp}`,
+        type: notifTypeMap[action],
+        priority: action === 'revoke' ? 'critical' : 'normal',
+        status: 'resolved',
+        title: `Subscription ${action.charAt(0).toUpperCase() + action.slice(1)}d`,
+        message: `Subscription for user "${targetUserId}" was ${action}d. Reason: ${reason}`,
+        actionLabel: 'View User',
+        actionUrl: `/admin?tab=users&userId=${encodeURIComponent(targetUserId)}`,
+        userId: targetUserId,
+        targetUserId,
+        actorUserId: auth.adminUserId,
+        actorEmail: auth.adminEmail,
+        metadata: { action, reason },
+      });
     }
 
     return NextResponse.json({

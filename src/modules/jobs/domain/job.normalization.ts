@@ -15,80 +15,23 @@ const TRACKING_PARAMS = new Set([
   '_hsmi',
 ]);
 
-const INDIAN_HUBS = [
-  'india',
-  'bharat',
-  'bangalore',
-  'bengaluru',
-  'delhi',
-  'new delhi',
-  'ncr',
-  'mumbai',
-  'bombay',
-  'pune',
-  'hyderabad',
-  'chennai',
-  'madras',
-  'noida',
-  'greater noida',
-  'gurgaon',
-  'gurugram',
-  'kolkata',
-  'calcutta',
-  'ahmedabad',
-  'thiruvananthapuram',
-  'trivandrum',
-  'kochi',
-  'cochin',
-  'chandigarh',
-  'mohali',
-  'panchkula',
-  'jaipur',
-  'indore',
-  'lucknow',
-  'nagpur',
-  'bhubaneswar',
-  'bhubaneshwar',
-  'patna',
-  'bhopal',
-  'visakhapatnam',
-  'vizag',
-  'coimbatore',
-  'vadodara',
-  'baroda',
-  'mysore',
-  'mysuru',
-  'surat',
-  'faridabad',
-  'ghaziabad',
-  'navi mumbai',
-  'thane',
-  'secunderabad',
-  'mangalore',
-  'mangaluru',
-  'dehradun',
-  'nashik',
-  'nasik',
-  'guwahati',
-  'raipur',
-  'ranchi',
-  'kanpur',
-  'varanasi',
-  'amritsar',
-  'ludhiana',
-  'jalandhar',
-  'madurai',
-  'trichy',
-  'tiruchirappalli',
-  'vijayawada',
-  'guntur',
-  'hubli',
-  'dharwad',
-  'belgaum',
-  'belagavi',
-  'aurangabad',
-  'chhatrapati sambhajinagar',
-];
+import {
+  INDIAN_HUBS,
+  classifyWorkplace,
+  PrimaryWorkplaceType,
+  RemoteEligibilityType,
+  WorkplaceClassification,
+} from './workplace.classification';
+
+export {
+  INDIAN_HUBS,
+  classifyWorkplace,
+};
+export type {
+  PrimaryWorkplaceType,
+  RemoteEligibilityType,
+  WorkplaceClassification,
+};
 
 export function isValidHttpUrl(url: unknown): boolean {
   if (typeof url !== 'string' || !url.trim()) return false;
@@ -168,47 +111,33 @@ export function normalizeDate(dateInput: unknown): string {
   return new Date().toISOString();
 }
 
-export function normalizeLocation(rawLocation?: string): {
+export function normalizeLocation(
+  rawLocation?: string,
+  rawDescription?: string,
+  explicitIsRemote?: boolean,
+  rawWorkplaceType?: string
+): {
   location: string;
   isRemote: boolean;
   isIndiaEligible: boolean;
   workplaceType: 'remote' | 'hybrid' | 'onsite' | 'unknown';
+  primaryType: PrimaryWorkplaceType;
+  remoteEligibility: RemoteEligibilityType;
 } {
-  const clean = (rawLocation || '').trim();
-  const lower = clean.toLowerCase();
-
-  const isHybrid = lower.includes('hybrid') || lower.includes('partially remote');
-  const isRemote =
-    !isHybrid &&
-    (lower.includes('remote') ||
-      lower.includes('anywhere') ||
-      lower.includes('worldwide') ||
-      lower.includes('global') ||
-      lower.includes('telecommute') ||
-      lower.includes('distributed') ||
-      lower.includes('work from home'));
-  const isIndiaDirect = INDIAN_HUBS.some((hub) => lower.includes(hub));
-  const isWorldwideRemote =
-    lower.includes('anywhere in the world') ||
-    lower.includes('worldwide') ||
-    lower.includes('global') ||
-    lower.includes('remote worldwide');
-
-  const isIndiaEligible = isIndiaDirect || isWorldwideRemote;
-
-  const workplaceType: 'remote' | 'hybrid' | 'onsite' | 'unknown' = !clean
-    ? 'unknown'
-    : isHybrid
-    ? 'hybrid'
-    : isRemote
-    ? 'remote'
-    : 'onsite';
+  const result = classifyWorkplace(
+    rawLocation,
+    rawDescription,
+    explicitIsRemote,
+    rawWorkplaceType
+  );
 
   return {
-    location: clean || 'Location not provided',
-    isRemote,
-    isIndiaEligible,
-    workplaceType,
+    location: result.normalizedLocation,
+    isRemote: result.isRemote,
+    isIndiaEligible: result.isIndiaEligible,
+    workplaceType: result.workplaceType,
+    primaryType: result.primaryType,
+    remoteEligibility: result.remoteEligibility,
   };
 }
 
@@ -226,10 +155,11 @@ export function normalizeEmploymentType(rawType?: unknown): string {
   const lower = str.toLowerCase();
   if (lower.includes('apprentice')) return 'Apprenticeship';
   if (lower.includes('intern')) return 'Internship';
-  if (lower.includes('trainee') || lower.includes('fresher')) return 'Trainee / Fresher';
+  if (lower.includes('trainee') || lower.includes('fresher') || lower.includes('graduate trainee')) return 'Trainee / Fresher';
+  if (lower.includes('freelance')) return 'Freelance';
   if (lower.includes('part') || lower.includes('part-time')) return 'Part Time';
-  if (lower.includes('contract') || lower.includes('freelance') || lower.includes('consult'))
-    return 'Contract';
+  if (lower.includes('temporary') || lower.includes('temp')) return 'Temporary';
+  if (lower.includes('contract') || lower.includes('consult')) return 'Contract';
   return 'Full Time';
 }
 
