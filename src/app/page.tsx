@@ -3229,19 +3229,15 @@ export default function Home() {
           >
             <Sparkles size={14} className="hero-ats-badge-icon" />
             <span className="hero-ats-badge-accent">
-              {pendingSearchCriteria
-                ? `Updating: ${getSearchCriteriaSummary(pendingSearchCriteria) || 'All Industries'}`
-                : searched
-                  ? searchError && failedSearch ? 'Search unavailable' : `${matchingCount.toLocaleString()} Matching Jobs`
-                  : globalInventorySummary}
+              {searched
+                ? searchError && failedSearch ? 'Search unavailable' : `${matchingCount.toLocaleString()} Matching Jobs`
+                : globalInventorySummary}
             </span>
             <span className="hero-ats-badge-bullet">•</span>
             <span className="hero-ats-badge-secondary">
-              {pendingSearchCriteria
-                ? `Last applied: ${getSearchCriteriaSummary(appliedSearchCriteria) || 'All Industries'}`
-                : searched
-                  ? searchError && failedSearch ? 'Search could not be completed' : `${displayedJobs.length.toLocaleString()} Loaded · ${globalInventorySummary}`
-                  : `${sourcesCount || '—'} Configured Public Sources`}
+              {searched
+                ? searchError && failedSearch ? 'Search could not be completed' : `${displayedJobs.length.toLocaleString()} Loaded · ${globalInventorySummary}`
+                : `${sourcesCount || '—'} Configured Public Sources`}
             </span>
           </motion.div>
 
@@ -5593,45 +5589,6 @@ export default function Home() {
                 >
                   {isLoadingMore ? 'Retrying…' : 'Retry loading more'}
                 </button>
-              )}
-            </div>
-          )}
-
-          {(pendingSearchCriteria || inventoryStatsError || (hasUnappliedDraft && !searchError) || (searchTruncated && !pendingSearchCriteria && !searchError)) && (
-            <div
-              role="status"
-              aria-live="polite"
-              style={{
-                marginBottom: '0.85rem',
-                padding: '0.75rem 1rem',
-                borderRadius: '0.75rem',
-                border: '1px solid rgba(99, 102, 241, 0.25)',
-                background: 'rgba(99, 102, 241, 0.08)',
-                color: 'var(--text-secondary)',
-                fontSize: '0.86rem',
-              }}
-            >
-              {pendingSearchCriteria && (
-                <p style={{ margin: 0 }}>
-                  Updating results for {getSearchCriteriaSummary(pendingSearchCriteria) || 'all industries'}.
-                  {jobs.length > 0 && ` Previous results for ${getSearchCriteriaSummary(appliedSearchCriteria) || 'all industries'} are hidden until this search finishes.`}
-                </p>
-              )}
-              {hasUnappliedDraft && !pendingSearchCriteria && !searchError && (
-                <p style={{ margin: 0 }}>
-                  Draft filters are not applied. The results below still use {getSearchCriteriaSummary(appliedSearchCriteria) || 'all industries'}.
-                  Press Search Jobs to apply the selected controls.
-                </p>
-              )}
-              {searchTruncated && !pendingSearchCriteria && !searchError && (
-                <p style={{ margin: searchError || pendingSearchCriteria ? '0.35rem 0 0' : 0 }}>
-                  {matchingCount.toLocaleString()} matching jobs in this search; {displayedJobs.length.toLocaleString()} are loaded. Scroll or choose “Load more” to continue.
-                </p>
-              )}
-              {inventoryStatsError && (
-                <p style={{ margin: '0.35rem 0 0' }}>
-                  {globalInventorySummary}
-                </p>
               )}
             </div>
           )}
