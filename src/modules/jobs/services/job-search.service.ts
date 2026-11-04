@@ -343,125 +343,8 @@ export class JobSearchService {
       return this.customInFlightPromise;
     }
 
-    if (params.forceRefresh) {
-      if (JobSearchService.inFlightFetchPromise) {
-        return JobSearchService.inFlightFetchPromise;
-      }
-
-      JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
-        .then(({ allJobs, diagnostics }) => {
-          JobSearchService.cachedRawJobs = allJobs;
-          JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
-          JobSearchService.cachedDiagnostics = diagnostics;
-          JobSearchService.cacheTimestamp = Date.now();
-          JobSearchService.searchCache.clear();
-          JobSearchService.rankedQueryCache.clear();
-          globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
-          JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
-          return { allJobs: [...allJobs], diagnostics };
-        })
-        .finally(() => {
-          JobSearchService.inFlightFetchPromise = null;
-        });
-
-      return JobSearchService.inFlightFetchPromise;
-    }
-
-    const now = Date.now();
-
-    // 1. Fresh cache hit: Return immediately in 0ms!
-    if (
-      JobSearchService.cachedRawJobs &&
-      now - JobSearchService.cacheTimestamp < JobSearchService.CACHE_TTL_MS
-    ) {
-      return {
-        allJobs: [...JobSearchService.cachedRawJobs],
-        diagnostics: JobSearchService.cachedDiagnostics || [],
-      };
-    }
-
-    // 2. Stale-while-revalidate: If we have cached jobs that are older than TTL,
-    // return them immediately so the user never waits on slow external APIs,
-    // while refreshing in the background!
-    if (JobSearchService.cachedRawJobs && JobSearchService.cachedRawJobs.length > 0) {
-      if (!JobSearchService.inFlightFetchPromise) {
-        JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
-          .then(({ allJobs, diagnostics }) => {
-            JobSearchService.cachedRawJobs = allJobs;
-            JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
-            JobSearchService.cachedDiagnostics = diagnostics;
-            JobSearchService.cacheTimestamp = Date.now();
-            JobSearchService.searchCache.clear();
-            JobSearchService.rankedQueryCache.clear();
-            globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
-            JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
-            return { allJobs, diagnostics };
-          })
-          .catch((err) => {
-            console.error('[JobSearchService] Background refresh failed:', err);
-            return {
-              allJobs: JobSearchService.cachedRawJobs || [],
-              diagnostics: JobSearchService.cachedDiagnostics || [],
-            };
-          })
-          .finally(() => {
-            JobSearchService.inFlightFetchPromise = null;
-          });
-      }
-
-      return {
-        allJobs: [...JobSearchService.cachedRawJobs],
-        diagnostics: JobSearchService.cachedDiagnostics || [],
-      };
-    }
-
-    // 3. Cold start with persistent disk snapshot: Load in <50ms, revalidate asynchronously
-    const diskSnapshot = JobSearchService.loadDiskSnapshot();
-    if (diskSnapshot && diskSnapshot.allJobs.length > 0) {
-      JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
-      JobSearchService.cachedUniqueJobs = deduplicateJobs(diskSnapshot.allJobs);
-      JobSearchService.cachedDiagnostics = diskSnapshot.diagnostics || [];
-      JobSearchService.cacheTimestamp = diskSnapshot.timestamp || Date.now();
-
-      // Trigger background revalidation without blocking this user request
-      if (!JobSearchService.inFlightFetchPromise) {
-        JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
-          .then(({ allJobs, diagnostics }) => {
-            JobSearchService.cachedRawJobs = allJobs;
-            JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
-            JobSearchService.cachedDiagnostics = diagnostics;
-            JobSearchService.cacheTimestamp = Date.now();
-            JobSearchService.searchCache.clear();
-            JobSearchService.rankedQueryCache.clear();
-            globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
-            JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
-            return { allJobs, diagnostics };
-          })
-          .catch((err) => {
-            console.error('[JobSearchService] Background refresh failed:', err);
-            return {
-              allJobs: JobSearchService.cachedRawJobs || [],
-              diagnostics: JobSearchService.cachedDiagnostics || [],
-            };
-          })
-          .finally(() => {
-            JobSearchService.inFlightFetchPromise = null;
-          });
-      }
-
-      return {
-        allJobs: [...JobSearchService.cachedRawJobs],
-        diagnostics: JobSearchService.cachedDiagnostics || [],
-      };
-    }
-
-    // 4. Cold start without disk snapshot: Fetch from providers, sharing promise among concurrent requests.
-    if (JobSearchService.inFlightFetchPromise) {
-      return JobSearchService.inFlightFetchPromise;
-    }
-
-    JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
-      .then(({ allJobs, diagnostics }) => {
+    const commitSuccessfulJobs = (allJobs: NormalizedJob[], diagnostics: ProviderDiagnostic[]) => {
+      if (Array.isArray(allJobs) && allJobs.length > 0) {
         JobSearchService.cachedRawJobs = allJobs;
         JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
         JobSearchService.cachedDiagnostics = diagnostics;
@@ -470,7 +353,98 @@ export class JobSearchService {
         JobSearchService.rankedQueryCache.clear();
         globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
         JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
-        return { allJobs: [...allJobs], diagnostics };
+      } else {
+        console.warn(
+          `[JobNexus] Provider fetch yielded 0 jobs; retaining healthy snapshot of ${JobSearchService.cachedRawJobs?.length || 0} jobs.`
+        );
+      }
+    };
+
+    if (params.forceRefresh) {
+      if (JobSearchService.inFlightFetchPromise) {
+        return JobSearchService.inFlightFetchPromise;
+      }
+
+      JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
+        .then(({ allJobs, diagnostics }) => {
+          commitSuccessfulJobs(allJobs, diagnostics);
+          return { allJobs: [...(JobSearchService.cachedRawJobs || allJobs)], diagnostics };
+        })
+        .finally(() => {
+          JobSearchService.inFlightFetchPromise = null;
+        });
+
+      return JobSearchService.inFlightFetchPromise;
+    }
+
+    // Ensure memory cache is always populated from disk/bundled seed snapshot if available
+    if (!JobSearchService.cachedRawJobs || JobSearchService.cachedRawJobs.length === 0) {
+      const diskSnapshot = JobSearchService.loadDiskSnapshot();
+      if (diskSnapshot && diskSnapshot.allJobs.length > 0) {
+        JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
+        JobSearchService.cachedUniqueJobs = deduplicateJobs(diskSnapshot.allJobs);
+        JobSearchService.cachedDiagnostics = diskSnapshot.diagnostics || [];
+        JobSearchService.cacheTimestamp = diskSnapshot.timestamp || Date.now();
+      }
+    }
+
+    const now = Date.now();
+
+    // 1. Fresh cache hit: Return immediately in 0ms!
+    if (
+      JobSearchService.cachedRawJobs &&
+      JobSearchService.cachedRawJobs.length > 0 &&
+      now - JobSearchService.cacheTimestamp < JobSearchService.CACHE_TTL_MS
+    ) {
+      return {
+        allJobs: [...JobSearchService.cachedRawJobs],
+        diagnostics: JobSearchService.cachedDiagnostics || [],
+      };
+    }
+
+    // 2. Stale-while-revalidate: If we have cached jobs (even older than TTL or from seed snapshot),
+    // return them immediately so the user never waits on slow external APIs (<50ms),
+    // while refreshing in the background!
+    if (JobSearchService.cachedRawJobs && JobSearchService.cachedRawJobs.length > 0) {
+      if (!JobSearchService.inFlightFetchPromise) {
+        JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
+          .then(({ allJobs, diagnostics }) => {
+            commitSuccessfulJobs(allJobs, diagnostics);
+            return {
+              allJobs: JobSearchService.cachedRawJobs || allJobs,
+              diagnostics: JobSearchService.cachedDiagnostics || diagnostics,
+            };
+          })
+          .catch((err) => {
+            console.error('[JobSearchService] Background refresh failed:', err);
+            return {
+              allJobs: JobSearchService.cachedRawJobs || [],
+              diagnostics: JobSearchService.cachedDiagnostics || [],
+            };
+          })
+          .finally(() => {
+            JobSearchService.inFlightFetchPromise = null;
+          });
+      }
+
+      return {
+        allJobs: [...JobSearchService.cachedRawJobs],
+        diagnostics: JobSearchService.cachedDiagnostics || [],
+      };
+    }
+
+    // 3. Cold start without disk snapshot: Fetch from providers, sharing promise among concurrent requests.
+    if (JobSearchService.inFlightFetchPromise) {
+      return JobSearchService.inFlightFetchPromise;
+    }
+
+    JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
+      .then(({ allJobs, diagnostics }) => {
+        commitSuccessfulJobs(allJobs, diagnostics);
+        return {
+          allJobs: [...(JobSearchService.cachedRawJobs || allJobs)],
+          diagnostics: JobSearchService.cachedDiagnostics || diagnostics,
+        };
       })
       .finally(() => {
         JobSearchService.inFlightFetchPromise = null;
