@@ -4071,7 +4071,7 @@ html[data-theme="light"] .admin-expiring-filter-btn.is-active {
 
 .admin-action-option-list {
   position: absolute;
-  z-index: 20;
+  z-index: 100;
   top: calc(100% + 0.35rem);
   left: 0;
   right: 0;

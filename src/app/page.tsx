@@ -895,6 +895,15 @@ export default function Home() {
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
+  const hasOpenRefinementDropdown =
+    showIndustryDropdown ||
+    showRoleDropdown ||
+    showWorkplaceDropdown ||
+    showTypeDropdown ||
+    showLevelDropdown ||
+    showCompanyDropdown;
+  const hasOpenSearchDropdown = showJobDropdown || showLocDropdown;
+
   // Advanced Refinements Drawer state
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const locBoxRef = useRef<HTMLDivElement>(null);
@@ -2742,7 +2751,7 @@ export default function Home() {
                   </button>
 
                   {/* User Dropdown Capsule */}
-                  <div ref={userMenuRef} style={{ position: 'relative' }}>
+                  <div ref={userMenuRef} style={{ position: 'relative', zIndex: isUserMenuOpen ? 1050 : 10 }}>
                     <button
                       type="button"
                       aria-haspopup="true"
@@ -2799,7 +2808,7 @@ export default function Home() {
                             backdropFilter: 'blur(16px)',
                             WebkitBackdropFilter: 'blur(16px)',
                             padding: '0.5rem',
-                            zIndex: 350,
+                            zIndex: 1060,
                           }}
                         >
                           {/* User Identity Header */}
@@ -3204,7 +3213,14 @@ export default function Home() {
           )}
 
         {/* Hero Section */}
-        <section style={{ margin: '0.85rem 0 1.25rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
+        <section
+          style={{
+            margin: '0.85rem 0 1.25rem',
+            textAlign: 'center',
+            position: 'relative',
+            zIndex: (hasOpenSearchDropdown || hasOpenRefinementDropdown) ? 50 : 10,
+          }}
+        >
           <motion.div
             key={searched ? `hero-searched-${matchingCount}` : `hero-total-${displayTotalJobs}`}
             initial={{ opacity: 0, y: -8 }}
@@ -3386,6 +3402,8 @@ export default function Home() {
               border: '1px solid var(--border-card)',
               borderRadius: 18,
               boxShadow: 'var(--shadow-card)',
+              position: 'relative',
+              zIndex: (hasOpenSearchDropdown || hasOpenRefinementDropdown) ? 100 : 20,
             }}
           >
             {/* Dedicated Workplace Category Selector (Integrated directly as Top Header of Search Console) */}
@@ -3473,7 +3491,17 @@ export default function Home() {
               </div>
             </div>
             {/* Top Tier: Primary Inputs + Search CTA */}
-            <div className="search-inputs-row" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div
+              className="search-inputs-row"
+              style={{
+                display: 'flex',
+                gap: '0.75rem',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                position: 'relative',
+                zIndex: hasOpenSearchDropdown ? 600 : 20,
+              }}
+            >
               {/* Query Input */}
               <div
                 ref={searchBoxRef}
@@ -3482,7 +3510,7 @@ export default function Home() {
                   flex: '1.8',
                   minWidth: 260,
                   position: 'relative',
-                  zIndex: showJobDropdown ? 300 : 1,
+                  zIndex: showJobDropdown ? 610 : 10,
                   display: 'flex',
                   alignItems: 'center',
                   background: 'var(--input-bg)',
@@ -3507,11 +3535,13 @@ export default function Home() {
                   value={query}
                   onFocus={() => {
                     setShowJobDropdown(true);
+                    setShowLocDropdown(false);
                     setActiveJobSuggestionIndex(-1);
                   }}
                   onChange={(e) => {
                     setQuery(e.target.value);
                     setShowJobDropdown(true);
+                    setShowLocDropdown(false);
                     setActiveJobSuggestionIndex(-1);
                   }}
                   onKeyDown={(e) => {
@@ -3574,7 +3604,7 @@ export default function Home() {
                         width: '100%',
                         minWidth: 'min(100%, 280px)',
                         maxWidth: 'calc(100vw - 32px)',
-                        zIndex: 200,
+                        zIndex: 620,
                         background: 'var(--dropdown-bg)',
                         borderRadius: 12,
                         border: '1px solid var(--border)',
@@ -3645,7 +3675,7 @@ export default function Home() {
                   flex: '1.2',
                   minWidth: 200,
                   position: 'relative',
-                  zIndex: showLocDropdown ? 300 : 1,
+                  zIndex: showLocDropdown ? 610 : 10,
                   display: 'flex',
                   alignItems: 'center',
                   background: 'var(--input-bg)',
@@ -3670,11 +3700,13 @@ export default function Home() {
                   value={location}
                   onFocus={() => {
                     setShowLocDropdown(true);
+                    setShowJobDropdown(false);
                     setActiveLocationSuggestionIndex(-1);
                   }}
                   onChange={(e) => {
                     setLocation(e.target.value);
                     setShowLocDropdown(true);
+                    setShowJobDropdown(false);
                     setActiveLocationSuggestionIndex(-1);
                   }}
                   onKeyDown={(e) => {
@@ -3741,7 +3773,7 @@ export default function Home() {
                         maxWidth: 'calc(100vw - 32px)',
                         maxHeight: 380,
                         overflowY: 'auto',
-                        zIndex: 250,
+                        zIndex: 620,
                         background: 'var(--dropdown-bg)',
                         borderRadius: 12,
                         border: '1px solid var(--border)',
@@ -3954,6 +3986,8 @@ export default function Home() {
                   alignItems: 'center',
                   paddingTop: '0.85rem',
                   borderTop: '1px solid var(--border)',
+                  position: 'relative',
+                  zIndex: hasOpenSearchDropdown ? 10 : (hasOpenRefinementDropdown ? 400 : 20),
                 }}
               >
                 {/* Role & Category Custom Dropdown */}
@@ -3962,7 +3996,7 @@ export default function Home() {
                   className="search-refinement-role"
                   style={{
                     position: 'relative',
-                    zIndex: showRoleDropdown ? 300 : 1,
+                    zIndex: showRoleDropdown ? 410 : 1,
                     flex: '1.1',
                     minWidth: 160,
                     order: 2,
@@ -3972,10 +4006,13 @@ export default function Home() {
                     type="button"
                     onClick={() => {
                       setShowRoleDropdown((prev) => !prev);
+                      setShowJobDropdown(false);
+                      setShowLocDropdown(false);
                       setShowIndustryDropdown(false);
                       setShowWorkplaceDropdown(false);
                       setShowTypeDropdown(false);
                       setShowLevelDropdown(false);
+                      setShowCompanyDropdown(false);
                     }}
                     aria-expanded={showRoleDropdown}
                     aria-haspopup="listbox"
@@ -4279,7 +4316,7 @@ export default function Home() {
                   className="search-refinement-company"
                   style={{
                     position: 'relative',
-                    zIndex: showCompanyDropdown ? 300 : 1,
+                    zIndex: showCompanyDropdown ? 410 : 1,
                     display: showAdvancedFilters ? 'block' : 'none',
                     flex: showAdvancedFilters ? '1 1 100%' : '0 0 0',
                     minWidth: showAdvancedFilters ? '100%' : 0,
@@ -4292,6 +4329,8 @@ export default function Home() {
                     type="button"
                     onClick={() => {
                       setShowCompanyDropdown((prev) => !prev);
+                      setShowJobDropdown(false);
+                      setShowLocDropdown(false);
                       setShowRoleDropdown(false);
                       setShowIndustryDropdown(false);
                       setShowWorkplaceDropdown(false);
@@ -4385,7 +4424,7 @@ export default function Home() {
                           maxWidth: 'calc(100vw - 32px)',
                           maxHeight: 320,
                           overflowY: 'auto',
-                          zIndex: 250,
+                          zIndex: 420,
                           background: 'var(--dropdown-bg)',
                           borderRadius: 12,
                           border: '1px solid var(--border)',
@@ -4505,7 +4544,7 @@ export default function Home() {
                   className="search-refinement-industry"
                   style={{
                     position: 'relative',
-                    zIndex: showIndustryDropdown ? 300 : 1,
+                    zIndex: showIndustryDropdown ? 410 : 1,
                     flex: '1.4',
                     minWidth: 190,
                     order: 1,
@@ -4515,10 +4554,13 @@ export default function Home() {
                     type="button"
                     onClick={() => {
                       setShowIndustryDropdown((prev) => !prev);
+                      setShowJobDropdown(false);
+                      setShowLocDropdown(false);
                       setShowRoleDropdown(false);
                       setShowWorkplaceDropdown(false);
                       setShowTypeDropdown(false);
                       setShowLevelDropdown(false);
+                      setShowCompanyDropdown(false);
                     }}
                     aria-expanded={showIndustryDropdown}
                     aria-haspopup="listbox"
@@ -4607,7 +4649,7 @@ export default function Home() {
                           maxWidth: 'calc(100vw - 32px)',
                           maxHeight: 320,
                           overflowY: 'auto',
-                          zIndex: 250,
+                          zIndex: 420,
                           background: 'var(--dropdown-bg)',
                           borderRadius: 12,
                           border: '1px solid var(--border)',
@@ -4667,7 +4709,7 @@ export default function Home() {
                   style={{
                     display: 'none',
                     position: 'relative',
-                    zIndex: showWorkplaceDropdown ? 300 : 1,
+                    zIndex: showWorkplaceDropdown ? 410 : 1,
                     flex: '0.85',
                     minWidth: 140,
                   }}
@@ -4676,10 +4718,13 @@ export default function Home() {
                     type="button"
                     onClick={() => {
                       setShowWorkplaceDropdown((prev) => !prev);
+                      setShowJobDropdown(false);
+                      setShowLocDropdown(false);
                       setShowRoleDropdown(false);
                       setShowIndustryDropdown(false);
                       setShowTypeDropdown(false);
                       setShowLevelDropdown(false);
+                      setShowCompanyDropdown(false);
                     }}
                     aria-expanded={showWorkplaceDropdown}
                     aria-haspopup="listbox"
@@ -4766,7 +4811,7 @@ export default function Home() {
                           width: 'max-content',
                           minWidth: 'max(100%, 190px)',
                           maxWidth: 'calc(100vw - 32px)',
-                          zIndex: 250,
+                          zIndex: 420,
                           background: 'var(--dropdown-bg)',
                           borderRadius: 12,
                           border: '1px solid var(--border)',
@@ -4823,7 +4868,7 @@ export default function Home() {
                   className="search-refinement-type"
                   style={{
                     position: 'relative',
-                    zIndex: showTypeDropdown ? 300 : 1,
+                    zIndex: showTypeDropdown ? 410 : 1,
                     flex: '0.75',
                     minWidth: 120,
                     order: 3,
@@ -4833,10 +4878,13 @@ export default function Home() {
                     type="button"
                     onClick={() => {
                       setShowTypeDropdown((prev) => !prev);
+                      setShowJobDropdown(false);
+                      setShowLocDropdown(false);
                       setShowRoleDropdown(false);
                       setShowIndustryDropdown(false);
                       setShowWorkplaceDropdown(false);
                       setShowLevelDropdown(false);
+                      setShowCompanyDropdown(false);
                     }}
                     aria-expanded={showTypeDropdown}
                     aria-haspopup="listbox"
@@ -4920,7 +4968,7 @@ export default function Home() {
                           width: 'max-content',
                           minWidth: 'max(100%, 175px)',
                           maxWidth: 'calc(100vw - 32px)',
-                          zIndex: 250,
+                          zIndex: 420,
                           background: 'var(--dropdown-bg)',
                           borderRadius: 12,
                           border: '1px solid var(--border)',
@@ -4974,7 +5022,7 @@ export default function Home() {
                   className="search-refinement-level"
                   style={{
                     position: 'relative',
-                    zIndex: showLevelDropdown ? 300 : 1,
+                    zIndex: showLevelDropdown ? 410 : 1,
                     flex: '0.8',
                     minWidth: 130,
                     order: 4,
@@ -4984,10 +5032,13 @@ export default function Home() {
                     type="button"
                     onClick={() => {
                       setShowLevelDropdown((prev) => !prev);
+                      setShowJobDropdown(false);
+                      setShowLocDropdown(false);
                       setShowRoleDropdown(false);
                       setShowIndustryDropdown(false);
                       setShowWorkplaceDropdown(false);
                       setShowTypeDropdown(false);
+                      setShowCompanyDropdown(false);
                     }}
                     aria-expanded={showLevelDropdown}
                     aria-haspopup="listbox"
@@ -5071,7 +5122,7 @@ export default function Home() {
                           width: 'max-content',
                           minWidth: 'max(100%, 185px)',
                           maxWidth: 'calc(100vw - 32px)',
-                          zIndex: 250,
+                          zIndex: 420,
                           background: 'var(--dropdown-bg)',
                           borderRadius: 12,
                           border: '1px solid var(--border)',
