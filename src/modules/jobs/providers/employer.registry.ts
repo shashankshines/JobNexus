@@ -1,10 +1,10 @@
 /**
  * Configurable Employer Registry for ATS-integrated Companies.
- * Supports Greenhouse, Ashby, Lever, and extensible ATS platforms with
+ * Supports Greenhouse, Ashby, Lever, SmartRecruiters, and extensible ATS platforms with
  * strict SSRF slug validation and curated global employers across industries.
  */
 
-export type AtsProviderType = 'greenhouse' | 'ashby' | 'lever';
+export type AtsProviderType = 'greenhouse' | 'ashby' | 'lever' | 'smartrecruiters';
 
 export interface EmployerConfig {
   id: string;
@@ -30,12 +30,12 @@ export function isValidEmployerSlug(slug: string): boolean {
 }
 
 /**
- * Curated, verified registry of global employers across Technology, Cloud,
- * Fintech, Cybersecurity, AI, Design, and Open Source.
- * Every slug listed has been verified against the respective ATS endpoint.
+ * Curated, verified registry of 50+ global employers across Technology, Cloud,
+ * Fintech, Cybersecurity, AI, Design, Manufacturing, and Healthcare.
+ * Every slug listed adheres strictly to the safe slug validation regex.
  */
 export const CURATED_EMPLOYERS: EmployerConfig[] = [
-  // Greenhouse Employers
+  // Greenhouse Employers (Global & India Hubs)
   {
     id: 'canonical',
     name: 'Canonical',
@@ -168,8 +168,96 @@ export const CURATED_EMPLOYERS: EmployerConfig[] = [
     careerPageUrl: 'https://careers.airbnb.com',
     active: true,
   },
+  {
+    id: 'twilio',
+    name: 'Twilio',
+    ats: 'greenhouse',
+    slug: 'twilio',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Cloud Communications',
+    careerPageUrl: 'https://www.twilio.com/company/jobs',
+    active: true,
+  },
+  {
+    id: 'deliveroo',
+    name: 'Deliveroo',
+    ats: 'greenhouse',
+    slug: 'deliveroo',
+    country: 'United Kingdom',
+    region: 'Global',
+    industry: 'Logistics / E-commerce',
+    careerPageUrl: 'https://deliveroo.co.uk/careers',
+    active: true,
+  },
+  {
+    id: 'gusto',
+    name: 'Gusto',
+    ats: 'greenhouse',
+    slug: 'gusto',
+    country: 'United States',
+    region: 'Global',
+    industry: 'HR Tech / Payroll',
+    careerPageUrl: 'https://gusto.com/about/careers',
+    active: true,
+  },
+  {
+    id: 'miro',
+    name: 'Miro',
+    ats: 'greenhouse',
+    slug: 'miro',
+    country: 'Netherlands',
+    region: 'Global',
+    industry: 'Collaboration / Design',
+    careerPageUrl: 'https://miro.com/careers',
+    active: true,
+  },
+  {
+    id: 'affirm',
+    name: 'Affirm',
+    ats: 'greenhouse',
+    slug: 'affirm',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Fintech / Lending',
+    careerPageUrl: 'https://www.affirm.com/careers',
+    active: true,
+  },
+  {
+    id: 'elastic',
+    name: 'Elastic',
+    ats: 'greenhouse',
+    slug: 'elastic',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Search / Data Infrastructure',
+    careerPageUrl: 'https://www.elastic.co/about/careers',
+    active: true,
+  },
+  {
+    id: 'carta',
+    name: 'Carta',
+    ats: 'greenhouse',
+    slug: 'carta',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Fintech / Equity',
+    careerPageUrl: 'https://carta.com/careers',
+    active: true,
+  },
+  {
+    id: 'hashicorp',
+    name: 'HashiCorp',
+    ats: 'greenhouse',
+    slug: 'hashicorp',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Cloud Infrastructure / DevOps',
+    careerPageUrl: 'https://www.hashicorp.com/jobs',
+    active: true,
+  },
 
-  // Ashby Employers
+  // Ashby Employers (AI, Developer Tools, High-Growth Tech)
   {
     id: 'linear',
     name: 'Linear',
@@ -269,8 +357,52 @@ export const CURATED_EMPLOYERS: EmployerConfig[] = [
     careerPageUrl: 'https://www.vanta.com/careers',
     active: true,
   },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    ats: 'ashby',
+    slug: 'anthropic',
+    country: 'United States',
+    region: 'Global',
+    industry: 'AI Research & Safety',
+    careerPageUrl: 'https://www.anthropic.com/careers',
+    active: true,
+  },
+  {
+    id: 'scaleai',
+    name: 'Scale AI',
+    ats: 'ashby',
+    slug: 'scaleapi',
+    country: 'United States',
+    region: 'Global',
+    industry: 'AI Data Infrastructure',
+    careerPageUrl: 'https://scale.com/careers',
+    active: true,
+  },
+  {
+    id: 'brex',
+    name: 'Brex',
+    ats: 'ashby',
+    slug: 'brex',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Fintech / Banking',
+    careerPageUrl: 'https://www.brex.com/careers',
+    active: true,
+  },
+  {
+    id: 'perplexity',
+    name: 'Perplexity AI',
+    ats: 'ashby',
+    slug: 'perplexity',
+    country: 'United States',
+    region: 'Global',
+    industry: 'AI Search & Knowledge',
+    careerPageUrl: 'https://www.perplexity.ai/careers',
+    active: true,
+  },
 
-  // Lever Employers
+  // Lever Employers (Media, Cloud Hosting, Software)
   {
     id: 'spotify',
     name: 'Spotify',
@@ -291,6 +423,107 @@ export const CURATED_EMPLOYERS: EmployerConfig[] = [
     region: 'Global',
     industry: 'Managed Cloud Hosting',
     careerPageUrl: 'https://kinsta.com/careers',
+    active: true,
+  },
+  {
+    id: 'atlassian',
+    name: 'Atlassian',
+    ats: 'lever',
+    slug: 'atlassian',
+    country: 'Australia',
+    region: 'Global',
+    industry: 'Collaboration Software',
+    careerPageUrl: 'https://www.atlassian.com/company/careers',
+    active: true,
+  },
+  {
+    id: 'eventbrite',
+    name: 'Eventbrite',
+    ats: 'lever',
+    slug: 'eventbrite',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Event Technology',
+    careerPageUrl: 'https://www.eventbritecareers.com',
+    active: true,
+  },
+  {
+    id: 'medallia',
+    name: 'Medallia',
+    ats: 'lever',
+    slug: 'medallia',
+    country: 'United States',
+    region: 'Global',
+    industry: 'Customer Experience',
+    careerPageUrl: 'https://www.medallia.com/careers',
+    active: true,
+  },
+
+  // SmartRecruiters Employers (Global Enterprises, Manufacturing, Services, Gaming)
+  {
+    id: 'ubisoft',
+    name: 'Ubisoft',
+    ats: 'smartrecruiters',
+    slug: 'Ubisoft2',
+    country: 'France',
+    region: 'Global / India (Pune, Mumbai)',
+    industry: 'Gaming & Interactive Entertainment',
+    careerPageUrl: 'https://jobs.smartrecruiters.com/Ubisoft2',
+    active: true,
+  },
+  {
+    id: 'bosch',
+    name: 'Bosch Group',
+    ats: 'smartrecruiters',
+    slug: 'BoschGroup',
+    country: 'Germany',
+    region: 'Global / India (Bangalore, Coimbatore)',
+    industry: 'Core Engineering & Automotive',
+    careerPageUrl: 'https://jobs.smartrecruiters.com/BoschGroup',
+    active: true,
+  },
+  {
+    id: 'visa',
+    name: 'Visa',
+    ats: 'smartrecruiters',
+    slug: 'Visa',
+    country: 'United States',
+    region: 'Global / India (Bangalore)',
+    industry: 'Banking & Financial Payments',
+    careerPageUrl: 'https://jobs.smartrecruiters.com/Visa',
+    active: true,
+  },
+  {
+    id: 'sgs',
+    name: 'SGS',
+    ats: 'smartrecruiters',
+    slug: 'SGS',
+    country: 'Switzerland',
+    region: 'Global / India',
+    industry: 'Inspection, Verification & Testing',
+    careerPageUrl: 'https://jobs.smartrecruiters.com/SGS',
+    active: true,
+  },
+  {
+    id: 'publicis',
+    name: 'Publicis Groupe',
+    ats: 'smartrecruiters',
+    slug: 'PublicisGroupe',
+    country: 'France',
+    region: 'Global / India',
+    industry: 'Marketing, Advertising & Digital Media',
+    careerPageUrl: 'https://jobs.smartrecruiters.com/PublicisGroupe',
+    active: true,
+  },
+  {
+    id: 'avery-dennison',
+    name: 'Avery Dennison',
+    ats: 'smartrecruiters',
+    slug: 'AveryDennison',
+    country: 'United States',
+    region: 'Global / India',
+    industry: 'Materials Science & Manufacturing',
+    careerPageUrl: 'https://jobs.smartrecruiters.com/AveryDennison',
     active: true,
   },
 ];

@@ -101,6 +101,7 @@ const INDUSTRY_DISCOVERY_DETAILS: Record<
   JobIndustry,
   Pick<DiscoveryDomain, 'desc' | 'tags' | 'icon'>
 > = {
+  // Legacy Base
   technology: {
     desc: 'Software development, cloud systems, AI/ML, data engineering, cybersecurity, and IT operations.',
     tags: ['Full Stack', 'Cloud & DevOps', 'AI & ML', 'Cybersecurity'],
@@ -176,6 +177,143 @@ const INDUSTRY_DISCOVERY_DETAILS: Record<
     tags: ['Cross-functional', 'General Roles', 'Other'],
     icon: Briefcase,
   },
+
+  // 30 Specific Canonical Sectors
+  it_software: {
+    desc: 'Full-stack software engineering, web, cloud systems, and mobile applications.',
+    tags: ['Frontend', 'Backend', 'Full Stack', 'Mobile'],
+    icon: Code2,
+  },
+  ai_data_science: {
+    desc: 'Machine learning, generative AI, LLM engineering, and advanced data analytics.',
+    tags: ['Machine Learning', 'GenAI / LLMs', 'Data Science', 'Data Analytics'],
+    icon: Code2,
+  },
+  cybersecurity_cloud: {
+    desc: 'Cloud architecture, AWS/GCP/Azure, DevOps, SRE, and information security.',
+    tags: ['Cloud DevOps', 'Kubernetes', 'Cybersecurity', 'SRE'],
+    icon: ShieldCheck,
+  },
+  engineering_core: {
+    desc: 'Mechanical, civil, electrical, electronics, and embedded hardware engineering.',
+    tags: ['Mechanical', 'Civil', 'Electrical', 'Hardware'],
+    icon: HardHat,
+  },
+  banking_finance: {
+    desc: 'Commercial and investment banking, financial analysis, wealth management, and fintech.',
+    tags: ['Banking', 'Investment', 'Fintech', 'Wealth Management'],
+    icon: TrendingUp,
+  },
+  accounting_audit_insurance: {
+    desc: 'Chartered accountancy, statutory audit, taxation, and actuarial underwriting.',
+    tags: ['Chartered Accountant', 'Audit', 'Taxation', 'Underwriting'],
+    icon: TrendingUp,
+  },
+  sales_bizdev: {
+    desc: 'Enterprise B2B sales, account executive, business development, and client expansion.',
+    tags: ['Enterprise Sales', 'BDR / SDR', 'Account Executive', 'BizDev'],
+    icon: ShoppingBag,
+  },
+  marketing_digital: {
+    desc: 'Growth marketing, performance ads, SEO, brand positioning, and social media.',
+    tags: ['Growth Marketing', 'SEO', 'Content Strategy', 'Brand'],
+    icon: Compass,
+  },
+  hr_recruitment: {
+    desc: 'Talent acquisition, employer branding, people partner, and total rewards.',
+    tags: ['Recruiting', 'People Partner', 'Talent Acquisition', 'HR'],
+    icon: Users,
+  },
+  legal_compliance: {
+    desc: 'Corporate legal counsel, contracts, regulatory compliance, and data privacy.',
+    tags: ['Legal Counsel', 'Compliance', 'Contracts', 'Regulatory'],
+    icon: Landmark,
+  },
+  admin_operations: {
+    desc: 'Executive assistance, office coordination, administration, and business ops.',
+    tags: ['Executive Assistant', 'Office Operations', 'Coordination'],
+    icon: Briefcase,
+  },
+  consulting_management: {
+    desc: 'Management consulting, business analysis, strategic advisory, and PMO.',
+    tags: ['Management Consulting', 'Strategy', 'PMO', 'Agile'],
+    icon: Compass,
+  },
+  research_science: {
+    desc: 'Scientific research, laboratory assays, biotechnology, physics, and chemistry.',
+    tags: ['Research Scientist', 'Biotech', 'Laboratory', 'R&D'],
+    icon: HeartPulse,
+  },
+  media_design_creative: {
+    desc: 'UI/UX design, product design, creative direction, animation, and video production.',
+    tags: ['UI/UX Design', 'Product Design', 'Animation', 'Creative'],
+    icon: Compass,
+  },
+  healthcare_pharma: {
+    desc: 'Physicians, nursing officers, pharmaceutical discovery, and clinical practice.',
+    tags: ['Doctors', 'Nursing', 'Pharma', 'Clinical Research'],
+    icon: HeartPulse,
+  },
+  education_teaching: {
+    desc: 'School teachers, university professors, tutors, and instructional designers.',
+    tags: ['School Teaching', 'Professors', 'Tutoring', 'EdTech'],
+    icon: GraduationCap,
+  },
+  manufacturing_production: {
+    desc: 'Industrial manufacturing, plant management, CNC machining, and quality assurance.',
+    tags: ['Plant Operations', 'CNC Machining', 'Fabrication', 'Quality'],
+    icon: Factory,
+  },
+  logistics_supply_chain: {
+    desc: 'Supply chain planning, freight logistics, warehouse ops, and fleet dispatch.',
+    tags: ['Supply Chain', 'Warehousing', 'Freight', 'Dispatch'],
+    icon: Truck,
+  },
+  retail_ecommerce: {
+    desc: 'Store retail management, e-commerce catalog operations, and merchandising.',
+    tags: ['Store Manager', 'E-commerce', 'Merchandising', 'Retail'],
+    icon: ShoppingBag,
+  },
+  construction_real_estate: {
+    desc: 'Civil construction, site engineering, real estate brokerage, and surveying.',
+    tags: ['Civil Construction', 'Real Estate', 'Surveying', 'Site Engg'],
+    icon: HardHat,
+  },
+  customer_support_bpo: {
+    desc: 'Omnichannel customer support, helpdesk, BPO voice/non-voice operations.',
+    tags: ['Customer Support', 'BPO', 'Helpdesk', 'Contact Center'],
+    icon: Headphones,
+  },
+  skilled_trades_field: {
+    desc: 'Electricians, plumbers, HVAC technicians, welders, and field service mechanics.',
+    tags: ['Electricians', 'Plumbers', 'HVAC', 'Welders'],
+    icon: HardHat,
+  },
+  agriculture_forestry: {
+    desc: 'Agronomy, farm management, dairy sciences, horticulture, and forestry.',
+    tags: ['Agronomy', 'Farming', 'Dairy', 'Horticulture'],
+    icon: Leaf,
+  },
+  energy_utilities: {
+    desc: 'Renewable energy, solar, wind, power plant operations, and utilities.',
+    tags: ['Renewables', 'Solar', 'Utilities', 'Power Plant'],
+    icon: Building2,
+  },
+  automotive_aviation: {
+    desc: 'Automotive engineering, EV systems, aircraft maintenance, and aerospace.',
+    tags: ['Automotive', 'EV Engineering', 'Aviation', 'Aerospace'],
+    icon: Truck,
+  },
+  security_facilities_defense: {
+    desc: 'Physical security, surveillance, facility engineering, and occupational safety.',
+    tags: ['Physical Security', 'Facilities', 'Surveillance', 'Safety'],
+    icon: ShieldCheck,
+  },
+  social_services_ngo: {
+    desc: 'Non-profit management, community welfare, social work, and humanitarian aid.',
+    tags: ['NGO', 'Social Work', 'Community', 'Humanitarian'],
+    icon: Landmark,
+  },
 };
 
 const DISCOVERY_DOMAINS: DiscoveryDomain[] = Object.values(INDUSTRY_TAXONOMY).map(({ id }) => ({
@@ -184,6 +322,7 @@ const DISCOVERY_DOMAINS: DiscoveryDomain[] = Object.values(INDUSTRY_TAXONOMY).ma
 }));
 
 const INDUSTRY_EMOJI: Record<JobIndustry, string> = {
+  // Legacy Base
   technology: '💻',
   healthcare: '🏥',
   construction_trades: '🏗️',
@@ -199,6 +338,35 @@ const INDUSTRY_EMOJI: Record<JobIndustry, string> = {
   customer_service: '🎧',
   security_facilities: '🛡️',
   other: '📁',
+
+  // Canonical 30
+  it_software: '💻',
+  ai_data_science: '🤖',
+  cybersecurity_cloud: '☁️',
+  engineering_core: '📐',
+  banking_finance: '🏦',
+  accounting_audit_insurance: '🧾',
+  sales_bizdev: '📈',
+  marketing_digital: '📣',
+  hr_recruitment: '👥',
+  legal_compliance: '⚖️',
+  admin_operations: '🗂️',
+  consulting_management: '🧭',
+  research_science: '🔬',
+  media_design_creative: '🎨',
+  healthcare_pharma: '💊',
+  education_teaching: '📚',
+  manufacturing_production: '🏭',
+  logistics_supply_chain: '📦',
+  retail_ecommerce: '🛒',
+  construction_real_estate: '🏢',
+  customer_support_bpo: '📞',
+  skilled_trades_field: '🔧',
+  agriculture_forestry: '🌾',
+  energy_utilities: '⚡',
+  automotive_aviation: '✈️',
+  security_facilities_defense: '🛡️',
+  social_services_ngo: '🤝',
 };
 
 interface Job {

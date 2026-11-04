@@ -270,5 +270,46 @@ describe('JobNexus — Canonical Industry & Category Taxonomy Suite', () => {
       assert.strictEqual(getIndustryLabel('all'), 'All Industries');
       assert.strictEqual(getIndustryLabel(''), 'All Industries');
     });
+
+    it('defines and normalizes all 30 canonical employment sectors', () => {
+      const canonical30: JobIndustry[] = [
+        'it_software',
+        'ai_data_science',
+        'cybersecurity_cloud',
+        'engineering_core',
+        'banking_finance',
+        'accounting_audit_insurance',
+        'sales_bizdev',
+        'marketing_digital',
+        'hr_recruitment',
+        'legal_compliance',
+        'admin_operations',
+        'consulting_management',
+        'research_science',
+        'media_design_creative',
+        'healthcare_pharma',
+        'education_teaching',
+        'manufacturing_production',
+        'logistics_supply_chain',
+        'retail_ecommerce',
+        'hospitality_tourism',
+        'construction_real_estate',
+        'customer_support_bpo',
+        'skilled_trades_field',
+        'agriculture_forestry',
+        'energy_utilities',
+        'automotive_aviation',
+        'security_facilities_defense',
+        'government_public',
+        'social_services_ngo',
+        'other',
+      ];
+
+      for (const sector of canonical30) {
+        assert.ok(INDUSTRY_TAXONOMY[sector], `Sector ${sector} must exist in INDUSTRY_TAXONOMY`);
+        assert.ok(INDUSTRY_TAXONOMY[sector].label.length > 0, `Sector ${sector} must have a label`);
+        assert.ok(INDUSTRY_TAXONOMY[sector].description.length > 0, `Sector ${sector} must have a description`);
+      }
+    });
   });
 });

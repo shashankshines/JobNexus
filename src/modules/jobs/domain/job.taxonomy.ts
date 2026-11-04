@@ -1,19 +1,48 @@
 export type JobIndustry =
+  // Canonical 30 Sectors
+  | 'it_software'
+  | 'ai_data_science'
+  | 'cybersecurity_cloud'
+  | 'engineering_core'
+  | 'banking_finance'
+  | 'accounting_audit_insurance'
+  | 'sales_bizdev'
+  | 'marketing_digital'
+  | 'hr_recruitment'
+  | 'legal_compliance'
+  | 'admin_operations'
+  | 'consulting_management'
+  | 'research_science'
+  | 'media_design_creative'
+  | 'healthcare_pharma'
+  | 'education_teaching'
+  | 'manufacturing_production'
+  | 'logistics_supply_chain'
+  | 'retail_ecommerce'
+  | 'hospitality_tourism'
+  | 'construction_real_estate'
+  | 'customer_support_bpo'
+  | 'skilled_trades_field'
+  | 'agriculture_forestry'
+  | 'energy_utilities'
+  | 'automotive_aviation'
+  | 'security_facilities_defense'
+  | 'government_public'
+  | 'social_services_ngo'
+  | 'other'
+  // Legacy Aliases (Strict Backward Compatibility)
   | 'technology'
   | 'healthcare'
   | 'construction_trades'
   | 'manufacturing'
   | 'logistics_transport'
   | 'retail_sales'
-  | 'hospitality_tourism'
   | 'education'
   | 'finance_accounting'
   | 'administration_hr'
   | 'agriculture'
-  | 'government_public'
   | 'customer_service'
-  | 'security_facilities'
-  | 'other';
+  | 'security_facilities';
 
 export interface IndustryDefinition {
   id: JobIndustry;
@@ -23,6 +52,7 @@ export interface IndustryDefinition {
 }
 
 export const INDUSTRY_TAXONOMY: Record<JobIndustry, IndustryDefinition> = {
+  // Legacy Base Entries
   technology: {
     id: 'technology',
     label: 'Technology & Engineering',
@@ -168,9 +198,174 @@ export const INDUSTRY_TAXONOMY: Record<JobIndustry, IndustryDefinition> = {
     description: 'Cross-functional, multi-sector, or emerging career categories',
     keywords: [],
   },
+
+  // 30 Specific Expanded Sectors
+  it_software: {
+    id: 'it_software',
+    label: 'IT & Software Development',
+    description: 'Full-stack software engineering, web and mobile application development',
+    keywords: ['software engineer', 'developer', 'frontend', 'backend', 'fullstack', 'react', 'node', 'python', 'java', 'typescript', 'mobile developer'],
+  },
+  ai_data_science: {
+    id: 'ai_data_science',
+    label: 'AI, Machine Learning & Data Science',
+    description: 'Machine learning, generative AI, LLM engineering, data analytics, and statistics',
+    keywords: ['data scientist', 'machine learning', 'ai engineer', 'nlp', 'computer vision', 'deep learning', 'data analyst', 'bi developer', 'prompt engineer'],
+  },
+  cybersecurity_cloud: {
+    id: 'cybersecurity_cloud',
+    label: 'Cybersecurity & Cloud',
+    description: 'Cloud infrastructure, AWS/Azure/GCP, SRE, DevOps, SOC analysis, and penetration testing',
+    keywords: ['cybersecurity', 'cloud engineer', 'devops', 'sre', 'infosec', 'penetration tester', 'security analyst', 'aws', 'kubernetes'],
+  },
+  engineering_core: {
+    id: 'engineering_core',
+    label: 'Engineering (Mech, Civil, Elec, Electronics)',
+    description: 'Core engineering disciplines spanning mechanical, civil, electrical, and embedded hardware',
+    keywords: ['mechanical engineer', 'civil engineer', 'electrical engineer', 'electronics', 'hardware engineer', 'embedded systems', 'pcb designer'],
+  },
+  banking_finance: {
+    id: 'banking_finance',
+    label: 'Banking & Financial Services',
+    description: 'Commercial and investment banking, equity research, asset management, and fintech',
+    keywords: ['banker', 'investment banking', 'credit analyst', 'loan officer', 'wealth management', 'financial consultant', 'fintech'],
+  },
+  accounting_audit_insurance: {
+    id: 'accounting_audit_insurance',
+    label: 'Accounting, Audit & Insurance',
+    description: 'Statutory audit, chartered accountancy, taxation, corporate bookkeeping, and actuarial underwriting',
+    keywords: ['chartered accountant', 'auditor', 'tax consultant', 'bookkeeper', 'underwriter', 'actuary', 'claims adjuster'],
+  },
+  sales_bizdev: {
+    id: 'sales_bizdev',
+    label: 'Sales & Business Development',
+    description: 'Enterprise sales, B2B deal closing, client relationships, account executive roles, and territory growth',
+    keywords: ['sales manager', 'account executive', 'business development', 'bdr', 'sdr', 'sales representative', 'client relationship'],
+  },
+  marketing_digital: {
+    id: 'marketing_digital',
+    label: 'Marketing & Digital Marketing',
+    description: 'Growth marketing, SEO, paid performance media, brand strategy, content, and communications',
+    keywords: ['marketing manager', 'seo specialist', 'growth marketer', 'content strategist', 'social media manager', 'copywriter', 'performance marketing'],
+  },
+  hr_recruitment: {
+    id: 'hr_recruitment',
+    label: 'Human Resources & Recruitment',
+    description: 'Talent acquisition, employer branding, people operations, HR generalist, and total rewards',
+    keywords: ['human resources', 'hr manager', 'talent acquisition', 'recruiter', 'people partner', 'compensation analyst'],
+  },
+  legal_compliance: {
+    id: 'legal_compliance',
+    label: 'Legal & Compliance',
+    description: 'Corporate counsel, contract administration, regulatory compliance, data privacy, and intellectual property',
+    keywords: ['legal counsel', 'attorney', 'lawyer', 'compliance officer', 'paralegal', 'contract manager', 'data privacy officer'],
+  },
+  admin_operations: {
+    id: 'admin_operations',
+    label: 'Administration & Operations',
+    description: 'Executive assistance, workplace coordination, administrative support, and office management',
+    keywords: ['executive assistant', 'office manager', 'administrative assistant', 'operations coordinator', 'facilities coordinator'],
+  },
+  consulting_management: {
+    id: 'consulting_management',
+    label: 'Consulting & Management',
+    description: 'Strategy consulting, management advisory, transformation programs, and enterprise PMO',
+    keywords: ['management consultant', 'strategy consultant', 'business analyst', 'program manager', 'scrum master', 'change manager'],
+  },
+  research_science: {
+    id: 'research_science',
+    label: 'Research & Science',
+    description: 'Laboratory research, biotechnology, clinical trials, physics, chemistry, and scientific academia',
+    keywords: ['research scientist', 'biologist', 'chemist', 'physicist', 'laboratory technician', 'clinical research associate'],
+  },
+  media_design_creative: {
+    id: 'media_design_creative',
+    label: 'Media, Design & Creative',
+    description: 'UI/UX design, graphic design, video editing, 3D animation, journalism, and creative production',
+    keywords: ['ui designer', 'ux designer', 'product designer', 'graphic designer', 'animator', 'video editor', 'art director'],
+  },
+  healthcare_pharma: {
+    id: 'healthcare_pharma',
+    label: 'Healthcare & Pharmaceuticals',
+    description: 'Medical care, clinical practice, nursing, pharmacology, and drug discovery',
+    keywords: ['physician', 'doctor', 'nurse', 'pharmacist', 'surgeon', 'clinical specialist', 'medical officer'],
+  },
+  education_teaching: {
+    id: 'education_teaching',
+    label: 'Education & Teaching',
+    description: 'School teaching, collegiate professorship, tutoring, instructional design, and educational leadership',
+    keywords: ['teacher', 'professor', 'lecturer', 'tutor', 'principal', 'instructional designer', 'faculty'],
+  },
+  manufacturing_production: {
+    id: 'manufacturing_production',
+    label: 'Manufacturing & Production',
+    description: 'Industrial manufacturing, plant operations, fabrication, CNC machining, and quality control',
+    keywords: ['plant manager', 'production supervisor', 'cnc operator', 'machinist', 'industrial technician', 'quality inspector'],
+  },
+  logistics_supply_chain: {
+    id: 'logistics_supply_chain',
+    label: 'Logistics & Supply Chain',
+    description: 'Supply chain logistics, warehousing, transportation, freight forwarding, and inventory distribution',
+    keywords: ['supply chain manager', 'logistics coordinator', 'warehouse supervisor', 'forklift operator', 'fleet manager', 'dispatch'],
+  },
+  retail_ecommerce: {
+    id: 'retail_ecommerce',
+    label: 'Retail & E-commerce',
+    description: 'Store operations, merchandising, e-commerce catalog operations, category management, and visual display',
+    keywords: ['store manager', 'retail associate', 'e-commerce specialist', 'category manager', 'merchandiser'],
+  },
+  construction_real_estate: {
+    id: 'construction_real_estate',
+    label: 'Construction & Real Estate',
+    description: 'Site civil construction, real estate brokerage, project management, surveying, and quantity estimation',
+    keywords: ['construction manager', 'site engineer', 'real estate agent', 'property manager', 'quantity surveyor'],
+  },
+  customer_support_bpo: {
+    id: 'customer_support_bpo',
+    label: 'Customer Support & BPO',
+    description: 'Customer experience, omnichannel contact centers, voice/chat helpdesks, and technical support',
+    keywords: ['customer service representative', 'support agent', 'call center agent', 'bpo executive', 'helpdesk technician'],
+  },
+  skilled_trades_field: {
+    id: 'skilled_trades_field',
+    label: 'Skilled Trades & Field Services',
+    description: 'Electricians, plumbers, HVAC technicians, welders, carpenters, mechanics, and field technicians',
+    keywords: ['electrician', 'plumber', 'hvac technician', 'welder', 'carpenter', 'mechanic', 'field service engineer'],
+  },
+  agriculture_forestry: {
+    id: 'agriculture_forestry',
+    label: 'Agriculture, Dairy & Forestry',
+    description: 'Agronomy, farm management, horticulture, dairy husbandry, and forestry conservation',
+    keywords: ['agronomist', 'farm manager', 'horticulturist', 'veterinarian', 'dairy specialist', 'forester'],
+  },
+  energy_utilities: {
+    id: 'energy_utilities',
+    label: 'Energy, Oil & Utilities',
+    description: 'Solar energy, wind power, oil & gas exploration, power plant operations, and municipal utilities',
+    keywords: ['energy engineer', 'solar technician', 'petroleum engineer', 'utilities operator', 'power plant operator', 'wind turbine technician'],
+  },
+  automotive_aviation: {
+    id: 'automotive_aviation',
+    label: 'Automotive & Aviation',
+    description: 'Automobile design, EV powertrain, aircraft maintenance, aviation operations, and avionics',
+    keywords: ['automotive engineer', 'ev engineer', 'aircraft maintenance', 'pilot', 'flight dispatcher', 'avionics technician'],
+  },
+  security_facilities_defense: {
+    id: 'security_facilities_defense',
+    label: 'Security, Facilities & Defense',
+    description: 'Physical security, surveillance, facility engineering, occupational health, and defense services',
+    keywords: ['security guard', 'facility manager', 'safety officer', 'surveillance technician', 'building superintendent'],
+  },
+  social_services_ngo: {
+    id: 'social_services_ngo',
+    label: 'Social Services & NGOs',
+    description: 'Non-profit management, community development, social work, humanitarian aid, and philanthropy',
+    keywords: ['social worker', 'ngo coordinator', 'community organizer', 'fundraising officer', 'humanitarian worker'],
+  },
 };
 
 const INDUSTRY_ALIASES: Record<string, JobIndustry> = {
+  // Legacy Aliases
   'finance and banking': 'finance_accounting',
   'healthcare and medical': 'healthcare',
   'education and training': 'education',
@@ -180,6 +375,61 @@ const INDUSTRY_ALIASES: Record<string, JobIndustry> = {
   'fintech spend management': 'finance_accounting',
   'crypto fintech': 'finance_accounting',
   'travel hospitality': 'hospitality_tourism',
+
+  // Sector Canonical Synonyms
+  'it software': 'it_software',
+  'it and software development': 'it_software',
+  'software development': 'it_software',
+  'software': 'it_software',
+  'ai and data science': 'ai_data_science',
+  'ai data science': 'ai_data_science',
+  'machine learning': 'ai_data_science',
+  'data science': 'ai_data_science',
+  'cybersecurity and cloud': 'cybersecurity_cloud',
+  'cyber security': 'cybersecurity_cloud',
+  'cloud computing': 'cybersecurity_cloud',
+  'engineering core': 'engineering_core',
+  'mechanical engineering': 'engineering_core',
+  'civil engineering': 'engineering_core',
+  'electrical engineering': 'engineering_core',
+  'banking and financial services': 'banking_finance',
+  'banking finance': 'banking_finance',
+  'accounting audit and insurance': 'accounting_audit_insurance',
+  'sales and business development': 'sales_bizdev',
+  'sales bizdev': 'sales_bizdev',
+  'marketing and digital marketing': 'marketing_digital',
+  'digital marketing': 'marketing_digital',
+  'human resources and recruitment': 'hr_recruitment',
+  'hr recruitment': 'hr_recruitment',
+  'legal and compliance': 'legal_compliance',
+  'administration and operations': 'admin_operations',
+  'consulting and management': 'consulting_management',
+  'management consulting': 'consulting_management',
+  'research and science': 'research_science',
+  'media design and creative': 'media_design_creative',
+  'design creative': 'media_design_creative',
+  'healthcare and pharmaceuticals': 'healthcare_pharma',
+  'pharma': 'healthcare_pharma',
+  'education and teaching': 'education_teaching',
+  'manufacturing and production': 'manufacturing_production',
+  'logistics and supply chain': 'logistics_supply_chain',
+  'retail and e commerce': 'retail_ecommerce',
+  'retail ecommerce': 'retail_ecommerce',
+  'hospitality tourism and restaurants': 'hospitality_tourism',
+  'construction and real estate': 'construction_real_estate',
+  'customer support and bpo': 'customer_support_bpo',
+  'bpo': 'customer_support_bpo',
+  'skilled trades and field services': 'skilled_trades_field',
+  'skilled trades': 'skilled_trades_field',
+  'agriculture dairy and forestry': 'agriculture_forestry',
+  'energy oil and utilities': 'energy_utilities',
+  'clean energy': 'energy_utilities',
+  'automotive and aviation': 'automotive_aviation',
+  'automotive': 'automotive_aviation',
+  'security facilities and defense': 'security_facilities_defense',
+  'government and public administration': 'government_public',
+  'social services and ngos': 'social_services_ngo',
+  'non profit': 'social_services_ngo',
 };
 
 function normalizeIndustryText(value: string): string {

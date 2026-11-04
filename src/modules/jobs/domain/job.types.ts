@@ -18,6 +18,14 @@ export interface NormalizedJob {
   status?: 'active' | 'expired' | 'unknown';
   isIndiaEligible?: boolean;
   workplaceType?: 'remote' | 'hybrid' | 'onsite' | 'unknown';
+  primaryWorkplaceType?: 'ONSITE' | 'HYBRID' | 'REMOTE' | 'UNSPECIFIED';
+  remoteEligibility?:
+    | 'worldwide'
+    | 'india_remote'
+    | 'country_specific'
+    | 'region_specific'
+    | 'timezone_restricted'
+    | 'unspecified';
   score?: number;
   alternateSources?: Array<{ sourceName: string; sourceUrl?: string; applicationUrl: string }>;
   salary?: string;
@@ -56,6 +64,8 @@ export interface LegacyJob {
   score?: number;
   isRemote?: boolean;
   workplaceType?: string;
+  primaryWorkplaceType?: 'ONSITE' | 'HYBRID' | 'REMOTE' | 'UNSPECIFIED';
+  remoteEligibility?: string;
   isIndiaEligible?: boolean;
   isFresh?: boolean;
   salary?: string;
@@ -129,6 +139,8 @@ export function toLegacyJob(job: NormalizedJob): LegacyJob {
     score: job.score,
     isRemote: job.isRemote,
     workplaceType: job.workplaceType ?? (job.isRemote ? 'remote' : job.location?.trim() ? 'onsite' : 'unknown'),
+    primaryWorkplaceType: job.primaryWorkplaceType,
+    remoteEligibility: job.remoteEligibility,
     isIndiaEligible: job.isIndiaEligible,
     isFresh,
     salary: job.salary,

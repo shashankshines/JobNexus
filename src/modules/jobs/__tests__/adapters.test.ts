@@ -119,6 +119,78 @@ describe('Provider Adapters Unit Tests', () => {
       assert.strictEqual(lever.name, 'Lever ATS');
       assert.strictEqual(lever.id, 'lever');
     });
+
+    it('initializes SmartRecruiters adapter with default verified employer boards and fetches normalized jobs via fixtures', async () => {
+      const { SmartRecruitersAdapter } = await import('../adapters/ats/smartrecruiters.adapter');
+      const sr = new SmartRecruitersAdapter();
+      assert.strictEqual(sr.name, 'SmartRecruiters ATS');
+      assert.strictEqual(sr.id, 'smartrecruiters');
+
+      const fixtureAdapter = new SmartRecruitersAdapter(
+        [
+          {
+            id: 'ubisoft',
+            name: 'Ubisoft',
+            ats: 'smartrecruiters',
+            slug: 'Ubisoft2',
+            industry: 'Gaming',
+            active: true,
+          },
+        ],
+        {
+          Ubisoft2: [
+            {
+              id: 'sr_posting_101',
+              name: 'Senior Game Engine Programmer',
+              location: {
+                city: 'Pune',
+                region: 'Maharashtra',
+                country: 'in',
+                remote: false,
+              },
+              department: { label: 'Engineering' },
+              typeOfEmployment: { label: 'Permanent / Full Time' },
+              releasedDate: '2026-11-01T10:00:00.000Z',
+            },
+            {
+              id: 'sr_posting_102',
+              name: 'Gameplay Animator Intern',
+              location: {
+                city: 'Mumbai',
+                region: 'Maharashtra',
+                country: 'in',
+                remote: true,
+              },
+              typeOfEmployment: { label: 'Internship' },
+              releasedDate: '2026-11-02T10:00:00.000Z',
+            },
+          ],
+        }
+      );
+
+      const jobs = await fixtureAdapter.fetchJobs();
+      assert.strictEqual(jobs.length, 2);
+
+      const job1 = jobs[0];
+      assert.strictEqual(job1.title, 'Senior Game Engine Programmer');
+      assert.strictEqual(job1.company, 'Ubisoft');
+      assert.strictEqual(job1.location, 'Pune, Maharashtra, IN');
+      assert.strictEqual(job1.isIndiaEligible, true);
+      assert.strictEqual(job1.isRemote, false);
+      assert.strictEqual(job1.workplaceType, 'onsite');
+      assert.strictEqual(job1.primaryWorkplaceType, 'ONSITE');
+      assert.strictEqual(job1.seniority, 'Senior');
+      assert.strictEqual(job1.employmentType, 'Full Time');
+      assert.strictEqual(job1.applicationUrl, 'https://jobs.smartrecruiters.com/Ubisoft2/sr_posting_101');
+
+      const job2 = jobs[1];
+      assert.strictEqual(job2.title, 'Gameplay Animator Intern');
+      assert.strictEqual(job2.isRemote, true);
+      assert.strictEqual(job2.primaryWorkplaceType, 'REMOTE');
+      assert.strictEqual(job2.remoteEligibility, 'india_remote');
+      assert.strictEqual(job2.employmentType, 'Internship');
+      assert.strictEqual(job2.seniority, 'Entry');
+    });
   });
 
   describe('National Career Service (NCS) Adapter', () => {
