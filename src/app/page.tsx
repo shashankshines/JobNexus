@@ -5966,24 +5966,6 @@ export default function Home() {
                 style={{ outline: 'none', marginTop: '0.5rem', paddingBottom: '3rem', scrollMarginTop: '100px' }}
               >
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: '0.35rem 0.9rem',
-                      borderRadius: 9999,
-                      background: 'rgba(99, 102, 241, 0.2)',
-                      border: '1px solid rgba(99, 102, 241, 0.25)',
-                      color: '#687ff0ff',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      marginBottom: '0.75rem',
-                    }}
-                  >
-                    <Compass size={14} />
-                    <span>Curated Discovery Tracks</span>
-                  </div>
                   <h3 style={{ fontSize: '1.9rem', fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
                     Explore Opportunities Across Every Industry
                   </h3>
