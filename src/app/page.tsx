@@ -1290,7 +1290,7 @@ export default function Home() {
                     });
                   }
                 })
-                .catch(() => {});
+                .catch(() => { });
             }, 800);
           }
         }
@@ -1391,7 +1391,7 @@ export default function Home() {
             });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     },
     [isAuthenticated, sortBy]
   );
@@ -1490,7 +1490,7 @@ export default function Home() {
                   });
                 }
               })
-              .catch(() => {});
+              .catch(() => { });
           }, 800);
         }
       }
@@ -1579,7 +1579,7 @@ export default function Home() {
                   });
                 }
               })
-              .catch(() => {});
+              .catch(() => { });
           }, 800);
         }
       }
@@ -6041,8 +6041,7 @@ export default function Home() {
                       marginBottom: '0.75rem',
                     }}
                   >
-                    <Compass size={14} />
-                    <span>Curated Discovery Tracks</span>
+
                   </div>
                   <h3 style={{ fontSize: '1.9rem', fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
                     Explore Opportunities Across Every Industry
