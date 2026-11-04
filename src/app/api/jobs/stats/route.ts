@@ -7,6 +7,8 @@ import {
 
 const searchService = new JobSearchService();
 
+export const maxDuration = 60;
+
 export async function GET(request: Request): Promise<NextResponse>;
 export async function GET(): Promise<NextResponse>;
 export async function GET(request?: Request): Promise<NextResponse> {

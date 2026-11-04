@@ -124,6 +124,7 @@ export class JobSearchService {
     if (process.env.NODE_ENV === 'test') return null;
     const paths = [
       path.resolve(process.cwd(), '.catalog-snapshot.json'),
+      path.resolve(process.cwd(), 'src/modules/jobs/data/catalog-seed.json'),
       path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json'),
     ];
 
@@ -144,6 +145,22 @@ export class JobSearchService {
         // Continue to fallback
       }
     }
+
+    try {
+      // Direct bundled import fallback guaranteeing cold-start instant readiness on serverless (e.g. Vercel)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const seedData = require('../data/catalog-seed.json');
+      if (Array.isArray(seedData?.allJobs) && seedData.allJobs.length > 0) {
+        return {
+          allJobs: seedData.allJobs,
+          diagnostics: Array.isArray(seedData.diagnostics) ? seedData.diagnostics : [],
+          timestamp: typeof seedData.timestamp === 'number' ? seedData.timestamp : 0,
+        };
+      }
+    } catch {
+      // Bundled json not present or unreadable
+    }
+
     return null;
   }
 
@@ -283,7 +300,7 @@ export class JobSearchService {
       }
     });
 
-    const results = await executeWithConcurrencyLimit(providerTasks, 8);
+    const results = await executeWithConcurrencyLimit(providerTasks, Math.max(providerTasks.length, 12));
     for (const jobBatch of results) {
       if (Array.isArray(jobBatch)) {
         allJobs.push(...jobBatch);

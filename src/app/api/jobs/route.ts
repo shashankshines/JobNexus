@@ -15,6 +15,8 @@ import { normalizeIndustryFilter } from '@/modules/jobs/domain/job.taxonomy';
 // Re-export Job interface for backward compatibility with existing imports
 export type Job = LegacyJob;
 
+export const maxDuration = 60;
+
 const searchService = new JobSearchService();
 
 export async function GET(request: Request) {
