@@ -425,21 +425,14 @@ function getSearchCriteriaFromUrl(params: URLSearchParams): SearchCriteria {
 }
 
 function getSearchCriteriaSummary(criteria: SearchCriteria): string {
-  const role = criteria.role
-    ? (JOB_POST_GROUPS.flatMap((group) => group.posts).find((post) => post.value === criteria.role)?.label || criteria.role)
-    : '';
-  const workplace = criteria.remote
-    ? (WORKPLACE_OPTIONS.find((option) => option.value === criteria.remote && option.value !== '')?.label || '')
-    : '';
-  const jobType = criteria.type
-    ? (TYPE_OPTIONS.find((option) => option.value === criteria.type && option.value !== '')?.label || '')
-    : '';
-  const seniority = criteria.level
-    ? (LEVEL_OPTIONS.find((option) => option.value === criteria.level && option.value !== '')?.label || '')
-    : '';
+  const role = JOB_POST_GROUPS.flatMap((group) => group.posts)
+    .find((post) => post.value === criteria.role)?.label || criteria.role;
+  const workplace = WORKPLACE_OPTIONS.find((option) => option.value === criteria.remote)?.label;
+  const jobType = TYPE_OPTIONS.find((option) => option.value === criteria.type)?.label;
+  const seniority = LEVEL_OPTIONS.find((option) => option.value === criteria.level)?.label;
 
   return [
-    criteria.industry && criteria.industry !== 'all' ? getIndustryLabel(criteria.industry) : '',
+    criteria.industry ? getIndustryLabel(criteria.industry) : '',
     criteria.location,
     workplace,
     jobType,
@@ -1170,11 +1163,6 @@ export default function Home() {
 
       const abortController = new AbortController();
       activeSearchAbortRef.current = abortController;
-      const fetchTimeoutId = setTimeout(() => {
-        if (activeSearchAbortRef.current === abortController) {
-          abortController.abort(new Error('Search request timed out after 4500ms'));
-        }
-      }, 4500);
 
       try {
         const res = await fetch(`/api/jobs?${requestParams.toString()}`, {
@@ -1182,8 +1170,6 @@ export default function Home() {
           signal: abortController.signal,
           headers: { Accept: 'application/json' },
         });
-
-        clearTimeout(fetchTimeoutId);
 
         if (!res.ok) {
           throw new Error(`Server returned HTTP ${res.status}`);
@@ -1245,22 +1231,6 @@ export default function Home() {
           timestamp: Date.now(),
         });
 
-        // Fast session cache for instant subsequent tab/page restores
-        const isDefaultFeed = !hasActiveSearchCriteria(searchCriteria) && selectedSort === 'relevance';
-        if (isDefaultFeed && typeof window !== 'undefined') {
-          try {
-            sessionStorage.setItem('JOBNEXUS_FEED_CACHE', JSON.stringify({
-              jobs: data.jobs,
-              count,
-              totalAvailable: data.totalAvailable,
-              snapshotId: data.snapshotId,
-              timestamp: Date.now(),
-            }));
-          } catch {
-            // Non-fatal if sessionStorage is unavailable
-          }
-        }
-
         // Background idle prefetch for next page so infinite scroll has zero latency
         if (data.hasMore) {
           const nextPageParams = new URLSearchParams(params.toString());
@@ -1290,18 +1260,12 @@ export default function Home() {
                     });
                   }
                 })
-                .catch(() => { });
+                .catch(() => {});
             }, 800);
           }
         }
       } catch (error: unknown) {
-        clearTimeout(fetchTimeoutId);
         if (error instanceof Error && error.name === 'AbortError') {
-          if (requestId === searchRequestIdRef.current) {
-            setLoading(false);
-            setPendingSearchCriteria(null);
-            setSearchError('Search took longer than expected. Please check your connection or retry.');
-          }
           return;
         }
         if (requestId !== searchRequestIdRef.current) return;
@@ -1318,13 +1282,9 @@ export default function Home() {
         setSearchError('We could not complete this search. Please try again.');
         setPendingSearchCriteria(null);
       } finally {
-        clearTimeout(fetchTimeoutId);
-        if (requestId === searchRequestIdRef.current) {
+        if (requestId === searchRequestIdRef.current && activeSearchAbortRef.current === abortController) {
           setLoading(false);
-          setPendingSearchCriteria(null);
-          if (activeSearchAbortRef.current === abortController) {
-            activeSearchAbortRef.current = null;
-          }
+          activeSearchAbortRef.current = null;
         }
       }
     },
@@ -1391,7 +1351,7 @@ export default function Home() {
             });
           }
         })
-        .catch(() => { });
+        .catch(() => {});
     },
     [isAuthenticated, sortBy]
   );
@@ -1490,7 +1450,7 @@ export default function Home() {
                   });
                 }
               })
-              .catch(() => { });
+              .catch(() => {});
           }, 800);
         }
       }
@@ -1579,7 +1539,7 @@ export default function Home() {
                   });
                 }
               })
-              .catch(() => { });
+              .catch(() => {});
           }, 800);
         }
       }
@@ -1881,26 +1841,6 @@ export default function Home() {
     setRemote(criteria.remote);
     setIndustry(criteria.industry);
     setSortBy(initialSort);
-
-    // Instant session cache restore: Render feed in 0ms while revalidating seamlessly
-    if (!hasFilters && typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('JOBNEXUS_FEED_CACHE');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed.jobs) && parsed.jobs.length > 0 && Date.now() - parsed.timestamp < 15 * 60 * 1000) {
-            setJobs(parsed.jobs);
-            setMatchingCount(parsed.count);
-            setTotalAvailableJobs(parsed.totalAvailable);
-            setSearchTruncated(true);
-            setSearchPage(1);
-          }
-        }
-      } catch {
-        // Non-fatal fallback to network
-      }
-    }
-
     void executeSearch(criteria, {
       markSearched: hasFilters,
       syncUrl: false,
@@ -5620,7 +5560,7 @@ export default function Home() {
                 fontSize: '0.86rem',
               }}
             >
-              {pendingSearchCriteria && (searched || jobs.length > 0) && (
+              {pendingSearchCriteria && (
                 <p style={{ margin: 0 }}>
                   Updating results for {getSearchCriteriaSummary(pendingSearchCriteria) || 'all industries'}.
                   {jobs.length > 0 && ` Previous results for ${getSearchCriteriaSummary(appliedSearchCriteria) || 'all industries'} are hidden until this search finishes.`}
@@ -6041,7 +5981,8 @@ export default function Home() {
                       marginBottom: '0.75rem',
                     }}
                   >
-
+                    <Compass size={14} />
+                    <span>Curated Discovery Tracks</span>
                   </div>
                   <h3 style={{ fontSize: '1.9rem', fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
                     Explore Opportunities Across Every Industry
