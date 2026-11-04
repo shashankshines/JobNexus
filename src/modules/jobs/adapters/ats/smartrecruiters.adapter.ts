@@ -204,3 +204,4 @@ export class SmartRecruitersAdapter implements JobProvider {
     };
   }
 }
+

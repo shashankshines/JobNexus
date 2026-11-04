@@ -105,3 +105,4 @@ describe('JobNexus — Centralized Workplace & Remote Eligibility Classification
     });
   });
 });
+
