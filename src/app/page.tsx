@@ -3289,26 +3289,6 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
             zIndex: (hasOpenSearchDropdown || hasOpenRefinementDropdown) ? 50 : 10,
           }}
         >
-          <motion.div
-            key={searched ? `hero-searched-${matchingCount}` : `hero-total-${displayTotalJobs}`}
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="hero-ats-badge"
-          >
-            <Sparkles size={14} className="hero-ats-badge-icon" />
-            <span className="hero-ats-badge-accent">
-              {searched
-                ? searchError && failedSearch ? 'Search unavailable' : `${matchingCount.toLocaleString()} Matching Jobs`
-                : globalInventorySummary}
-            </span>
-            <span className="hero-ats-badge-bullet">•</span>
-            <span className="hero-ats-badge-secondary">
-              {searched
-                ? searchError && failedSearch ? 'Search could not be completed' : `${displayedJobs.length.toLocaleString()} Loaded · ${globalInventorySummary}`
-                : `${sourcesCount || '—'} Configured Public Sources`}
-            </span>
-          </motion.div>
-
           {/* Luminous Animated Hero Headline Container */}
           <div className="hero-headline-container">
             <div
