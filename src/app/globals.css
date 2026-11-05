@@ -3148,6 +3148,22 @@ html[data-theme="light"] .user-dropdown-admin-card:hover {
   flex-shrink: 0;
 }
 
+.search-submit-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: 0.35rem;
+  line-height: 1;
+}
+
 .search-refinements-bar {
   position: relative;
   z-index: 300;

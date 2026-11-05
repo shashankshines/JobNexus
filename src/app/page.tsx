@@ -2301,8 +2301,33 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
   );
   const activeLocationOptions = location.trim() ? locationSuggestions : popularLocationOptions;
 
+  const activeDraftCount = useMemo(() => {
+    let count = 0;
+    if (query.trim()) count++;
+    if (location.trim()) count++;
+    if (selectedRole) count++;
+    if (industry && industry !== 'all') count++;
+    if (type) count++;
+    if (level) count++;
+    if (company) count++;
+    if (remote) count++;
+    return count;
+  }, [query, location, selectedRole, industry, type, level, company, remote]);
+
+  const hasDraftFilters = activeDraftCount > 0;
+
   const handleWorkplaceCategoryClick = (categoryRemoteParam: string) => {
-    const criteria = { ...appliedSearchCriteria, remote: categoryRemoteParam };
+    setRemote(categoryRemoteParam);
+    const criteria: SearchCriteria = {
+      query,
+      role: selectedRole,
+      company,
+      location,
+      type,
+      level,
+      remote: categoryRemoteParam,
+      industry,
+    };
     updateDraftSearchCriteria(criteria);
     setActiveView('all');
     setActiveDiscoveryTab('feed');
@@ -2653,7 +2678,13 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                     ) : (
                       <span className="elapsed-counter-status">
                         <span className="elapsed-counter-num">{searchError ? '—' : matchingCount.toLocaleString()}</span>
-                        <span className="elapsed-counter-label">{searchError ? 'Search unavailable' : 'Roles Matched'}</span>
+                        <span className="elapsed-counter-label">
+                          {searchError
+                            ? 'Search unavailable'
+                            : hasActiveSearchCriteria(appliedSearchCriteria)
+                              ? 'Roles Matched'
+                              : 'Jobs Available'}
+                        </span>
                         <span className="elapsed-counter-dot count-secondary">•</span>
                         <span className="elapsed-counter-verified count-secondary">{displayTotalJobs} Across Integrations</span>
                       </span>
@@ -2703,7 +2734,13 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                     ) : (
                       <span className="elapsed-counter-status">
                         <span className="elapsed-counter-num">{searchError ? '—' : matchingCount.toLocaleString()}</span>
-                        <span className="elapsed-counter-label">{searchError ? 'Unavailable' : 'Matched'}</span>
+                        <span className="elapsed-counter-label">
+                          {searchError
+                            ? 'Unavailable'
+                            : hasActiveSearchCriteria(appliedSearchCriteria)
+                              ? 'Matched'
+                              : 'Available'}
+                        </span>
                         <span className="count-secondary">• {displayTotalJobs} Total</span>
                       </span>
                     )
@@ -3994,29 +4031,64 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                 className="btn-primary search-submit-btn"
                 style={{
                   height: 48,
-                  padding: '0 2rem',
+                  padding: '0 1.85rem',
                   borderRadius: 12,
                   fontSize: '0.95rem',
                   fontWeight: 600,
                   flexShrink: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  boxShadow: hasDraftFilters ? '0 0 16px rgba(99, 102, 241, 0.42)' : undefined,
+                  transition: 'all 0.2s ease',
                 }}
               >
                 {loading ? (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    <span>Searching...</span>
+                    <span>{hasDraftFilters ? 'Searching...' : 'Loading Jobs...'}</span>
                   </>
-                ) : (
+                ) : hasDraftFilters ? (
                   <>
                     <Search size={17} />
                     <span>Search Jobs</span>
+                    <span className="search-submit-count-badge" title={`${activeDraftCount} filter criteria staged`}>
+                      {activeDraftCount}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Compass size={17} />
+                    <span>Explore All Jobs</span>
                   </>
                 )}
               </motion.button>
             </div>
 
-            <p style={{ margin: '-0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-              Your selected criteria apply only after you click Search Jobs.
+            <p
+              className="search-criteria-apply-hint"
+              style={{
+                margin: '-0.25rem 0 0',
+                color: hasDraftFilters ? 'var(--primary-start)' : 'var(--text-muted)',
+                fontSize: '0.78rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                transition: 'color 0.2s ease',
+              }}
+            >
+              {hasDraftFilters ? (
+                <>
+                  <Sparkles size={12} style={{ flexShrink: 0 }} />
+                  <span style={{ fontWeight: 600 }}>
+                    {activeDraftCount} filter{activeDraftCount > 1 ? 's' : ''} staged — Your selected criteria apply only after you click Search Jobs.
+                  </span>
+                </>
+              ) : (
+                <span>
+                  Showing all verified opportunities across sectors. Your selected criteria apply only after you click Search Jobs.
+                </span>
+              )}
             </p>
 
             {/* Search refinements remain visible without an extra filter-toggle step. */}
@@ -5655,9 +5727,9 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                     {activeView === 'saved' ? (
                       `${savedJobs.length} Saved Positions`
                     ) : searchTruncated ? (
-                      `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} loaded · ${matchingCount.toLocaleString()} matches`
+                      `Showing ${visibleJobs.length} of ${displayedJobs.length.toLocaleString()} loaded · ${matchingCount.toLocaleString()} ${hasActiveSearchCriteria(appliedSearchCriteria) ? 'matches' : 'available'}`
                     ) : (
-                      `Showing ${visibleJobs.length} of ${matchingCount.toLocaleString()} matching jobs`
+                      `Showing ${visibleJobs.length} of ${matchingCount.toLocaleString()} ${hasActiveSearchCriteria(appliedSearchCriteria) ? 'matching jobs' : 'available jobs'}`
                     )}
                   </h3>
 
@@ -5687,12 +5759,12 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                       <span className="desktop-only">
                         {isScrollingCards ? (
                           <>
-                            <span className="count-main">{animatedElapsedCount} viewed · {matchingCount.toLocaleString()} matches</span>
+                            <span className="count-main">{animatedElapsedCount} viewed · {matchingCount.toLocaleString()} {hasActiveSearchCriteria(appliedSearchCriteria) ? 'matches' : 'available'}</span>
                             <span className="count-secondary"> • {globalInventorySummary}</span>
                           </>
                         ) : (
                           <>
-                            <span className="count-main">{matchingCount.toLocaleString()} matching jobs</span>
+                            <span className="count-main">{matchingCount.toLocaleString()} {hasActiveSearchCriteria(appliedSearchCriteria) ? 'matching jobs' : 'available jobs'}</span>
                             <span className="count-secondary"> • {globalInventorySummary}</span>
                           </>
                         )}
@@ -5700,7 +5772,7 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                       <span className="mobile-only">
                         {isScrollingCards
                           ? `${animatedElapsedCount}/${displayedJobs.length.toLocaleString()} viewed`
-                          : `${matchingCount.toLocaleString()} matches`}
+                          : `${matchingCount.toLocaleString()} ${hasActiveSearchCriteria(appliedSearchCriteria) ? 'matches' : 'available'}`}
                       </span>
                     </motion.div>
                   )}
