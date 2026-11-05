@@ -1034,10 +1034,24 @@ export default function Home() {
 
   const currentHeroWord = HERO_ROTATING_WORDS[heroWordIndex];
 
+const MEANINGLESS_PILL_REGEX =
+  /\b(nonexistent|non-existent|dummy|sample|fake|mock|asdf|qwerty|foo|bar|baz|xyz|placeholder|hello world|demo|undefined|null|random string)\b/i;
+
+function isMeaningfulPill(pill?: QuickPill | null): boolean {
+  if (!pill || typeof pill.query !== 'string') return false;
+  const q = pill.query.trim().toLowerCase();
+  const label = typeof pill.label === 'string' ? pill.label.toLowerCase() : '';
+  if (q.length < 3 || MEANINGLESS_PILL_REGEX.test(q) || MEANINGLESS_PILL_REGEX.test(label)) {
+    return false;
+  }
+  if (/\b(test|testing)\b/i.test(q) && !/\b(qa|software|automation|penetration|manual|security|performance|engineer|lead|analyst)\b/i.test(q)) {
+    return false;
+  }
+  return true;
+}
+
   const applyPopularPills = useCallback((data: { pills?: QuickPill[]; lastUpdated?: string }) => {
-    const rolePills = data.pills?.filter(
-      (pill) => typeof pill.query === 'string' && pill.query.trim().length > 0
-    );
+    const rolePills = data.pills?.filter(isMeaningfulPill);
     if (!rolePills?.length) return;
 
     const updatedAt = data.lastUpdated ? Date.parse(data.lastUpdated) : Date.now();

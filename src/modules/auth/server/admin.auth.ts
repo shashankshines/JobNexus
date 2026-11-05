@@ -11,18 +11,18 @@ import { extractSessionId, validateSession, UserRecord } from './session.store';
 
 export type AdminAuthResult =
   | {
-      authorized: true;
-      statusCode: 200;
-      user: UserRecord;
-      adminEmail: string;
-      adminUserId: string;
-    }
+    authorized: true;
+    statusCode: 200;
+    user: UserRecord;
+    adminEmail: string;
+    adminUserId: string;
+  }
   | {
-      authorized: false;
-      statusCode: 401 | 403;
-      error: string;
-      user?: UserRecord;
-    };
+    authorized: false;
+    statusCode: 401 | 403;
+    error: string;
+    user?: UserRecord;
+  };
 
 export const DESIGNATED_ADMIN_EMAIL = 'shashankshines@gmail.com';
 
@@ -33,10 +33,12 @@ export const DESIGNATED_ADMIN_EMAIL = 'shashankshines@gmail.com';
  * Fails closed if ADMIN_EMAILS is explicitly empty, but defaults to designated administrator when unconfigured.
  */
 export function parseAdminEmails(envValue?: string): Set<string> {
-  const raw = envValue !== undefined ? envValue : process.env.ADMIN_EMAILS;
-  if (raw === undefined) {
+  const isEnvUnset = envValue === undefined && process.env.ADMIN_EMAILS === undefined;
+  if (isEnvUnset) {
     return new Set<string>([DESIGNATED_ADMIN_EMAIL]);
   }
+
+  const raw = envValue !== undefined ? envValue : (process.env.ADMIN_EMAILS || '');
   const unquoted = raw.trim().replace(/^["']|["']$/g, '');
   if (!unquoted) {
     return new Set<string>();
@@ -60,6 +62,9 @@ export function parseAdminEmails(envValue?: string): Set<string> {
 export function isAllowedAdminEmail(email?: string | null, envValue?: string): boolean {
   if (!email || typeof email !== 'string') return false;
   const normalized = email.trim().toLowerCase();
+  if (envValue === undefined && process.env.ADMIN_EMAILS === undefined && normalized === DESIGNATED_ADMIN_EMAIL) {
+    return true;
+  }
   const allowlist = parseAdminEmails(envValue);
   return allowlist.has(normalized);
 }

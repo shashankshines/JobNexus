@@ -1,8 +1,48 @@
 import { PopularSearchPill, PopularSearchesResponse } from '../domain/popular-searches.types';
-import { parseQueryTokens } from '../domain/job.ranking';
+import { parseQueryTokens, isKnownLocation } from '../domain/job.ranking';
 import { DurableStore } from '../../storage/durable.store';
 
 const WINDOW_DAYS = 30;
+
+const MEANINGLESS_QUERY_REGEX =
+  /\b(nonexistent|non-existent|dummy|sample|fake|mock|asdf|qwerty|foo|bar|baz|xyz|placeholder|hello world|demo|undefined|null|random string)\b/i;
+
+const VALID_TESTING_DISCIPLINES =
+  /\b(qa|quality|automation|software|penetration|manual|security|performance|load|unit|integration|lead|engineer|analyst|specialist|tester|sdet)\b/i;
+
+export function isMeaningfulJobQuery(query: string): boolean {
+  if (!query || typeof query !== 'string') return false;
+  const clean = query.trim().toLowerCase();
+  if (clean.length < 3) return false;
+
+  // Block known meaningless, mock, sample, or test strings
+  if (MEANINGLESS_QUERY_REGEX.test(clean)) {
+    return false;
+  }
+
+  // Block test/testing unless paired with a recognized software/QA discipline
+  if (/\b(test|testing)\b/i.test(clean)) {
+    if (!VALID_TESTING_DISCIPLINES.test(clean)) {
+      return false;
+    }
+  }
+
+  // Must contain at least one recognized alphabetic word of length >= 3
+  if (!/[a-z]{3,}/i.test(clean)) {
+    return false;
+  }
+
+  // Block location-only queries (e.g. "Mumbai, Maharashtra")
+  const parsed = parseQueryTokens(clean);
+  if (parsed.hasLocationTokens && (!parsed.hasRoleTokens || parsed.roleTokens.length === 0)) {
+    return false;
+  }
+  if (isKnownLocation(clean)) {
+    return false;
+  }
+
+  return true;
+}
 
 export const BASELINE_POPULAR_PILLS: Omit<PopularSearchPill, 'updatedAt'>[] = [
   {
@@ -199,7 +239,10 @@ export class PopularSearchesService {
     this.initDefaults();
     const storedItems = this.store.getAll().flatMap((item) => {
       const roleQuery = getRoleOnlyQuery(item.query);
-      if (!roleQuery) return [];
+      if (!roleQuery || !isMeaningfulJobQuery(roleQuery) || !isMeaningfulJobQuery(item.label)) {
+        this.store.delete(item.id);
+        return [];
+      }
       const hasLocationTokens = parseQueryTokens(item.query).hasLocationTokens;
       return [{
         ...item,
@@ -265,7 +308,7 @@ export class PopularSearchesService {
   static getPopularSearchesResponse(limit = 8): PopularSearchesResponse {
     this.initDefaults();
     const pills = this.getPopularPills(limit);
-    const allItems = this.store.getAll();
+    const allItems = this.store.getAll().filter((item) => isMeaningfulJobQuery(item.query));
     const totalSearchesRecorded = allItems.reduce(
       (acc, pill) => acc + (getRoleOnlyQuery(pill.query) ? pill.searchCount : 0),
       0
@@ -282,7 +325,7 @@ export class PopularSearchesService {
   static recordSearch(rawQuery: string, limit = 8): PopularSearchPill[] {
     this.initDefaults();
     const clean = getRoleOnlyQuery(rawQuery || '');
-    if (!clean || clean.length < 2) {
+    if (!clean || clean.length < 3 || !isMeaningfulJobQuery(clean)) {
       return this.getPopularPills(limit);
     }
 

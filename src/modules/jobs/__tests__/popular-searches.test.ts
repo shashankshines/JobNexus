@@ -99,9 +99,25 @@ describe('JobNexus — Dynamic Popular Search Pills & Average Search Volume Suit
     PopularSearchesService.recordSearch('   ');
     PopularSearchesService.recordSearch('a');
     PopularSearchesService.recordSearch('###');
+    PopularSearchesService.recordSearch('nonexistent test');
+    PopularSearchesService.recordSearch('dummy');
+    PopularSearchesService.recordSearch('asdf');
+    PopularSearchesService.recordSearch('foo bar');
+    PopularSearchesService.recordSearch('test');
 
     const afterCount = PopularSearchesService.getPopularPills(20).length;
-    assert.strictEqual(beforeCount, afterCount, 'Noisy searches should be ignored');
+    assert.strictEqual(beforeCount, afterCount, 'Noisy and meaningless searches should be ignored');
+    const pills = PopularSearchesService.getPopularPills(20);
+    assert.ok(!pills.some((p) => p.query.includes('nonexistent')));
+    assert.ok(!pills.some((p) => p.query.includes('dummy')));
+  });
+
+  it('allows legitimate QA/Testing engineering roles while blocking standalone test noise', () => {
+    PopularSearchesService.recordSearch('QA Automation Test Engineer');
+
+    const pills = PopularSearchesService.getPopularPills(20);
+    const qaPill = pills.find((p) => p.query === 'QA Automation Test Engineer');
+    assert.ok(qaPill, 'Legitimate QA Test Engineer role must be accepted');
   });
 
   it('records only the role portion of mixed searches and ignores location-only searches', () => {
