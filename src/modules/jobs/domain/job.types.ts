@@ -119,6 +119,18 @@ export interface JobStatsResponse {
   sourcesCount: number;
   providerBreakdown: Record<string, number>;
   lastUpdated: string;
+  itCount?: number;
+  nonItCount?: number;
+  workplaceDistribution?: {
+    remote: number;
+    hybrid: number;
+    onsite: number;
+  };
+  sourceCoverage?: {
+    total: number;
+    itSources: number;
+    nonItSources: number;
+  };
 }
 
 export function toLegacyJob(job: NormalizedJob): LegacyJob {

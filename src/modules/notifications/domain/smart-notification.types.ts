@@ -32,9 +32,9 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: Omit<NotificationPreferences, 'us
   enabled: true,
   mode: 'instant',
   timezone: 'Asia/Kolkata',
-  startTime: '09:00',
-  endTime: '21:00',
-  activeDays: [1, 2, 3, 4, 5, 6], // Mon-Sat active, Sunday disabled
+  startTime: '00:00',
+  endTime: '23:59',
+  activeDays: [1, 2, 3, 4, 5, 6, 7], // 24 hours x 7 days x 365 days active (all days, unrestricted)
 };
 
 export interface SavedJobAlert {

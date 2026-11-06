@@ -4,6 +4,7 @@ import { authorizeAdminRequest } from '@/modules/auth/server/admin.auth';
 import { JobSearchService } from '@/modules/jobs/services/job-search.service';
 import {
   processNewCanonicalJobs,
+  processPendingJobEvents,
   processDeferredPendingNotifications,
 } from '@/modules/notifications/services/smart-notification.store';
 import { NormalizedJob } from '@/modules/jobs/domain/job.types';
@@ -69,7 +70,10 @@ async function handleNotificationCron(request: Request) {
     // 3. Process new canonical jobs against active alerts
     const ingestionResult = await processNewCanonicalJobs(canonicalJobs);
 
-    // 4. Sweep deferred queue one more time to catch newly queued jobs that may be immediately deliverable
+    // 4. Process any pending durable JOB_CREATED events in the outbox
+    const outboxResult = await processPendingJobEvents();
+
+    // 5. Sweep deferred queue one more time to catch newly queued jobs that may be immediately deliverable
     const finalDeferred = await processDeferredPendingNotifications();
 
     return NextResponse.json(
@@ -79,8 +83,9 @@ async function handleNotificationCron(request: Request) {
           timestamp: new Date().toISOString(),
           canonicalJobsEvaluated: canonicalJobs.length,
           newJobsDetected: ingestionResult.newJobsDetected,
-          notificationsCreated: ingestionResult.created,
-          instantDelivered: ingestionResult.delivered,
+          notificationsCreated: ingestionResult.created + outboxResult.notificationsCreated,
+          instantDelivered: ingestionResult.delivered + outboxResult.delivered,
+          outboxEventsProcessed: outboxResult.eventsProcessed,
           initialDeferredProcessed: initialDeferred,
           finalDeferredProcessed: finalDeferred,
         },

@@ -17,6 +17,8 @@ export const FIRESTORE_COLLECTIONS = {
   USER_NOTIFICATION_PREFERENCES: 'user_notification_preferences',
   USER_JOB_ALERTS: 'user_job_alerts',
   USER_NOTIFICATIONS: 'user_notifications',
+  CANONICAL_JOBS: 'canonical_jobs',
+  JOB_EVENTS_OUTBOX: 'job_events_outbox',
 } as const;
 
 export type FirestoreCollectionName =
@@ -221,4 +223,12 @@ export function getUserJobAlertsCollection<T extends DocumentData = DocumentData
 
 export function getUserNotificationsCollection<T extends DocumentData = DocumentData>(): CollectionReference<T> {
   return getTypedCollection<T>(FIRESTORE_COLLECTIONS.USER_NOTIFICATIONS);
+}
+
+export function getCanonicalJobsCollection<T extends DocumentData = DocumentData>(): CollectionReference<T> {
+  return getTypedCollection<T>(FIRESTORE_COLLECTIONS.CANONICAL_JOBS);
+}
+
+export function getJobEventsOutboxCollection<T extends DocumentData = DocumentData>(): CollectionReference<T> {
+  return getTypedCollection<T>(FIRESTORE_COLLECTIONS.JOB_EVENTS_OUTBOX);
 }

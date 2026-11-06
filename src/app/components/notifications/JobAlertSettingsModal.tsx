@@ -544,9 +544,26 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
 
             {/* Active Days */}
             <div style={{ marginTop: '0.35rem' }}>
-              <label style={{ display: 'block', fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                Active Delivery Days (Sunday disabled by default)
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                  Active Delivery Days (24×7×365 enabled across all 7 days by default)
+                </label>
+                {preferences.activeDays.length === 7 && preferences.startTime === '00:00' && (
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      color: 'var(--primary)',
+                      background: 'var(--hero-badge-bg)',
+                      border: '1px solid var(--hero-badge-border)',
+                      borderRadius: '999px',
+                      padding: '1px 8px',
+                    }}
+                  >
+                    24×7×365 Active
+                  </span>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                 {WEEKDAYS.map((day) => {
                   const isActive = preferences.activeDays.includes(day.id);

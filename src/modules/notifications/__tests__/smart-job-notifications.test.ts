@@ -23,6 +23,7 @@ import {
   resetSmartNotificationMemoryStore,
   getNotificationPreferences,
   updateNotificationPreferences,
+  migrateLegacyPreferences,
   createAlert,
   getAlertsForUser,
   updateAlert,
@@ -62,10 +63,22 @@ function createSampleJob(partial: Partial<NormalizedJob> = {}): NormalizedJob {
   };
 }
 
-describe('1. Dedicated Server-Side Notification Scheduling Utility', () => {
-  const defaultPrefs: NotificationPreferences = {
+describe('1. Dedicated Server-Side Notification Scheduling Utility & 24x7x365 Engine', () => {
+  const default24x7Prefs: NotificationPreferences = {
     userId: 'user_sched_1',
     ...DEFAULT_NOTIFICATION_PREFERENCES,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const customQuietHoursPrefs: NotificationPreferences = {
+    userId: 'user_sched_2',
+    enabled: true,
+    mode: 'instant',
+    timezone: 'Asia/Kolkata',
+    startTime: '09:00',
+    endTime: '21:00',
+    activeDays: [1, 2, 3, 4, 5, 6], // Explicit legacy quiet hours (Sun off)
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -89,81 +102,103 @@ describe('1. Dedicated Server-Side Notification Scheduling Utility', () => {
     assert.strictEqual(parts.minutes, 30);
   });
 
-  it('evaluates delivery window: Monday 08:30 (before 09:00 window) -> NOT in window', () => {
-    // 03:00:00 UTC = 08:30:00 IST
+  it('evaluates delivery window: Monday 08:30 with 24x7 default -> IN window', () => {
     const mon830 = new Date('2026-05-04T03:00:00.000Z');
-    assert.strictEqual(isWithinDeliveryWindow(mon830, defaultPrefs), false);
+    assert.strictEqual(isWithinDeliveryWindow(mon830, default24x7Prefs), true);
   });
 
-  it('evaluates delivery window: Monday 10:30 (inside 09:00-21:00 window) -> IN window', () => {
-    // 05:00:00 UTC = 10:30:00 IST
-    const mon1030 = new Date('2026-05-04T05:00:00.000Z');
-    assert.strictEqual(isWithinDeliveryWindow(mon1030, defaultPrefs), true);
-  });
-
-  it('evaluates delivery window: Monday 20:59:59 (inside window before 21:00) -> IN window', () => {
-    // 15:29:59 UTC = 20:59:59 IST
-    const mon2059 = new Date('2026-05-04T15:29:59.000Z');
-    assert.strictEqual(isWithinDeliveryWindow(mon2059, defaultPrefs), true);
-  });
-
-  it('evaluates delivery window: Monday 21:00:00 (end boundary) -> NOT in window', () => {
-    // 15:30:00 UTC = 21:00:00 IST
-    const mon2100 = new Date('2026-05-04T15:30:00.000Z');
-    assert.strictEqual(isWithinDeliveryWindow(mon2100, defaultPrefs), false);
-  });
-
-  it('evaluates delivery window: Saturday 21:05 (Saturday night quiet hours) -> NOT in window', () => {
-    // 2026-05-09 is Saturday. 15:35:00 UTC = 21:05:00 IST
-    const sat2105 = new Date('2026-05-09T15:35:00.000Z');
-    assert.strictEqual(isWithinDeliveryWindow(sat2105, defaultPrefs), false);
-  });
-
-  it('evaluates delivery window: Sunday 11:00 (Sunday disabled by default) -> NOT in window', () => {
-    // 2026-05-10 is Sunday. 05:30:00 UTC = 11:00:00 IST
+  it('evaluates delivery window: Sunday 11:00 with 24x7 default -> IN window', () => {
     const sun1100 = new Date('2026-05-10T05:30:00.000Z');
-    assert.strictEqual(isWithinDeliveryWindow(sun1100, defaultPrefs), false);
+    assert.strictEqual(isWithinDeliveryWindow(sun1100, default24x7Prefs), true);
   });
 
-  it('calculates next delivery window: Mon 08:30 -> Mon 09:00', () => {
+  it('evaluates delivery window: Saturday 21:05 with 24x7 default -> IN window', () => {
+    const sat2105 = new Date('2026-05-09T15:35:00.000Z');
+    assert.strictEqual(isWithinDeliveryWindow(sat2105, default24x7Prefs), true);
+  });
+
+  it('evaluates delivery window with custom quiet hours: Monday 08:30 (before 09:00) -> NOT in window', () => {
     const mon830 = new Date('2026-05-04T03:00:00.000Z');
-    const next = calculateNextDeliveryWindow(mon830, defaultPrefs);
+    assert.strictEqual(isWithinDeliveryWindow(mon830, customQuietHoursPrefs), false);
+  });
+
+  it('evaluates delivery window with custom quiet hours: Monday 10:30 -> IN window', () => {
+    const mon1030 = new Date('2026-05-04T05:00:00.000Z');
+    assert.strictEqual(isWithinDeliveryWindow(mon1030, customQuietHoursPrefs), true);
+  });
+
+  it('evaluates delivery window with custom quiet hours: Monday 21:00 -> NOT in window', () => {
+    const mon2100 = new Date('2026-05-04T15:30:00.000Z');
+    assert.strictEqual(isWithinDeliveryWindow(mon2100, customQuietHoursPrefs), false);
+  });
+
+  it('evaluates delivery window with custom quiet hours: Sunday 11:00 (Sunday disabled) -> NOT in window', () => {
+    const sun1100 = new Date('2026-05-10T05:30:00.000Z');
+    assert.strictEqual(isWithinDeliveryWindow(sun1100, customQuietHoursPrefs), false);
+  });
+
+  it('calculates next delivery window with custom quiet hours: Mon 08:30 -> Mon 09:00', () => {
+    const mon830 = new Date('2026-05-04T03:00:00.000Z');
+    const next = calculateNextDeliveryWindow(mon830, customQuietHoursPrefs);
     const parts = getLocalTimeParts(next, 'Asia/Kolkata');
     assert.strictEqual(parts.isoWeekday, 1); // Monday
     assert.strictEqual(parts.hours, 9);
     assert.strictEqual(parts.minutes, 0);
   });
 
-  it('calculates next delivery window: Mon 21:00 -> Tue 09:00', () => {
+  it('calculates next delivery window with custom quiet hours: Mon 21:00 -> Tue 09:00', () => {
     const mon2100 = new Date('2026-05-04T15:30:00.000Z');
-    const next = calculateNextDeliveryWindow(mon2100, defaultPrefs);
+    const next = calculateNextDeliveryWindow(mon2100, customQuietHoursPrefs);
     const parts = getLocalTimeParts(next, 'Asia/Kolkata');
     assert.strictEqual(parts.isoWeekday, 2); // Tuesday
     assert.strictEqual(parts.hours, 9);
     assert.strictEqual(parts.minutes, 0);
   });
 
-  it('calculates next delivery window: Sat 21:05 (Sunday disabled) -> Mon 09:00', () => {
+  it('calculates next delivery window with custom quiet hours: Sat 21:05 (Sunday disabled) -> Mon 09:00', () => {
     const sat2105 = new Date('2026-05-09T15:35:00.000Z');
-    const next = calculateNextDeliveryWindow(sat2105, defaultPrefs);
+    const next = calculateNextDeliveryWindow(sat2105, customQuietHoursPrefs);
     const parts = getLocalTimeParts(next, 'Asia/Kolkata');
     assert.strictEqual(parts.isoWeekday, 1); // Monday (skipping Sunday)
     assert.strictEqual(parts.hours, 9);
     assert.strictEqual(parts.minutes, 0);
   });
 
-  it('calculates next delivery window: Sun 11:00 (Sunday disabled) -> Mon 09:00', () => {
+  it('calculates next delivery window with 24x7: returns current date immediately without queue delay', () => {
     const sun1100 = new Date('2026-05-10T05:30:00.000Z');
-    const next = calculateNextDeliveryWindow(sun1100, defaultPrefs);
-    const parts = getLocalTimeParts(next, 'Asia/Kolkata');
-    assert.strictEqual(parts.isoWeekday, 1); // Monday
-    assert.strictEqual(parts.hours, 9);
-    assert.strictEqual(parts.minutes, 0);
+    const next = calculateNextDeliveryWindow(sun1100, default24x7Prefs);
+    assert.strictEqual(next.getTime(), sun1100.getTime());
+  });
+
+  it('migrates legacy preferences safely to 24x7 while preserving explicit opt-outs and custom schedules', () => {
+    // 1. Explicit opt out remains OFF
+    const optOut = migrateLegacyPreferences({ enabled: false }, 'u_optout');
+    assert.strictEqual(optOut.enabled, false);
+
+    // 2. Legacy defaults upgraded to 24x7x365
+    const legacy = migrateLegacyPreferences(
+      { enabled: true, activeDays: [1, 2, 3, 4, 5, 6], startTime: '09:00', endTime: '21:00' },
+      'u_legacy'
+    );
+    assert.strictEqual(legacy.enabled, true);
+    assert.deepStrictEqual(legacy.activeDays, [1, 2, 3, 4, 5, 6, 7]);
+    assert.strictEqual(legacy.startTime, '00:00');
+    assert.strictEqual(legacy.endTime, '23:59');
+
+    // 3. Custom schedule preserved
+    const custom = migrateLegacyPreferences(
+      { enabled: true, activeDays: [1, 3, 5], startTime: '10:00', endTime: '18:00' },
+      'u_custom'
+    );
+    assert.strictEqual(custom.enabled, true);
+    assert.deepStrictEqual(custom.activeDays, [1, 3, 5]);
+    assert.strictEqual(custom.startTime, '10:00');
+    assert.strictEqual(custom.endTime, '18:00');
   });
 
   it('supports different IANA timezones (e.g. America/New_York)', () => {
     const nyPrefs: NotificationPreferences = {
-      ...defaultPrefs,
+      ...customQuietHoursPrefs,
       timezone: 'America/New_York',
     };
 
@@ -303,15 +338,15 @@ describe('3. Smart Notification Store, Persistence & Ingestion Engine', () => {
     resetSmartNotificationMemoryStore();
   });
 
-  it('returns default preferences for new users', async () => {
+  it('returns default preferences for new users (24x7x365)', async () => {
     const prefs = await getNotificationPreferences('user_test_new');
     assert.strictEqual(prefs.userId, 'user_test_new');
     assert.strictEqual(prefs.enabled, true);
     assert.strictEqual(prefs.mode, 'instant');
     assert.strictEqual(prefs.timezone, 'Asia/Kolkata');
-    assert.strictEqual(prefs.startTime, '09:00');
-    assert.strictEqual(prefs.endTime, '21:00');
-    assert.deepStrictEqual(prefs.activeDays, [1, 2, 3, 4, 5, 6]);
+    assert.strictEqual(prefs.startTime, '00:00');
+    assert.strictEqual(prefs.endTime, '23:59');
+    assert.deepStrictEqual(prefs.activeDays, [1, 2, 3, 4, 5, 6, 7]);
   });
 
   it('supports updating preferences and cancels pending notifications when master toggle is turned OFF', async () => {

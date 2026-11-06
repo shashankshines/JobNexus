@@ -91,7 +91,7 @@ export function isValidTimezone(tz: string): boolean {
  * Determines whether a given timestamp falls within the user's configured notification delivery window.
  * Delivery window condition:
  *   activeDays includes localWeekday &&
- *   startTime <= localTime < endTime
+ *   startTime <= localTime < endTime (or 24x7 unrestricted)
  */
 export function isWithinDeliveryWindow(date: Date, preferences: NotificationPreferences): boolean {
   if (!preferences.enabled) {
@@ -101,20 +101,33 @@ export function isWithinDeliveryWindow(date: Date, preferences: NotificationPref
   const local = getLocalTimeParts(date, preferences.timezone);
   const activeDays = Array.isArray(preferences.activeDays) && preferences.activeDays.length > 0
     ? preferences.activeDays
-    : [1, 2, 3, 4, 5, 6];
+    : [1, 2, 3, 4, 5, 6, 7];
 
   if (!activeDays.includes(local.weekday)) {
     return false;
   }
 
-  const start = parseTimeString(preferences.startTime || '09:00');
-  const end = parseTimeString(preferences.endTime || '21:00');
+  const start = parseTimeString(preferences.startTime || '00:00');
+  const end = parseTimeString(preferences.endTime || '23:59');
+
+  // If 24 hours unrestricted on this active day
+  if (
+    (start.hour === 0 && start.minute === 0 && ((end.hour === 23 && end.minute >= 59) || end.hour === 24 || (end.hour === 0 && end.minute === 0))) ||
+    (start.hour === end.hour && start.minute === end.minute)
+  ) {
+    return true;
+  }
 
   const currentMinutes = local.hour * 60 + local.minute;
   const startMinutes = start.hour * 60 + start.minute;
   const endMinutes = end.hour * 60 + end.minute;
 
-  return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  if (startMinutes < endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  } else {
+    // Overnight window (e.g., 20:00 to 08:00)
+    return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+  }
 }
 
 /**
@@ -163,8 +176,8 @@ export function calculateNextDeliveryWindow(fromDate: Date, preferences: Notific
   const local = getLocalTimeParts(fromDate, preferences.timezone);
   const activeDays = Array.isArray(preferences.activeDays) && preferences.activeDays.length > 0
     ? preferences.activeDays
-    : [1, 2, 3, 4, 5, 6];
-  const start = parseTimeString(preferences.startTime || '09:00');
+    : [1, 2, 3, 4, 5, 6, 7];
+  const start = parseTimeString(preferences.startTime || '00:00');
   const startMinutes = start.hour * 60 + start.minute;
   const currentMinutes = local.hour * 60 + local.minute;
 

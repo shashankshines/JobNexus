@@ -19,6 +19,12 @@ import {
   isValidTimezone,
 } from './notification-scheduler.service';
 import { findMatchingAlertsForJob } from './job-alert-matcher.service';
+import { fromCanonicalJob } from '@/modules/jobs/domain/canonical-job.types';
+import {
+  upsertCanonicalJobs,
+  getPendingJobEvents,
+  markJobEventProcessed,
+} from '@/modules/jobs/services/canonical-job.store';
 
 export const JOB_NOTIFICATION_CURSOR_DOC = 'job_notification_cursor';
 export const MAX_SEEN_JOB_IDS_TRACKED = 20000;
@@ -69,8 +75,64 @@ export function isValidJobApplicationUrl(url: string | null | undefined): boolea
 }
 
 // ============================================================================
-// 1. Notification Preferences
+// 1. Notification Preferences & 24x7 Migration
 // ============================================================================
+
+/**
+ * Idempotently migrates and normalizes user notification preferences to 24x7x365 defaults:
+ * - Users with explicit enabled: false remain OFF.
+ * - Users without explicit opt-out receive ON by default, 24x7x365 unrestricted delivery.
+ * - Legacy default schedule (09:00-21:00, Mon-Sat) is safely migrated to unrestricted [1..7], 00:00-23:59.
+ * - Explicit custom user schedules are preserved without overwrite.
+ */
+export function migrateLegacyPreferences(
+  data: Partial<NotificationPreferences> | undefined,
+  userId: string
+): NotificationPreferences {
+  const now = new Date().toISOString();
+  if (!data) {
+    return {
+      ...DEFAULT_NOTIFICATION_PREFERENCES,
+      userId,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  // 1. Explicit opt-out check: If user explicitly opted out (enabled === false), preserve OFF
+  const enabled = data.enabled === false ? false : true;
+
+  // 2. Schedule migration: If legacy default (Mon-Sat, 09:00-21:00) or missing schedule,
+  // upgrade to unrestricted 24x7x365. Custom user schedules are left intact.
+  const isLegacyDefaultSchedule =
+    !data.activeDays ||
+    (Array.isArray(data.activeDays) &&
+      data.activeDays.length === 6 &&
+      data.activeDays.every((d, i) => d === i + 1) &&
+      (data.startTime === '09:00' || !data.startTime) &&
+      (data.endTime === '21:00' || !data.endTime));
+
+  const activeDays = isLegacyDefaultSchedule
+    ? [1, 2, 3, 4, 5, 6, 7]
+    : Array.isArray(data.activeDays) && data.activeDays.length > 0
+    ? data.activeDays
+    : [1, 2, 3, 4, 5, 6, 7];
+
+  const startTime = isLegacyDefaultSchedule ? '00:00' : data.startTime || '00:00';
+  const endTime = isLegacyDefaultSchedule ? '23:59' : data.endTime || '23:59';
+
+  return {
+    userId,
+    enabled,
+    mode: data.mode || 'instant',
+    timezone: isValidTimezone(data.timezone || '') ? (data.timezone as string) : 'Asia/Kolkata',
+    startTime,
+    endTime,
+    activeDays,
+    createdAt: data.createdAt || now,
+    updatedAt: data.updatedAt || now,
+  };
+}
 
 export async function getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
   try {
@@ -79,11 +141,7 @@ export async function getNotificationPreferences(userId: string): Promise<Notifi
     if (snap.exists) {
       const data = snap.data();
       if (data) {
-        return {
-          ...DEFAULT_NOTIFICATION_PREFERENCES,
-          ...data,
-          userId,
-        };
+        return migrateLegacyPreferences(data, userId);
       }
     }
   } catch {
@@ -91,14 +149,9 @@ export async function getNotificationPreferences(userId: string): Promise<Notifi
   }
 
   const cached = memoryPreferences.get(userId);
-  if (cached) return cached;
+  if (cached) return migrateLegacyPreferences(cached, userId);
 
-  const initial: NotificationPreferences = {
-    ...DEFAULT_NOTIFICATION_PREFERENCES,
-    userId,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+  const initial = migrateLegacyPreferences(undefined, userId);
   memoryPreferences.set(userId, initial);
   return initial;
 }
@@ -528,6 +581,131 @@ export async function writeJobNotificationCursor(cursor: JobNotificationCursorDo
     // Memory fallback
   }
   memorySeenJobIds = new Set(cursor.seenJobIds);
+}
+
+/**
+ * Processes durable JOB_CREATED events from the outbox.
+ * Idempotently evaluates active user alerts and creates deliverable notifications.
+ */
+export async function processPendingJobEvents(
+  batchLimit = 50
+): Promise<{
+  eventsProcessed: number;
+  notificationsCreated: number;
+  delivered: number;
+  queued: number;
+}> {
+  const pendingEvents = await getPendingJobEvents(batchLimit);
+  if (pendingEvents.length === 0) {
+    return { eventsProcessed: 0, notificationsCreated: 0, delivered: 0, queued: 0 };
+  }
+
+  const activeAlerts = await getAllActiveAlerts();
+  if (activeAlerts.length === 0) {
+    for (const evt of pendingEvents) {
+      await markJobEventProcessed(evt.eventId);
+    }
+    return { eventsProcessed: pendingEvents.length, notificationsCreated: 0, delivered: 0, queued: 0 };
+  }
+
+  // Group alerts by user
+  const alertsByUser = new Map<string, SavedJobAlert[]>();
+  for (const alert of activeAlerts) {
+    if (!alertsByUser.has(alert.userId)) {
+      alertsByUser.set(alert.userId, []);
+    }
+    alertsByUser.get(alert.userId)!.push(alert);
+  }
+
+  const now = new Date();
+  let notificationsCreated = 0;
+  let delivered = 0;
+  let queued = 0;
+
+  for (const event of pendingEvents) {
+    const job = fromCanonicalJob(event.job);
+
+    // Skip invalid jobs
+    if (!job.title || !job.company || !isValidJobApplicationUrl(job.applicationUrl)) {
+      await markJobEventProcessed(event.eventId);
+      continue;
+    }
+
+    for (const [userId, userAlerts] of alertsByUser.entries()) {
+      const preferences = await getNotificationPreferences(userId);
+      if (!preferences.enabled) {
+        continue;
+      }
+
+      const matchingAlerts = findMatchingAlertsForJob(job, userAlerts);
+      if (matchingAlerts.length === 0) {
+        continue;
+      }
+
+      // 1 user + 1 canonical job = 1 notification
+      const dedupeKey = `${userId}__${job.id}`;
+      const notificationId = `notif_${crypto.createHash('sha256').update(dedupeKey).digest('hex').slice(0, 16)}`;
+
+      // Check delivery window (24x7x365 active by default)
+      const inWindow = isWithinDeliveryWindow(now, preferences);
+      const deliveryStatus = inWindow ? 'DELIVERED' : 'PENDING';
+      const deliveredAt = inWindow ? now.toISOString() : null;
+      const scheduledAt = inWindow
+        ? now.toISOString()
+        : calculateNextDeliveryWindow(now, preferences).toISOString();
+
+      const notif: SmartJobNotification = {
+        notificationId,
+        userId,
+        canonicalJobId: job.id,
+        jobTitle: job.title,
+        jobCompany: job.company,
+        jobLocation: job.location || (job.isRemote ? 'Remote' : 'Unspecified'),
+        jobWorkplaceType: job.workplaceType || (job.isRemote ? 'remote' : 'onsite'),
+        jobEmploymentType: job.employmentType || 'full-time',
+        jobUrl: job.applicationUrl,
+        jobIndustry: job.industry,
+        matchingAlertIds: matchingAlerts.map((a) => a.alertId),
+        matchingAlertNames: matchingAlerts.map((a) => a.alertName),
+        notificationType: 'new_job_match',
+        readStatus: 'UNREAD',
+        deliveryStatus,
+        scheduledAt,
+        deliveredAt,
+        createdAt: now.toISOString(),
+        dedupeKey,
+      };
+
+      try {
+        const col = getUserNotificationsCollection<SmartJobNotification>();
+        const docRef = col.doc(notificationId);
+        const existing = await docRef.get();
+        if (!existing.exists) {
+          await docRef.set(notif);
+          notificationsCreated++;
+          if (inWindow) delivered++;
+          else queued++;
+        }
+      } catch {
+        // Memory fallback
+        if (!memoryNotifications.has(notificationId)) {
+          memoryNotifications.set(notificationId, notif);
+          notificationsCreated++;
+          if (inWindow) delivered++;
+          else queued++;
+        }
+      }
+    }
+
+    await markJobEventProcessed(event.eventId);
+  }
+
+  return {
+    eventsProcessed: pendingEvents.length,
+    notificationsCreated,
+    delivered,
+    queued,
+  };
 }
 
 /**
