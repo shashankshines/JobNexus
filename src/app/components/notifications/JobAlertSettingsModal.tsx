@@ -11,9 +11,6 @@ import {
   Power,
   Clock,
   Globe,
-  Calendar,
-  AlertCircle,
-  Briefcase,
   Layers,
   Sparkles,
 } from 'lucide-react';
@@ -67,7 +64,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
     updatedAt: '',
   });
   const [alerts, setAlerts] = useState<SavedJobAlert[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -278,7 +275,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.75)',
+        background: 'var(--modal-backdrop, rgba(0, 0, 0, 0.72))',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
         padding: '1rem',
@@ -288,29 +285,29 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
       }}
     >
       <div
-        className="glass-panel"
+        className="glass-panel notification-modal-card"
         style={{
           width: '100%',
           maxWidth: '680px',
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--surface-elevated, #0f172a)',
-          border: '1px solid var(--border, rgba(255, 255, 255, 0.12))',
+          background: 'var(--modal-bg)',
+          border: '1px solid var(--modal-border)',
           borderRadius: '20px',
           overflow: 'hidden',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: '1.25rem 1.5rem',
-            borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.08))',
+            borderBottom: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: 'var(--surface)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -319,14 +316,14 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 width: '36px',
                 height: '36px',
                 borderRadius: '10px',
-                background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))',
-                border: '1px solid rgba(56, 189, 248, 0.4)',
+                background: 'var(--hero-badge-bg)',
+                border: '1px solid var(--hero-badge-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Sliders size={18} color="#38bdf8" />
+              <Sliders size={18} color="var(--primary)" />
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -371,9 +368,9 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
               style={{
                 padding: '0.65rem 1rem',
                 borderRadius: '8px',
-                background: 'rgba(56, 189, 248, 0.1)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                color: '#38bdf8',
+                background: 'var(--hero-badge-bg)',
+                border: '1px solid var(--hero-badge-border)',
+                color: 'var(--primary)',
                 fontSize: '0.8rem',
                 display: 'flex',
                 alignItems: 'center',
@@ -390,9 +387,9 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
             style={{
               padding: '1rem',
               borderRadius: '12px',
-              background: preferences.enabled ? 'rgba(56, 189, 248, 0.04)' : 'rgba(255, 255, 255, 0.02)',
+              background: preferences.enabled ? 'var(--hero-badge-bg)' : 'var(--surface)',
               border: preferences.enabled
-                ? '1px solid rgba(56, 189, 248, 0.25)'
+                ? '1px solid var(--hero-badge-border)'
                 : '1px solid var(--border)',
               display: 'flex',
               alignItems: 'center',
@@ -402,7 +399,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
           >
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Power size={16} color={preferences.enabled ? '#38bdf8' : 'var(--text-muted)'} />
+                <Power size={16} color={preferences.enabled ? 'var(--primary)' : 'var(--text-muted)'} />
                 <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
                   Master Job Notifications
                 </span>
@@ -412,8 +409,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                     fontWeight: 700,
                     padding: '2px 6px',
                     borderRadius: '4px',
-                    background: preferences.enabled ? 'rgba(52, 211, 153, 0.2)' : 'rgba(239, 68, 68, 0.15)',
-                    color: preferences.enabled ? '#34d399' : '#f87171',
+                    background: preferences.enabled ? 'var(--badge-emerald-bg)' : 'var(--badge-crimson-bg)',
+                    color: preferences.enabled ? 'var(--badge-emerald-icon)' : 'var(--badge-crimson-icon)',
                   }}
                 >
                   {preferences.enabled ? 'ACTIVE' : 'MUTED'}
@@ -434,7 +431,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 width: '48px',
                 height: '26px',
                 borderRadius: '999px',
-                background: preferences.enabled ? '#38bdf8' : 'rgba(255, 255, 255, 0.15)',
+                background: preferences.enabled ? 'var(--primary)' : 'var(--border)',
                 border: 'none',
                 cursor: 'pointer',
                 position: 'relative',
@@ -467,12 +464,12 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
               gap: '0.85rem',
               padding: '1rem',
               borderRadius: '12px',
-              background: 'rgba(255, 255, 255, 0.02)',
+              background: 'var(--surface)',
               border: '1px solid var(--border)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-              <Clock size={16} color="#38bdf8" />
+              <Clock size={16} color="var(--primary)" />
               <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                 Delivery Schedule & Quiet Hours
               </h4>
@@ -490,8 +487,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                     value={preferences.startTime}
                     onChange={(e) => handleUpdatePreference({ startTime: e.target.value })}
                     style={{
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--input-border)',
                       borderRadius: '6px',
                       color: 'var(--text-primary)',
                       padding: '5px 8px',
@@ -504,8 +501,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                     value={preferences.endTime}
                     onChange={(e) => handleUpdatePreference({ endTime: e.target.value })}
                     style={{
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--input-border)',
                       borderRadius: '6px',
                       color: 'var(--text-primary)',
                       padding: '5px 8px',
@@ -527,8 +524,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                     onChange={(e) => handleUpdatePreference({ timezone: e.target.value })}
                     style={{
                       flex: 1,
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--input-border)',
                       borderRadius: '6px',
                       color: 'var(--text-primary)',
                       padding: '6px 8px',
@@ -561,9 +558,9 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                       style={{
                         padding: '5px 12px',
                         borderRadius: '6px',
-                        background: isActive ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.04)',
-                        border: isActive ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid var(--border)',
-                        color: isActive ? '#38bdf8' : 'var(--text-secondary)',
+                        background: isActive ? 'var(--hero-badge-bg)' : 'var(--surface)',
+                        border: isActive ? '1px solid var(--hero-badge-border)' : '1px solid var(--border)',
+                        color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
                         fontSize: '0.78rem',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -588,7 +585,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                <Layers size={16} color="#38bdf8" />
+                <Layers size={16} color="var(--primary)" />
                 <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                   Saved Job Alerts ({alerts.length})
                 </h4>
@@ -598,7 +595,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 type="button"
                 onClick={openCreateAlert}
                 style={{
-                  background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+                  background: 'linear-gradient(135deg, var(--primary-start), var(--primary-end))',
                   color: '#ffffff',
                   border: 'none',
                   borderRadius: '8px',
@@ -621,7 +618,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 style={{
                   padding: '2rem 1rem',
                   borderRadius: '12px',
-                  background: 'rgba(255, 255, 255, 0.02)',
+                  background: 'var(--surface)',
                   border: '1px dashed var(--border)',
                   textAlign: 'center',
                   color: 'var(--text-secondary)',
@@ -632,8 +629,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 }}
               >
                 <Sparkles size={20} color="var(--text-secondary)" />
-                <span style={{ fontSize: '0.86rem', fontWeight: 600 }}>No alerts configured</span>
-                <span style={{ fontSize: '0.76rem', maxWidth: '300px' }}>
+                <span style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>No alerts configured</span>
+                <span style={{ fontSize: '0.76rem', maxWidth: '300px', color: 'var(--text-secondary)' }}>
                   Create alerts for specific job titles, workplace preferences, or industries to receive timely updates.
                 </span>
               </div>
@@ -642,15 +639,16 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 {alerts.map((alert) => (
                   <div
                     key={alert.alertId}
+                    className="notification-item-card"
                     style={{
                       padding: '0.85rem 1rem',
                       borderRadius: '12px',
-                      background: alert.enabled ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.01)',
+                      background: alert.enabled ? 'var(--surface)' : 'var(--surface-hover)',
                       border: '1px solid var(--border)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '0.45rem',
-                      opacity: alert.enabled ? 1 : 0.6,
+                      opacity: alert.enabled ? 1 : 0.65,
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -666,16 +664,22 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                             borderRadius: '4px',
                             background:
                               alert.jobCategories === 'it'
-                                ? 'rgba(56, 189, 248, 0.15)'
+                                ? 'var(--badge-sky-bg)'
                                 : alert.jobCategories === 'non_it'
-                                  ? 'rgba(168, 85, 247, 0.15)'
-                                  : 'rgba(255, 255, 255, 0.08)',
+                                  ? 'var(--badge-purple-bg)'
+                                  : 'var(--tag-bg)',
                             color:
                               alert.jobCategories === 'it'
-                                ? '#38bdf8'
+                                ? 'var(--badge-sky-text)'
                                 : alert.jobCategories === 'non_it'
-                                  ? '#c084fc'
-                                  : 'var(--text-secondary)',
+                                  ? 'var(--badge-purple-text)'
+                                  : 'var(--tag-text)',
+                            border:
+                              alert.jobCategories === 'it'
+                                ? '1px solid var(--badge-sky-border)'
+                                : alert.jobCategories === 'non_it'
+                                  ? '1px solid var(--badge-purple-border)'
+                                  : '1px solid var(--tag-border)',
                           }}
                         >
                           {alert.jobCategories === 'it'
@@ -695,8 +699,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                             fontWeight: 600,
                             padding: '2px 8px',
                             borderRadius: '4px',
-                            background: alert.enabled ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                            color: alert.enabled ? '#34d399' : 'var(--text-muted)',
+                            background: alert.enabled ? 'var(--badge-emerald-bg)' : 'var(--tag-bg)',
+                            color: alert.enabled ? 'var(--badge-emerald-icon)' : 'var(--text-muted)',
                             border: '1px solid var(--border)',
                             cursor: 'pointer',
                           }}
@@ -739,19 +743,19 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                     {/* Criteria Tags */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', fontSize: '0.72rem' }}>
                       {alert.roles && alert.roles.length > 0 && (
-                        <span style={{ color: '#38bdf8' }}>Roles: {alert.roles.join(', ')}</span>
+                        <span style={{ color: 'var(--primary)' }}>Roles: {alert.roles.join(', ')}</span>
                       )}
                       {alert.keywords && alert.keywords.length > 0 && (
-                        <span style={{ color: '#818cf8' }}>• Keywords: {alert.keywords.join(', ')}</span>
+                        <span style={{ color: 'var(--accent-violet)' }}>• Keywords: {alert.keywords.join(', ')}</span>
                       )}
                       {alert.workModes && alert.workModes.length > 0 && (
-                        <span style={{ color: '#34d399' }}>• Modes: {alert.workModes.join(', ')}</span>
+                        <span style={{ color: 'var(--accent-emerald)' }}>• Modes: {alert.workModes.join(', ')}</span>
                       )}
                       {alert.locations && alert.locations.length > 0 && (
-                        <span style={{ color: '#fbbf24' }}>• Locations: {alert.locations.join(', ')}</span>
+                        <span style={{ color: 'var(--accent-amber)' }}>• Locations: {alert.locations.join(', ')}</span>
                       )}
                       {alert.excludedKeywords && alert.excludedKeywords.length > 0 && (
-                        <span style={{ color: '#f87171' }}>• Excluded: {alert.excludedKeywords.join(', ')}</span>
+                        <span style={{ color: 'var(--error)' }}>• Excluded: {alert.excludedKeywords.join(', ')}</span>
                       )}
                     </div>
                   </div>
@@ -765,18 +769,18 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
         <div
           style={{
             padding: '1rem 1.5rem',
-            borderTop: '1px solid var(--border, rgba(255, 255, 255, 0.08))',
+            borderTop: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'flex-end',
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: 'var(--surface)',
           }}
         >
           <button
             type="button"
             onClick={onClose}
             style={{
-              background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+              background: 'linear-gradient(135deg, var(--primary-start), var(--primary-end))',
               color: '#ffffff',
               border: 'none',
               borderRadius: '8px',
@@ -801,22 +805,23 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(0,0,0,0.8)',
+            background: 'var(--modal-backdrop, rgba(0, 0, 0, 0.72))',
             padding: '1rem',
           }}
         >
           <div
-            className="glass-panel"
+            className="glass-panel notification-modal-card"
             style={{
               width: '100%',
               maxWidth: '520px',
-              background: 'var(--surface-elevated, #0f172a)',
-              border: '1px solid var(--border)',
+              background: 'var(--modal-bg)',
+              border: '1px solid var(--modal-border)',
               borderRadius: '16px',
               padding: '1.25rem',
               display: 'flex',
               flexDirection: 'column',
               gap: '1rem',
+              boxShadow: 'var(--shadow-lg)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -844,8 +849,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                   placeholder="e.g. Remote Product Manager"
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
                     borderRadius: '6px',
                     color: 'var(--text-primary)',
                     padding: '7px 10px',
@@ -864,8 +869,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                   onChange={(e) => setAlertFormCategory(e.target.value as JobCategoryFilter)}
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
                     borderRadius: '6px',
                     color: 'var(--text-primary)',
                     padding: '7px 10px',
@@ -890,8 +895,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                   placeholder="e.g. Frontend Engineer, React Developer"
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
                     borderRadius: '6px',
                     color: 'var(--text-primary)',
                     padding: '7px 10px',
@@ -912,8 +917,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                   placeholder="e.g. TypeScript, Next.js, GraphQL"
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
                     borderRadius: '6px',
                     color: 'var(--text-primary)',
                     padding: '7px 10px',
@@ -934,8 +939,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                   placeholder="e.g. Junior, Intern, Unpaid"
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
                     borderRadius: '6px',
                     color: 'var(--text-primary)',
                     padding: '7px 10px',
@@ -965,9 +970,9 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                           flex: 1,
                           padding: '6px',
                           borderRadius: '6px',
-                          background: isChecked ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.04)',
-                          border: isChecked ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid var(--border)',
-                          color: isChecked ? '#38bdf8' : 'var(--text-secondary)',
+                          background: isChecked ? 'var(--hero-badge-bg)' : 'var(--surface)',
+                          border: isChecked ? '1px solid var(--hero-badge-border)' : '1px solid var(--border)',
+                          color: isChecked ? 'var(--primary)' : 'var(--text-secondary)',
                           fontSize: '0.76rem',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -992,8 +997,8 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                   placeholder="e.g. India, Bengaluru, Remote"
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
                     borderRadius: '6px',
                     color: 'var(--text-primary)',
                     padding: '7px 10px',
@@ -1009,7 +1014,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 type="button"
                 onClick={() => setIsEditingAlert(false)}
                 style={{
-                  background: 'transparent',
+                  background: 'var(--surface)',
                   border: '1px solid var(--border)',
                   color: 'var(--text-secondary)',
                   borderRadius: '6px',
@@ -1024,7 +1029,7 @@ export const JobAlertSettingsModal: React.FC<JobAlertSettingsModalProps> = ({
                 type="button"
                 onClick={handleSaveAlert}
                 style={{
-                  background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+                  background: 'linear-gradient(135deg, var(--primary-start), var(--primary-end))',
                   color: '#ffffff',
                   border: 'none',
                   borderRadius: '6px',

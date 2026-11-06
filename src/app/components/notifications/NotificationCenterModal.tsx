@@ -77,7 +77,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.7)',
+        background: 'var(--modal-backdrop, rgba(0, 0, 0, 0.72))',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
         padding: '1rem',
@@ -87,29 +87,29 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
       }}
     >
       <div
-        className="glass-panel"
+        className="glass-panel notification-modal-card"
         style={{
           width: '100%',
           maxWidth: '560px',
           maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--surface-elevated, #0f172a)',
-          border: '1px solid var(--border, rgba(255, 255, 255, 0.12))',
+          background: 'var(--modal-bg)',
+          border: '1px solid var(--modal-border)',
           borderRadius: '20px',
           overflow: 'hidden',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: '1.25rem 1.5rem',
-            borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.08))',
+            borderBottom: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: 'var(--surface)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -118,14 +118,14 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 width: '36px',
                 height: '36px',
                 borderRadius: '10px',
-                background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))',
-                border: '1px solid rgba(56, 189, 248, 0.4)',
+                background: 'var(--hero-badge-bg)',
+                border: '1px solid var(--hero-badge-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Bell size={18} color="#38bdf8" />
+              <Bell size={18} color="var(--primary)" />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -135,13 +135,13 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 {unreadCount > 0 && (
                   <span
                     style={{
-                      background: 'rgba(56, 189, 248, 0.15)',
-                      color: '#38bdf8',
+                      background: 'var(--badge-sky-bg)',
+                      color: 'var(--badge-sky-text)',
                       fontSize: '0.72rem',
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: '999px',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      border: '1px solid var(--badge-sky-border)',
                     }}
                   >
                     {unreadCount} new
@@ -160,7 +160,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
               onClick={onOpenSettings}
               title="Alert Preferences & Schedule"
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
+                background: 'var(--surface)',
                 border: '1px solid var(--border)',
                 borderRadius: '8px',
                 padding: '6px 10px',
@@ -173,7 +173,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 fontWeight: 600,
               }}
             >
-              <Sliders size={14} color="#38bdf8" />
+              <Sliders size={14} color="var(--primary)" />
               <span>Settings</span>
             </button>
 
@@ -202,8 +202,9 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.06))',
+            borderBottom: '1px solid var(--border)',
             fontSize: '0.8rem',
+            background: 'var(--surface)',
           }}
         >
           <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -211,9 +212,9 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
               type="button"
               onClick={() => setFilter('all')}
               style={{
-                background: filter === 'all' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                border: filter === 'all' ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid transparent',
-                color: filter === 'all' ? '#38bdf8' : 'var(--text-secondary)',
+                background: filter === 'all' ? 'var(--hero-badge-bg)' : 'transparent',
+                border: filter === 'all' ? '1px solid var(--hero-badge-border)' : '1px solid transparent',
+                color: filter === 'all' ? 'var(--primary)' : 'var(--text-secondary)',
                 padding: '4px 10px',
                 borderRadius: '6px',
                 fontWeight: 600,
@@ -227,9 +228,9 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
               type="button"
               onClick={() => setFilter('unread')}
               style={{
-                background: filter === 'unread' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                border: filter === 'unread' ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid transparent',
-                color: filter === 'unread' ? '#38bdf8' : 'var(--text-secondary)',
+                background: filter === 'unread' ? 'var(--hero-badge-bg)' : 'transparent',
+                border: filter === 'unread' ? '1px solid var(--hero-badge-border)' : '1px solid transparent',
+                color: filter === 'unread' ? 'var(--primary)' : 'var(--text-secondary)',
                 padding: '4px 10px',
                 borderRadius: '6px',
                 fontWeight: 600,
@@ -292,7 +293,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                   width: '48px',
                   height: '48px',
                   borderRadius: '14px',
-                  background: 'rgba(255, 255, 255, 0.03)',
+                  background: 'var(--surface)',
                   border: '1px solid var(--border)',
                   display: 'flex',
                   alignItems: 'center',
@@ -315,7 +316,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                   onClick={onOpenSettings}
                   style={{
                     marginTop: '0.5rem',
-                    background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+                    background: 'linear-gradient(135deg, var(--primary-start), var(--primary-end))',
                     color: '#ffffff',
                     border: 'none',
                     padding: '8px 16px',
@@ -335,11 +336,12 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
               return (
                 <div
                   key={item.notificationId}
+                  className={`notification-item-card ${isUnread ? 'is-unread' : ''}`}
                   style={{
-                    background: isUnread ? 'rgba(56, 189, 248, 0.04)' : 'rgba(255, 255, 255, 0.02)',
+                    background: isUnread ? 'var(--surface-hover)' : 'var(--surface)',
                     border: isUnread
-                      ? '1px solid rgba(56, 189, 248, 0.3)'
-                      : '1px solid var(--border, rgba(255, 255, 255, 0.07))',
+                      ? '1px solid var(--border-focus)'
+                      : '1px solid var(--border)',
                     borderRadius: '12px',
                     padding: '0.85rem 1rem',
                     display: 'flex',
@@ -359,7 +361,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                               width: '7px',
                               height: '7px',
                               borderRadius: '50%',
-                              background: '#38bdf8',
+                              background: 'var(--primary)',
                               display: 'inline-block',
                               flexShrink: 0,
                             }}
@@ -388,7 +390,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                           alignItems: 'center',
                           gap: '0.75rem',
                           fontSize: '0.8rem',
-                          color: '#38bdf8',
+                          color: 'var(--primary)',
                           flexWrap: 'wrap',
                         }}
                       >
@@ -420,9 +422,9 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                             fontWeight: 600,
                             padding: '2px 7px',
                             borderRadius: '4px',
-                            background: 'rgba(56, 189, 248, 0.12)',
-                            color: '#7dd3fc',
-                            border: '1px solid rgba(56, 189, 248, 0.25)',
+                            background: 'var(--hero-badge-bg)',
+                            color: 'var(--hero-badge-text)',
+                            border: '1px solid var(--hero-badge-border)',
                           }}
                         >
                           Matched: {name}
@@ -439,7 +441,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                       justifyContent: 'space-between',
                       marginTop: '0.35rem',
                       paddingTop: '0.5rem',
-                      borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                      borderTop: '1px solid var(--border)',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -455,7 +457,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '0.35rem',
-                            background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+                            background: 'linear-gradient(135deg, var(--primary-start), var(--primary-end))',
                             color: '#ffffff',
                             fontSize: '0.78rem',
                             fontWeight: 600,
@@ -478,7 +480,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                             onClose();
                           }}
                           style={{
-                            background: 'transparent',
+                            background: 'var(--surface)',
                             border: '1px solid var(--border)',
                             color: 'var(--text-primary)',
                             fontSize: '0.78rem',

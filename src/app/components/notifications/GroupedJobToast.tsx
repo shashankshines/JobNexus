@@ -45,6 +45,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
     <div
       role="region"
       aria-label="Smart Job Match Alerts"
+      className="notification-toast-container"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
@@ -54,13 +55,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
         zIndex: 9999,
         maxWidth: '420px',
         width: 'calc(100vw - 3rem)',
-        background: 'rgba(15, 23, 42, 0.95)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: '1px solid rgba(56, 189, 248, 0.35)',
         borderRadius: '16px',
-        boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.15)',
-        color: '#f8fafc',
         padding: '1rem',
         animation: 'slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
       }}
@@ -73,7 +68,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
           justifyContent: 'space-between',
           marginBottom: '0.75rem',
           paddingBottom: '0.5rem',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid var(--border)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -82,20 +77,20 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
               width: '28px',
               height: '28px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))',
-              border: '1px solid rgba(56, 189, 248, 0.4)',
+              background: 'var(--hero-badge-bg)',
+              border: '1px solid var(--hero-badge-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Sparkles size={14} color="#38bdf8" />
+            <Sparkles size={14} style={{ color: 'var(--primary)' }} />
           </div>
           <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--toast-title, var(--text-primary))' }}>
               New Job Match{count > 1 ? 'es' : ''} Found
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--toast-body, var(--text-secondary))' }}>
               Matched your saved job alert preferences
             </div>
           </div>
@@ -107,13 +102,14 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#94a3b8',
+            color: 'var(--text-muted)',
             cursor: 'pointer',
             padding: '4px',
             borderRadius: '6px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            transition: 'color 0.15s ease',
           }}
           aria-label="Dismiss toast"
         >
@@ -127,8 +123,8 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
           <div
             key={notif.notificationId}
             style={{
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
               borderRadius: '10px',
               padding: '0.65rem 0.75rem',
               display: 'flex',
@@ -142,7 +138,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
                   style={{
                     fontSize: '0.84rem',
                     fontWeight: 600,
-                    color: '#ffffff',
+                    color: 'var(--text-primary)',
                     margin: 0,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -155,7 +151,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
                 <div
                   style={{
                     fontSize: '0.75rem',
-                    color: '#38bdf8',
+                    color: 'var(--primary)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.4rem',
@@ -176,9 +172,9 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
                     fontWeight: 600,
                     padding: '2px 6px',
                     borderRadius: '4px',
-                    background: 'rgba(56, 189, 248, 0.15)',
-                    color: '#7dd3fc',
-                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    background: 'var(--hero-badge-bg)',
+                    color: 'var(--hero-badge-text)',
+                    border: '1px solid var(--hero-badge-border)',
                     whiteSpace: 'nowrap',
                   }}
                 >
@@ -194,7 +190,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
                 justifyContent: 'space-between',
                 marginTop: '4px',
                 fontSize: '0.72rem',
-                color: '#94a3b8',
+                color: 'var(--text-secondary)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0 }}>
@@ -215,7 +211,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#cbd5e1',
+                      color: 'var(--text-secondary)',
                       fontSize: '0.72rem',
                       fontWeight: 500,
                       cursor: 'pointer',
@@ -234,14 +230,13 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '0.25rem',
-                      background: 'rgba(56, 189, 248, 0.18)',
-                      color: '#38bdf8',
+                      background: 'linear-gradient(135deg, var(--primary-start), var(--primary-end))',
+                      color: '#ffffff',
                       fontSize: '0.72rem',
                       fontWeight: 600,
-                      padding: '3px 7px',
+                      padding: '3px 8px',
                       borderRadius: '5px',
                       textDecoration: 'none',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
                     }}
                   >
                     <span>Apply</span>
@@ -262,10 +257,10 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
           justifyContent: 'space-between',
           marginTop: '0.75rem',
           paddingTop: '0.5rem',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          borderTop: '1px solid var(--border)',
         }}
       >
-        <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
           Auto-dismissing {isHovered ? '(Paused)' : 'in 12s'}
         </span>
         <button
@@ -277,7 +272,7 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#38bdf8',
+            color: 'var(--primary)',
             fontSize: '0.76rem',
             fontWeight: 600,
             cursor: 'pointer',
@@ -294,3 +289,4 @@ export const GroupedJobToast: React.FC<GroupedJobToastProps> = ({
     </div>
   );
 };
+

@@ -5738,3 +5738,40 @@ html[data-theme="light"] .admin-page-number-btn.is-active {
     transform: scale(1);
   }
 }
+
+/* ============================================================================
+   Smart Job Notifications Unified Theme Styles
+   ============================================================================ */
+.notification-modal-card {
+  background: var(--modal-bg) !important;
+  border: 1px solid var(--modal-border) !important;
+  box-shadow: var(--shadow-lg) !important;
+  color: var(--text-primary) !important;
+}
+
+.notification-item-card {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  transition: all 0.2s ease;
+}
+
+.notification-item-card:hover {
+  background: var(--surface-hover) !important;
+  border-color: var(--border-focus) !important;
+}
+
+.notification-item-card.is-unread {
+  background: var(--surface-hover) !important;
+  border-color: var(--border-focus) !important;
+}
+
+.notification-toast-container {
+  background: var(--toast-bg) !important;
+  border: 1px solid var(--toast-border) !important;
+  box-shadow: var(--toast-shadow) !important;
+  color: var(--toast-title) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+

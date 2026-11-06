@@ -43,7 +43,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
         size={16}
         className={unreadCount > 0 ? 'bell-icon-active' : ''}
         style={{
-          color: unreadCount > 0 ? '#38bdf8' : 'var(--text-secondary)',
+          color: unreadCount > 0 ? 'var(--primary)' : 'var(--text-secondary)',
           transition: 'color 0.2s ease',
         }}
       />
@@ -58,14 +58,14 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
             height: '18px',
             padding: '0 4px',
             borderRadius: '999px',
-            background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+            background: 'linear-gradient(135deg, var(--primary-start), var(--primary-end))',
             color: '#ffffff',
             fontSize: '0.68rem',
             fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 2px 6px rgba(56, 189, 248, 0.4)',
+            boxShadow: '0 2px 6px rgba(99, 102, 241, 0.4)',
             lineHeight: 1,
             pointerEvents: 'none',
           }}
@@ -76,3 +76,4 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
     </button>
   );
 };
+
