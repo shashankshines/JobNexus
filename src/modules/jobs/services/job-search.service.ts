@@ -182,48 +182,15 @@ export class JobSearchService {
 
   static loadDiskSnapshot(allowInTest = false): { allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[]; timestamp: number } | null {
     if (process.env.NODE_ENV === 'test' && !allowInTest && process.env.ALLOW_CATALOG_SNAPSHOT_IN_TEST !== 'true') return null;
-    const paths = [
-      path.resolve(process.cwd(), 'src/modules/jobs/data/catalog-seed.json'),
-      path.resolve(process.cwd(), '.catalog-snapshot.json'),
-      path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json'),
-    ];
 
-    let bestSnapshot: { allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[]; timestamp: number } | null = null;
-
-    for (const filePath of paths) {
-      try {
-        if (fs.existsSync(filePath)) {
-          const content = fs.readFileSync(filePath, 'utf-8');
-          const data = JSON.parse(content);
-          const validated = JobSearchService.validateSnapshot(data);
-          if (validated.valid) {
-            // Prefer the most complete valid baseline snapshot
-            if (!bestSnapshot || validated.allJobs.length > bestSnapshot.allJobs.length) {
-              bestSnapshot = {
-                allJobs: validated.allJobs,
-                diagnostics: validated.diagnostics,
-                timestamp: validated.timestamp,
-              };
-            }
-          }
-        }
-      } catch {
-        // Continue to fallback
-      }
-    }
-
-    if (bestSnapshot && bestSnapshot.allJobs.length >= 50000) {
-      JobSearchService.baselineSeedTimestamp = bestSnapshot.timestamp;
-      return bestSnapshot;
-    }
-
+    // 1. Authoritative bundled seed file (exact 50,000 canonical jobs across 100 verified sources)
+    const seedPath = path.resolve(process.cwd(), 'src/modules/jobs/data/catalog-seed.json');
     try {
-      // Direct bundled import fallback guaranteeing cold-start instant readiness on serverless (e.g. Vercel)
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const seedData = require('../data/catalog-seed.json');
-      const validated = JobSearchService.validateSnapshot(seedData);
-      if (validated.valid) {
-        if (!bestSnapshot || validated.allJobs.length > bestSnapshot.allJobs.length) {
+      if (fs.existsSync(seedPath)) {
+        const content = fs.readFileSync(seedPath, 'utf-8');
+        const data = JSON.parse(content);
+        const validated = JobSearchService.validateSnapshot(data);
+        if (validated.valid && validated.allJobs.length >= 50000) {
           JobSearchService.baselineSeedTimestamp = validated.timestamp;
           return {
             allJobs: validated.allJobs,
@@ -233,14 +200,52 @@ export class JobSearchService {
         }
       }
     } catch {
-      // Bundled json not present or unreadable
+      // Continue to bundled require fallback
     }
 
-    if (bestSnapshot) {
-      JobSearchService.baselineSeedTimestamp = bestSnapshot.timestamp;
+    // 2. Direct bundled import fallback guaranteeing cold-start instant readiness on serverless (e.g. Vercel)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const seedData = require('../data/catalog-seed.json');
+      const validated = JobSearchService.validateSnapshot(seedData);
+      if (validated.valid && validated.allJobs.length >= 50000) {
+        JobSearchService.baselineSeedTimestamp = validated.timestamp;
+        return {
+          allJobs: validated.allJobs,
+          diagnostics: validated.diagnostics,
+          timestamp: validated.timestamp,
+        };
+      }
+    } catch {
+      // Continue to external snapshot paths
     }
 
-    return bestSnapshot;
+    // 3. Fallback to persisted snapshot paths if seed is not directly present
+    const fallbackPaths = [
+      path.resolve(process.cwd(), '.catalog-snapshot.json'),
+      path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json'),
+    ];
+    for (const filePath of fallbackPaths) {
+      try {
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const data = JSON.parse(content);
+          const validated = JobSearchService.validateSnapshot(data);
+          if (validated.valid && validated.allJobs.length >= 50000) {
+            JobSearchService.baselineSeedTimestamp = validated.timestamp;
+            return {
+              allJobs: validated.allJobs,
+              diagnostics: validated.diagnostics,
+              timestamp: validated.timestamp,
+            };
+          }
+        }
+      } catch {
+        // Continue to next path
+      }
+    }
+
+    return null;
   }
 
   static saveDiskSnapshot(allJobs: NormalizedJob[], diagnostics: ProviderDiagnostic[]): void {
@@ -564,9 +569,17 @@ export class JobSearchService {
     }
 
     // Ensure memory cache is always populated from disk/bundled seed snapshot if available
-    if (!JobSearchService.cachedRawJobs || JobSearchService.cachedRawJobs.length === 0) {
+    if (!JobSearchService.cachedRawJobs || JobSearchService.cachedRawJobs.length < 50000) {
       const diskSnapshot = JobSearchService.loadDiskSnapshot();
-      if (diskSnapshot && diskSnapshot.allJobs.length > 0) {
+      if (diskSnapshot && diskSnapshot.allJobs.length >= 50000) {
+        const activeJobs = diskSnapshot.allJobs.filter(isJobActive);
+        JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
+        JobSearchService.cachedUniqueJobs = deduplicateJobs(activeJobs);
+        JobSearchService.cachedDiagnostics = diskSnapshot.diagnostics || [];
+        JobSearchService.baselineSeedTimestamp = diskSnapshot.timestamp;
+        JobSearchService.cacheTimestamp = Date.now();
+        JobSearchService.providerRefreshTimestamp = Date.now();
+      } else if (diskSnapshot && diskSnapshot.allJobs.length > 0 && (!JobSearchService.cachedRawJobs || JobSearchService.cachedRawJobs.length === 0)) {
         const activeJobs = diskSnapshot.allJobs.filter(isJobActive);
         JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
         JobSearchService.cachedUniqueJobs = deduplicateJobs(activeJobs);
@@ -806,7 +819,10 @@ export class JobSearchService {
   async getJobStats(): Promise<JobStatsResponse> {
     const now = Date.now();
     if (!this.isCustom && globalJobNexusCache.__JOBNEXUS_STATS_CACHE__) {
-      if (now - globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.timestamp < 60_000) {
+      if (
+        now - globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.timestamp < 60_000 &&
+        globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.stats.totalJobs >= 50000
+      ) {
         return globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.stats;
       }
     }
