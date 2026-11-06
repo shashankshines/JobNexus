@@ -15,7 +15,8 @@ export interface NormalizedJob {
   employmentType: string;
   seniority?: string;
   tags: string[];
-  status?: 'active' | 'expired' | 'unknown';
+  status?: 'active' | 'expired' | 'withdrawn' | 'unknown';
+  expiresAt?: string;
   isIndiaEligible?: boolean;
   workplaceType?: 'remote' | 'hybrid' | 'onsite' | 'unknown';
   primaryWorkplaceType?: 'ONSITE' | 'HYBRID' | 'REMOTE' | 'UNSPECIFIED';
@@ -82,6 +83,14 @@ export interface ProviderDiagnostic {
   error?: string;
 }
 
+export interface ProviderCoverage {
+  configured: number;
+  succeeded: number;
+  failed?: number;
+  incomplete: boolean;
+  catalogueSourceCoverage?: number;
+}
+
 export interface JobSearchResponse {
   jobs: LegacyJob[];
   /** Total matching jobs in the current normalized provider snapshot. */
@@ -95,11 +104,7 @@ export interface JobSearchResponse {
   pageSize: number;
   hasMore: boolean;
   truncated: boolean;
-  providerCoverage: {
-    configured: number;
-    succeeded: number;
-    incomplete: boolean;
-  };
+  providerCoverage: ProviderCoverage;
   sources: string[];
   diagnostics?: ProviderDiagnostic[];
 }
@@ -108,11 +113,7 @@ export interface JobStatsResponse {
   totalJobs: number;
   formattedCount: string;
   exactCount: number;
-  providerCoverage: {
-    configured: number;
-    succeeded: number;
-    incomplete: boolean;
-  };
+  providerCoverage: ProviderCoverage;
   remoteJobs: number;
   indiaEligibleJobs: number;
   sources: string[];
@@ -131,6 +132,16 @@ export interface JobStatsResponse {
     itSources: number;
     nonItSources: number;
   };
+}
+
+export function isJobActive(job: NormalizedJob): boolean {
+  if (!job) return false;
+  if (job.status === 'expired' || job.status === 'withdrawn') return false;
+  if (job.expiresAt) {
+    const exp = new Date(job.expiresAt).getTime();
+    if (!isNaN(exp) && exp < Date.now()) return false;
+  }
+  return true;
 }
 
 export function toLegacyJob(job: NormalizedJob): LegacyJob {

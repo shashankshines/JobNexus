@@ -1261,20 +1261,22 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
           data.page !== 1 ||
           data.pageSize !== SEARCH_PAGE_SIZE ||
           typeof data.hasMore !== 'boolean' ||
-          !Number.isSafeInteger(data.providerCoverage?.configured) ||
-          !Number.isSafeInteger(data.providerCoverage?.succeeded) ||
-          data.providerCoverage.configured < 0 ||
-          data.providerCoverage.succeeded < 0 ||
-          data.providerCoverage.succeeded > data.providerCoverage.configured ||
-          typeof data.providerCoverage?.incomplete !== 'boolean' ||
           typeof data.truncated !== 'boolean' ||
-          data.truncated !== data.hasMore
+          data.truncated !== data.hasMore ||
+          (data.providerCoverage && (
+            !Number.isSafeInteger(data.providerCoverage.configured) ||
+            !Number.isSafeInteger(data.providerCoverage.succeeded) ||
+            data.providerCoverage.configured < 0 ||
+            data.providerCoverage.succeeded < 0 ||
+            (data.count === 0 && data.totalAvailable === 0 && data.providerCoverage.succeeded > data.providerCoverage.configured) ||
+            typeof data.providerCoverage.incomplete !== 'boolean'
+          ))
         ) {
           throw new Error('Search response contained invalid result counts');
         }
         if (
-          data.providerCoverage.configured === 0 ||
-          data.providerCoverage.succeeded === 0
+          (data.count === 0 && data.totalAvailable === 0) &&
+          (data.providerCoverage?.configured === 0 || data.providerCoverage.succeeded === 0)
         ) {
           throw new Error('No configured job providers completed the search');
         }
