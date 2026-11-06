@@ -14,6 +14,9 @@ export const FIRESTORE_COLLECTIONS = {
   EMAIL_OUTBOX: 'email_outbox',
   CONFIG: 'billing_config',
   SYSTEM_METADATA: 'system_metadata',
+  USER_NOTIFICATION_PREFERENCES: 'user_notification_preferences',
+  USER_JOB_ALERTS: 'user_job_alerts',
+  USER_NOTIFICATIONS: 'user_notifications',
 } as const;
 
 export type FirestoreCollectionName =
@@ -206,4 +209,16 @@ export function getBillingConfigCollection(): CollectionReference<PaymentSetting
 
 export function getSystemMetadataCollection(): CollectionReference<DocumentData> {
   return getTypedCollection<DocumentData>(FIRESTORE_COLLECTIONS.SYSTEM_METADATA);
+}
+
+export function getUserNotificationPreferencesCollection<T extends DocumentData = DocumentData>(): CollectionReference<T> {
+  return getTypedCollection<T>(FIRESTORE_COLLECTIONS.USER_NOTIFICATION_PREFERENCES);
+}
+
+export function getUserJobAlertsCollection<T extends DocumentData = DocumentData>(): CollectionReference<T> {
+  return getTypedCollection<T>(FIRESTORE_COLLECTIONS.USER_JOB_ALERTS);
+}
+
+export function getUserNotificationsCollection<T extends DocumentData = DocumentData>(): CollectionReference<T> {
+  return getTypedCollection<T>(FIRESTORE_COLLECTIONS.USER_NOTIFICATIONS);
 }

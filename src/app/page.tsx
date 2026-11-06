@@ -47,11 +47,17 @@ import {
   Headphones,
   GraduationCap,
   Leaf,
+  Bell,
 } from 'lucide-react';
 import JobCard from './components/JobCard';
 import ThemeToggle from './components/ThemeToggle';
 import FuturisticToast from './components/FuturisticToast';
 import JobNexusLogo from './components/JobNexusLogo';
+import { NotificationBell } from './components/notifications/NotificationBell';
+import { NotificationCenterModal } from './components/notifications/NotificationCenterModal';
+import { GroupedJobToast } from './components/notifications/GroupedJobToast';
+import { JobAlertSettingsModal } from './components/notifications/JobAlertSettingsModal';
+import { useSmartJobNotifications } from '@/modules/notifications/hooks/useSmartJobNotifications';
 import { useAuth } from './context/AuthContext';
 import { useJobStats } from '@/modules/jobs/hooks/useJobStats';
 import { useElapsedJobCounter } from '@/modules/jobs/hooks/useElapsedJobCounter';
@@ -605,7 +611,21 @@ export default function Home() {
   const [activeView, setActiveView] = useState<'all' | 'saved'>('all');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [isJobAlertSettingsOpen, setIsJobAlertSettingsOpen] = useState(false);
   const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+
+  const {
+    notifications: smartNotifications,
+    unreadCount: smartUnreadCount,
+    isLoading: isSmartNotifsLoading,
+    activeToast: smartActiveToast,
+    dismissToast: dismissSmartToast,
+    markAsRead: markSmartAsRead,
+    dismissNotification: dismissSmartNotification,
+    markAllAsRead: markAllSmartAsRead,
+    refresh: refreshSmartNotifs,
+  } = useSmartJobNotifications(Boolean(isAuthenticated && user));
 
   // Admin UI visibility strictly locked to designated administrator
   const isDesignatedAdmin = Boolean(
@@ -1026,11 +1046,18 @@ export default function Home() {
 
   useEffect(() => {
     if (isHeroPaused || isPremiumOfferOpen || isProfileModalOpen) return;
+    if (isNotificationCenterOpen || isJobAlertSettingsOpen) return;
     const interval = setInterval(() => {
       setHeroWordIndex((prev) => (prev + 1) % HERO_ROTATING_WORDS.length);
     }, 3600);
     return () => clearInterval(interval);
-  }, [isHeroPaused, isPremiumOfferOpen, isProfileModalOpen]);
+  }, [
+    isHeroPaused,
+    isPremiumOfferOpen,
+    isProfileModalOpen,
+    isNotificationCenterOpen,
+    isJobAlertSettingsOpen,
+  ]);
 
   const currentHeroWord = HERO_ROTATING_WORDS[heroWordIndex];
 
@@ -2851,6 +2878,11 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                     </span>
                   </button>
 
+                  <NotificationBell
+                    unreadCount={smartUnreadCount}
+                    onClick={() => setIsNotificationCenterOpen(true)}
+                  />
+
                   {/* User Dropdown Capsule */}
                   <div ref={userMenuRef} style={{ position: 'relative', zIndex: isUserMenuOpen ? 1050 : 10 }}>
                     <button
@@ -3044,6 +3076,25 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                               </div>
                               <span style={{ flex: 1, fontWeight: 500 }}>Account & Profile</span>
                               <ChevronRight size={14} className="dropdown-item-arrow" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsJobAlertSettingsOpen(true);
+                                setIsUserMenuOpen(false);
+                              }}
+                              className="user-dropdown-action-btn"
+                            >
+                              <div className="dropdown-action-icon-wrap">
+                                <Bell size={14} color="var(--text-secondary)" />
+                              </div>
+                              <span style={{ flex: 1, fontWeight: 500 }}>Job Notifications</span>
+                              {smartUnreadCount > 0 ? (
+                                <span className="dropdown-count-pill">{smartUnreadCount}</span>
+                              ) : (
+                                <ChevronRight size={14} className="dropdown-item-arrow" />
+                              )}
                             </button>
 
                             {isDesignatedAdmin && (
@@ -6764,6 +6815,32 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                       </span>
                     </div>
                   )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    <div>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'block' }}>Job Notifications</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Smart alerts & scheduled delivery</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileModalOpen(false);
+                        setIsJobAlertSettingsOpen(true);
+                      }}
+                      style={{
+                        background: 'rgba(56, 189, 248, 0.15)',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                        color: '#38bdf8',
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Configure
+                    </button>
+                  </div>
                 </div>
 
                 {/* Subscription Actions */}
@@ -6942,6 +7019,66 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
           isBillingResolved={isBillingResolved}
           onBillingFlowChange={syncBillingFlow}
         />
+
+        {/* Smart Job Notification Modals & Toasts */}
+        {isAuthenticated && user && (
+          <>
+            <NotificationCenterModal
+              isOpen={isNotificationCenterOpen}
+              onClose={() => setIsNotificationCenterOpen(false)}
+              notifications={smartNotifications}
+              unreadCount={smartUnreadCount}
+              isLoading={isSmartNotifsLoading}
+              onMarkAsRead={markSmartAsRead}
+              onDismissNotification={dismissSmartNotification}
+              onMarkAllAsRead={markAllSmartAsRead}
+              onOpenSettings={() => {
+                setIsNotificationCenterOpen(false);
+                setIsJobAlertSettingsOpen(true);
+              }}
+              onSelectJob={(jobId) => {
+                const notif = smartNotifications.find((n) => n.canonicalJobId === jobId);
+                if (notif?.jobTitle) {
+                  const criteria: SearchCriteria = {
+                    ...appliedSearchCriteria,
+                    query: notif.jobTitle,
+                  };
+                  updateDraftSearchCriteria(criteria);
+                  setActiveView('all');
+                  setActiveDiscoveryTab('feed');
+                  void executeSearch(criteria);
+                  scrollToResults();
+                }
+              }}
+            />
+
+            <JobAlertSettingsModal
+              isOpen={isJobAlertSettingsOpen}
+              onClose={() => setIsJobAlertSettingsOpen(false)}
+              onAlertsUpdated={refreshSmartNotifs}
+            />
+
+            <GroupedJobToast
+              notifications={smartActiveToast}
+              onDismiss={dismissSmartToast}
+              onOpenNotificationCenter={() => setIsNotificationCenterOpen(true)}
+              onSelectJob={(jobId) => {
+                const notif = smartNotifications.find((n) => n.canonicalJobId === jobId);
+                if (notif?.jobTitle) {
+                  const criteria: SearchCriteria = {
+                    ...appliedSearchCriteria,
+                    query: notif.jobTitle,
+                  };
+                  updateDraftSearchCriteria(criteria);
+                  setActiveView('all');
+                  setActiveDiscoveryTab('feed');
+                  void executeSearch(criteria);
+                  scrollToResults();
+                }
+              }}
+            />
+          </>
+        )}
       </main>
 
       {/* Sleek Modern Platform Footer with Official Brand Lockup */}
