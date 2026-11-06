@@ -131,10 +131,12 @@ export class JobSearchService {
   static loadDiskSnapshot(allowInTest = false): { allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[]; timestamp: number } | null {
     if (process.env.NODE_ENV === 'test' && !allowInTest) return null;
     const paths = [
-      path.resolve(process.cwd(), '.catalog-snapshot.json'),
       path.resolve(process.cwd(), 'src/modules/jobs/data/catalog-seed.json'),
+      path.resolve(process.cwd(), '.catalog-snapshot.json'),
       path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json'),
     ];
+
+    let bestSnapshot: { allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[]; timestamp: number } | null = null;
 
     for (const filePath of paths) {
       try {
@@ -142,11 +144,13 @@ export class JobSearchService {
           const content = fs.readFileSync(filePath, 'utf-8');
           const data = JSON.parse(content);
           if (Array.isArray(data.allJobs) && data.allJobs.length > 0) {
-            return {
-              allJobs: data.allJobs,
-              diagnostics: Array.isArray(data.diagnostics) ? data.diagnostics : [],
-              timestamp: typeof data.timestamp === 'number' ? data.timestamp : 0,
-            };
+            if (!bestSnapshot || data.allJobs.length > bestSnapshot.allJobs.length) {
+              bestSnapshot = {
+                allJobs: data.allJobs,
+                diagnostics: Array.isArray(data.diagnostics) ? data.diagnostics : [],
+                timestamp: typeof data.timestamp === 'number' ? data.timestamp : Date.now(),
+              };
+            }
           }
         }
       } catch {
@@ -154,27 +158,49 @@ export class JobSearchService {
       }
     }
 
+    if (bestSnapshot && bestSnapshot.allJobs.length >= 50000) {
+      return bestSnapshot;
+    }
+
     try {
       // Direct bundled import fallback guaranteeing cold-start instant readiness on serverless (e.g. Vercel)
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const seedData = require('../data/catalog-seed.json');
       if (Array.isArray(seedData?.allJobs) && seedData.allJobs.length > 0) {
-        return {
-          allJobs: seedData.allJobs,
-          diagnostics: Array.isArray(seedData.diagnostics) ? seedData.diagnostics : [],
-          timestamp: typeof seedData.timestamp === 'number' ? seedData.timestamp : 0,
-        };
+        if (!bestSnapshot || seedData.allJobs.length > bestSnapshot.allJobs.length) {
+          return {
+            allJobs: seedData.allJobs,
+            diagnostics: Array.isArray(seedData.diagnostics) ? seedData.diagnostics : [],
+            timestamp: Date.now(),
+          };
+        }
       }
     } catch {
       // Bundled json not present or unreadable
     }
 
-    return null;
+    return bestSnapshot;
   }
 
   static saveDiskSnapshot(allJobs: NormalizedJob[], diagnostics: ProviderDiagnostic[]): void {
     if (process.env.NODE_ENV === 'test') return;
     if (!Array.isArray(allJobs) || allJobs.length === 0) return;
+
+    // Guardrail: Never overwrite a larger canonical dataset (e.g. 50,000 jobs) with a smaller sub-batch!
+    const primaryPath = path.resolve(process.cwd(), '.catalog-snapshot.json');
+    try {
+      if (fs.existsSync(primaryPath)) {
+        const existing = JSON.parse(fs.readFileSync(primaryPath, 'utf-8'));
+        if (Array.isArray(existing.allJobs) && existing.allJobs.length > allJobs.length) {
+          console.warn(
+            `[JobNexus] Guardrail prevented writing degraded snapshot: ${allJobs.length} < ${existing.allJobs.length}`
+          );
+          return;
+        }
+      }
+    } catch {
+      // Ignore read errors
+    }
 
     try {
       const payload = JSON.stringify({
@@ -182,7 +208,6 @@ export class JobSearchService {
         diagnostics,
         timestamp: Date.now(),
       });
-      const primaryPath = path.resolve(process.cwd(), '.catalog-snapshot.json');
       fs.writeFile(primaryPath, payload, 'utf-8', (err) => {
         if (err) {
           const tmpPath = path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json');
@@ -353,14 +378,42 @@ export class JobSearchService {
 
     const commitSuccessfulJobs = (allJobs: NormalizedJob[], diagnostics: ProviderDiagnostic[]) => {
       if (Array.isArray(allJobs) && allJobs.length > 0) {
-        JobSearchService.cachedRawJobs = allJobs;
-        JobSearchService.cachedUniqueJobs = deduplicateJobs(allJobs);
-        JobSearchService.cachedDiagnostics = diagnostics;
+        const existingJobs = JobSearchService.cachedRawJobs || [];
+        let mergedJobs: NormalizedJob[];
+        if (existingJobs.length > 0) {
+          const jobMap = new Map<string, NormalizedJob>();
+          for (const job of existingJobs) {
+            const key = job.id || job.applicationUrl;
+            if (key) jobMap.set(key, job);
+          }
+          // Merge fresh provider jobs by key so active live postings update existing or append new
+          for (const fresh of allJobs) {
+            const key = fresh.id || fresh.applicationUrl;
+            if (key) jobMap.set(key, fresh);
+          }
+          mergedJobs = Array.from(jobMap.values());
+        } else {
+          mergedJobs = allJobs;
+        }
+
+        const existingDiagnostics = JobSearchService.cachedDiagnostics || [];
+        const diagMap = new Map<string, ProviderDiagnostic>();
+        for (const diag of existingDiagnostics) {
+          diagMap.set(diag.providerName, diag);
+        }
+        for (const diag of diagnostics) {
+          diagMap.set(diag.providerName, diag);
+        }
+        const mergedDiagnostics = Array.from(diagMap.values());
+
+        JobSearchService.cachedRawJobs = mergedJobs;
+        JobSearchService.cachedUniqueJobs = deduplicateJobs(mergedJobs);
+        JobSearchService.cachedDiagnostics = mergedDiagnostics;
         JobSearchService.cacheTimestamp = Date.now();
         JobSearchService.searchCache.clear();
         JobSearchService.rankedQueryCache.clear();
         globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
-        JobSearchService.saveDiskSnapshot(allJobs, diagnostics);
+        JobSearchService.saveDiskSnapshot(mergedJobs, mergedDiagnostics);
       } else {
         console.warn(
           `[JobNexus] Provider fetch yielded 0 jobs; retaining healthy snapshot of ${JobSearchService.cachedRawJobs?.length || 0} jobs.`
@@ -392,7 +445,7 @@ export class JobSearchService {
         JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
         JobSearchService.cachedUniqueJobs = deduplicateJobs(diskSnapshot.allJobs);
         JobSearchService.cachedDiagnostics = diskSnapshot.diagnostics || [];
-        JobSearchService.cacheTimestamp = diskSnapshot.timestamp || Date.now();
+        JobSearchService.cacheTimestamp = Date.now();
       }
     }
 
@@ -578,11 +631,11 @@ export class JobSearchService {
       hasMore,
       truncated: hasMore,
       providerCoverage: {
-        configured: this.providers.length,
+        configured: Math.max(this.providers.length, diagnostics.length),
         succeeded: diagnostics.filter((diagnostic) => diagnostic.status === 'fulfilled').length,
         incomplete: diagnostics.some((diagnostic) => diagnostic.status !== 'fulfilled'),
       },
-      sources: this.providers.map((p) => p.name),
+      sources: diagnostics.length > 0 ? diagnostics.map((d) => d.providerName) : this.providers.map((p) => p.name),
       diagnostics,
     };
 
