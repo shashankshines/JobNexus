@@ -21,8 +21,9 @@ import {
   getLocationBucket,
   mergeProvenance,
 } from '../domain/job.deduplication';
-import { canonicalizeUrl } from '../domain/job.normalization';
+import { canonicalizeUrl, isValidProviderApplicationUrl } from '../domain/job.normalization';
 import { isValidJobApplicationUrl } from '@/modules/notifications/services/smart-notification.store';
+import { upsertCanonicalJobs } from './canonical-job.store';
 import { filterAndRankJobs } from '../domain/job.ranking';
 import {
   INDUSTRY_TAXONOMY,
@@ -183,14 +184,14 @@ export class JobSearchService {
   static loadDiskSnapshot(allowInTest = false): { allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[]; timestamp: number } | null {
     if (process.env.NODE_ENV === 'test' && !allowInTest && process.env.ALLOW_CATALOG_SNAPSHOT_IN_TEST !== 'true') return null;
 
-    // 1. Authoritative bundled seed file (exact 50,000 canonical jobs across 100 verified sources)
-    const seedPath = path.resolve(process.cwd(), 'src/modules/jobs/data/catalog-seed.json');
+    // 1. Authoritative genuine verified seed file (real jobs from verified providers)
+    const seedPath = path.resolve(process.cwd(), 'src/modules/jobs/data/genuine-catalog-seed.json');
     try {
       if (fs.existsSync(seedPath)) {
         const content = fs.readFileSync(seedPath, 'utf-8');
         const data = JSON.parse(content);
         const validated = JobSearchService.validateSnapshot(data);
-        if (validated.valid && validated.allJobs.length >= 50000) {
+        if (validated.valid && validated.allJobs.length > 0) {
           JobSearchService.baselineSeedTimestamp = validated.timestamp;
           return {
             allJobs: validated.allJobs,
@@ -206,9 +207,9 @@ export class JobSearchService {
     // 2. Direct bundled import fallback guaranteeing cold-start instant readiness on serverless (e.g. Vercel)
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const seedData = require('../data/catalog-seed.json');
+      const seedData = require('../data/genuine-catalog-seed.json');
       const validated = JobSearchService.validateSnapshot(seedData);
-      if (validated.valid && validated.allJobs.length >= 50000) {
+      if (validated.valid && validated.allJobs.length > 0) {
         JobSearchService.baselineSeedTimestamp = validated.timestamp;
         return {
           allJobs: validated.allJobs,
@@ -224,6 +225,7 @@ export class JobSearchService {
     const fallbackPaths = [
       path.resolve(process.cwd(), '.catalog-snapshot.json'),
       path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json'),
+      path.resolve(process.cwd(), 'src/modules/jobs/data/catalog-seed.json'),
     ];
     for (const filePath of fallbackPaths) {
       try {
@@ -231,7 +233,7 @@ export class JobSearchService {
           const content = fs.readFileSync(filePath, 'utf-8');
           const data = JSON.parse(content);
           const validated = JobSearchService.validateSnapshot(data);
-          if (validated.valid && validated.allJobs.length >= 50000) {
+          if (validated.valid && validated.allJobs.length > 0) {
             JobSearchService.baselineSeedTimestamp = validated.timestamp;
             return {
               allJobs: validated.allJobs,
@@ -259,12 +261,12 @@ export class JobSearchService {
     }
     if (!Array.isArray(allJobs) || allJobs.length === 0) return;
 
-    // Guardrail: Never overwrite a larger canonical dataset (e.g. 50,000 jobs) with a smaller sub-batch!
+    // Guardrail: Never overwrite a healthy canonical dataset with an empty or broken sub-batch (<500 jobs)
     const primaryPath = path.resolve(process.cwd(), '.catalog-snapshot.json');
     try {
       if (fs.existsSync(primaryPath)) {
         const existing = JSON.parse(fs.readFileSync(primaryPath, 'utf-8'));
-        if (Array.isArray(existing.allJobs) && existing.allJobs.length > allJobs.length) {
+        if (Array.isArray(existing.allJobs) && existing.allJobs.length > allJobs.length && allJobs.length < 500) {
           console.warn(
             `[JobNexus] Guardrail prevented writing degraded snapshot: ${allJobs.length} < ${existing.allJobs.length}`
           );
@@ -505,7 +507,9 @@ export class JobSearchService {
 
       for (const fresh of freshJobs) {
         if (!fresh || !fresh.title || !fresh.company) continue;
-        if (fresh.applicationUrl && !isValidJobApplicationUrl(fresh.applicationUrl)) continue;
+        if (fresh.applicationUrl && (!isValidJobApplicationUrl(fresh.applicationUrl) || !isValidProviderApplicationUrl(fresh.applicationUrl))) {
+          continue;
+        }
 
         const canonUrl = canonicalizeUrl(fresh.applicationUrl);
         const roleKey = `${cleanCompany(fresh.company)}:::${cleanTitle(fresh.title)}:::${getLocationBucket(fresh)}`;
@@ -549,6 +553,15 @@ export class JobSearchService {
       JobSearchService.rankedQueryCache.clear();
       globalJobNexusCache.__JOBNEXUS_STATS_CACHE__ = undefined;
       JobSearchService.saveDiskSnapshot(existingJobs, mergedDiagnostics);
+
+      // Asynchronously upsert fresh valid jobs into durable canonical store & outbox
+      try {
+        void upsertCanonicalJobs(freshJobs, { emitEvents: true }).catch((err) => {
+          console.warn('[JobSearchService] CanonicalJobStore upsert error:', err);
+        });
+      } catch {
+        // Non-fatal
+      }
     };
 
     if (params.forceRefresh) {
@@ -569,17 +582,9 @@ export class JobSearchService {
     }
 
     // Ensure memory cache is always populated from disk/bundled seed snapshot if available
-    if (!JobSearchService.cachedRawJobs || JobSearchService.cachedRawJobs.length < 50000) {
+    if (!JobSearchService.cachedRawJobs || JobSearchService.cachedRawJobs.length === 0) {
       const diskSnapshot = JobSearchService.loadDiskSnapshot();
-      if (diskSnapshot && diskSnapshot.allJobs.length >= 50000) {
-        const activeJobs = diskSnapshot.allJobs.filter(isJobActive);
-        JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
-        JobSearchService.cachedUniqueJobs = deduplicateJobs(activeJobs);
-        JobSearchService.cachedDiagnostics = diskSnapshot.diagnostics || [];
-        JobSearchService.baselineSeedTimestamp = diskSnapshot.timestamp;
-        JobSearchService.cacheTimestamp = Date.now();
-        JobSearchService.providerRefreshTimestamp = Date.now();
-      } else if (diskSnapshot && diskSnapshot.allJobs.length > 0 && (!JobSearchService.cachedRawJobs || JobSearchService.cachedRawJobs.length === 0)) {
+      if (diskSnapshot && diskSnapshot.allJobs.length > 0) {
         const activeJobs = diskSnapshot.allJobs.filter(isJobActive);
         JobSearchService.cachedRawJobs = diskSnapshot.allJobs;
         JobSearchService.cachedUniqueJobs = deduplicateJobs(activeJobs);
@@ -608,7 +613,7 @@ export class JobSearchService {
     // return them immediately so the user never waits on slow external APIs (<50ms),
     // while refreshing in the background!
     if (JobSearchService.cachedRawJobs && JobSearchService.cachedRawJobs.length > 0) {
-      if (!JobSearchService.inFlightFetchPromise) {
+      if (!JobSearchService.inFlightFetchPromise && now - JobSearchService.providerRefreshTimestamp >= JobSearchService.CACHE_TTL_MS) {
         JobSearchService.inFlightFetchPromise = this.fetchFromProviders({})
           .then(({ allJobs, diagnostics }) => {
             commitSuccessfulJobs(allJobs, diagnostics);
@@ -821,7 +826,7 @@ export class JobSearchService {
     if (!this.isCustom && globalJobNexusCache.__JOBNEXUS_STATS_CACHE__) {
       if (
         now - globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.timestamp < 60_000 &&
-        globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.stats.totalJobs >= 50000
+        globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.stats.totalJobs > 0
       ) {
         return globalJobNexusCache.__JOBNEXUS_STATS_CACHE__.stats;
       }

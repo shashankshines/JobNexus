@@ -43,6 +43,61 @@ export function isValidHttpUrl(url: unknown): boolean {
   }
 }
 
+/**
+ * Detects manufactured / synthetic application URLs, such as those generated
+ * by appending fabricated paths like `/jobs/{slug}-{seq}` or `/openings/{slug}-{seq}`
+ * to employer portal root domains.
+ */
+export function isFabricatedJobUrl(url: unknown): boolean {
+  if (typeof url !== 'string' || !url.trim()) return true;
+  const trimmed = url.trim();
+
+  if (!isValidHttpUrl(trimmed)) return true;
+
+  try {
+    const parsed = new URL(trimmed);
+    const pathname = parsed.pathname.toLowerCase();
+
+    // Rejects fabricated patterns from synthetic generators (e.g. /jobs/title-1001 or /openings/title-49336)
+    if (/\/(jobs|openings)\/[a-z0-9-]+-\d{3,}$/i.test(pathname)) {
+      return true;
+    }
+
+    // Rejects placeholder or invalid hostnames
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === 'placeholder.com' ||
+      host === 'invalid.com' ||
+      host === 'localhost' ||
+      host === '127.0.0.1'
+    ) {
+      return true;
+    }
+
+    if (host === 'example.com' && (pathname === '' || pathname === '/')) {
+      return true;
+    }
+
+    // Bare root paths cannot be direct application URLs
+    if (pathname === '' || pathname === '/') {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Validates that an application URL is a genuine, verified provider-supplied URL.
+ */
+export function isValidProviderApplicationUrl(url: unknown): boolean {
+  if (!isValidHttpUrl(url)) return false;
+  if (isFabricatedJobUrl(url)) return false;
+  return true;
+}
+
 export function canonicalizeUrl(rawUrl: string): string {
   if (!isValidHttpUrl(rawUrl)) return '';
   try {

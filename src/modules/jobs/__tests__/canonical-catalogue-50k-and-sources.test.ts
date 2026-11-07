@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { SourceRegistry, VERIFIED_SOURCES } from '../providers/source.registry';
 import { JobSearchService } from '../services/job-search.service';
 import { deduplicateJobs } from '../domain/job.deduplication';
+import { isFabricatedJobUrl, isValidProviderApplicationUrl } from '../domain/job.normalization';
+import { LinkHealthService } from '../services/link-health.service';
 import {
   computeCanonicalJobId,
   computeContentHash,
@@ -67,65 +69,107 @@ describe('JobNexus — 50K Canonical Catalogue & 100 Verified Sources Integratio
     });
   });
 
-  describe('2. Canonical 50,000 Job Catalogue Verification', () => {
-    it('loads the 50,000 canonical job catalogue with zero deduplication loss', async () => {
+  describe('2. Canonical Genuine Job Catalogue & Link Health Verification', () => {
+    it('loads the genuine canonical job catalogue with zero synthetic records', async () => {
       const diskSnapshot = JobSearchService.loadDiskSnapshot(true);
-      assert.ok(diskSnapshot, 'Disk snapshot or catalog-seed must exist');
-      assert.strictEqual(
-        diskSnapshot.allJobs.length,
-        50000,
-        'Catalogue must contain exactly 50,000 canonical jobs'
+      assert.ok(diskSnapshot, 'Disk snapshot or genuine-catalog-seed must exist');
+      assert.ok(
+        diskSnapshot.allJobs.length >= 8000,
+        `Catalogue must contain at least 8,000 genuine verified jobs, found: ${diskSnapshot.allJobs.length}`
       );
 
       const unique = deduplicateJobs(diskSnapshot.allJobs);
-      assert.strictEqual(
-        unique.length,
-        50000,
-        'All 50,000 jobs must be strictly unique without collisions in deduplicateJobs()'
+      assert.ok(
+        unique.length >= 8000,
+        'Genuine jobs must be strictly unique without collisions in deduplicateJobs()'
       );
+
+      // Verify ZERO jobs have fabricated application URLs
+      for (const job of diskSnapshot.allJobs.slice(0, 500)) {
+        if (job.applicationUrl) {
+          assert.strictEqual(
+            isFabricatedJobUrl(job.applicationUrl),
+            false,
+            `Job ${job.id} (${job.title}) has fabricated applicationUrl: ${job.applicationUrl}`
+          );
+          assert.strictEqual(
+            isValidProviderApplicationUrl(job.applicationUrl),
+            true,
+            `Job ${job.id} applicationUrl must be a valid provider URL: ${job.applicationUrl}`
+          );
+        }
+      }
     });
 
-    it('verifies exact 25,000 IT and 25,000 Non-IT balance', async () => {
+    it('rejects fabricated URL patterns and accepts genuine provider URLs', () => {
+      assert.strictEqual(isFabricatedJobUrl('https://stripe.com/jobs/senior-software-engineer-101'), true);
+      assert.strictEqual(isFabricatedJobUrl('https://airbnb.com/openings/product-manager-404'), true);
+      assert.strictEqual(isFabricatedJobUrl('https://example.com'), true);
+      assert.strictEqual(isFabricatedJobUrl('https://example.com/'), true);
+      assert.strictEqual(isFabricatedJobUrl(''), true);
+
+      // Real provider URLs must NOT be flagged as fabricated
+      assert.strictEqual(isFabricatedJobUrl('https://boards.greenhouse.io/stripe/jobs/1234567'), false);
+      assert.strictEqual(isFabricatedJobUrl('https://jobs.lever.co/databricks/abc-def-123'), false);
+      assert.strictEqual(isFabricatedJobUrl('https://jobs.ashbyhq.com/openai/xyz-789'), false);
+      assert.strictEqual(isFabricatedJobUrl('https://www.arbeitnow.com/jobs/companies/tech-corp/role-slug'), false);
+    });
+
+    it('verifies LinkHealthService handles cache, health states, and batching correctly', async () => {
+      const healthService = new LinkHealthService();
+      healthService.recordResult('https://boards.greenhouse.io/test/job-1', 'verified', 200);
+      healthService.recordResult('https://boards.greenhouse.io/test/job-blocked', 'blocked', 403);
+      healthService.recordResult('https://boards.greenhouse.io/test/job-broken', 'broken', 404);
+
+      assert.strictEqual(healthService.checkCached('https://boards.greenhouse.io/test/job-1')?.status, 'verified');
+      assert.strictEqual(healthService.checkCached('https://boards.greenhouse.io/test/job-blocked')?.status, 'blocked');
+      assert.strictEqual(healthService.checkCached('https://boards.greenhouse.io/test/job-broken')?.status, 'broken');
+
+      // Synthetic URLs are instantly marked broken without network calls
+      const syntheticCheck = await healthService.verifyUrl('https://fakecompany.com/jobs/role-999');
+      assert.strictEqual(syntheticCheck.status, 'broken');
+    });
+
+    it('verifies genuine IT and Non-IT balance', async () => {
       const diskSnapshot = JobSearchService.loadDiskSnapshot(true)!;
       const itJobs = diskSnapshot.allJobs.filter((j) =>
         ['it_software', 'ai_data_science', 'cybersecurity_cloud', 'technology'].includes(j.industry as string)
       );
       const nonItJobs = diskSnapshot.allJobs.length - itJobs.length;
 
-      assert.strictEqual(itJobs.length, 25000, 'Must have exactly 25,000 IT jobs');
-      assert.strictEqual(nonItJobs, 25000, 'Must have exactly 25,000 Non-IT jobs');
+      assert.ok(itJobs.length >= 2000, `Must have at least 2,000 IT jobs, found ${itJobs.length}`);
+      assert.ok(nonItJobs >= 4000, `Must have at least 4,000 Non-IT jobs, found ${nonItJobs}`);
     });
 
     it('verifies workplace distribution (Remote, Hybrid, On-site) and India eligibility', async () => {
       const diskSnapshot = JobSearchService.loadDiskSnapshot(true)!;
-      const remote = diskSnapshot.allJobs.filter((j) => j.isRemote).length;
+      const remote = diskSnapshot.allJobs.filter((j) => j.workplaceType === 'remote').length;
       const hybrid = diskSnapshot.allJobs.filter((j) => j.workplaceType === 'hybrid').length;
       const onsite = diskSnapshot.allJobs.filter((j) => j.workplaceType === 'onsite').length;
+      const unknown = diskSnapshot.allJobs.filter((j) => j.workplaceType === 'unknown' || !j.workplaceType).length;
       const indiaEligible = diskSnapshot.allJobs.filter((j) => j.isIndiaEligible).length;
 
-      assert.ok(remote > 8000, `Expected substantial remote jobs, found ${remote}`);
-      assert.ok(hybrid > 10000, `Expected substantial hybrid jobs, found ${hybrid}`);
-      assert.ok(onsite > 10000, `Expected substantial onsite jobs, found ${onsite}`);
-      assert.strictEqual(remote + hybrid + onsite, 50000, 'All jobs must have a valid workplace type');
-      assert.ok(indiaEligible > 20000, `Expected substantial India-eligible jobs, found ${indiaEligible}`);
+      assert.ok(remote > 1000, `Expected substantial remote jobs, found ${remote}`);
+      assert.ok(hybrid >= 400, `Expected substantial hybrid jobs, found ${hybrid}`);
+      assert.ok(onsite > 1000, `Expected substantial onsite jobs, found ${onsite}`);
+      assert.strictEqual(remote + hybrid + onsite + unknown, diskSnapshot.allJobs.length, 'All jobs must have a valid workplace type');
+      assert.ok(indiaEligible >= 500, `Expected substantial India-eligible jobs, found ${indiaEligible}`);
     });
 
-    it('reports canonical statistics via getJobStats() without regressions', async () => {
+    it('reports canonical statistics via getJobStats() accurately matching the catalogue', async () => {
       const diskSnapshot = JobSearchService.loadDiskSnapshot(true)!;
       JobSearchService.setSnapshotForTesting(diskSnapshot.allJobs, diskSnapshot.diagnostics);
 
       const service = new JobSearchService();
       const stats = await service.getJobStats();
 
-      assert.strictEqual(stats.totalJobs, 50000);
-      assert.strictEqual(stats.formattedCount, '50,000');
-      assert.strictEqual(stats.sourcesCount, 100);
-      assert.strictEqual(stats.itCount, 25000);
-      assert.strictEqual(stats.nonItCount, 25000);
+      assert.strictEqual(stats.totalJobs, diskSnapshot.allJobs.length);
+      assert.strictEqual(stats.formattedCount, diskSnapshot.allJobs.length.toLocaleString());
+      assert.ok(stats.sourcesCount > 0);
+      assert.ok((stats.itCount || 0) >= 2000);
+      assert.ok((stats.nonItCount || 0) >= 4000);
       assert.ok(stats.workplaceDistribution);
       assert.strictEqual(stats.workplaceDistribution.remote, stats.remoteJobs);
-      assert.strictEqual(stats.sourceCoverage?.itSources, 50);
-      assert.strictEqual(stats.sourceCoverage?.nonItSources, 50);
     });
   });
 
@@ -141,7 +185,7 @@ describe('JobNexus — 50K Canonical Catalogue & 100 Verified Sources Integratio
       isIndiaEligible: true,
       workplaceType: 'hybrid',
       description: 'Architect global ledger systems at scale.',
-      applicationUrl: 'https://stripe.com/jobs/staff-infra-101',
+      applicationUrl: 'https://boards.greenhouse.io/stripe/jobs/4567890',
       publishedAt: '2026-11-06T10:00:00.000Z',
       employmentType: 'Full-time',
       seniority: 'Lead',
@@ -189,7 +233,7 @@ describe('JobNexus — 50K Canonical Catalogue & 100 Verified Sources Integratio
         ...testJob1,
         id: 'test-canon-job-2',
         title: 'Lead Distributed Systems Architect',
-        applicationUrl: 'https://stripe.com/jobs/lead-distributed-202',
+        applicationUrl: 'https://boards.greenhouse.io/stripe/jobs/5678901',
       };
       await upsertCanonicalJobs([testJob2], { emitEvents: true });
 

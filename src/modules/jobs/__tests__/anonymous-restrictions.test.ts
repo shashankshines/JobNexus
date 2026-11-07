@@ -22,10 +22,13 @@ import {
 } from '../../auth/server/session.store';
 import { GET as jobsRouteHandler } from '../../../app/api/jobs/route';
 import { GET as statsRouteHandler } from '../../../app/api/jobs/stats/route';
+import { JobSearchService } from '../services/job-search.service';
 
 describe('JobNexus — Anonymous Job Access Restrictions & Company Masking Suite', () => {
   beforeEach(() => {
+    process.env.ALLOW_CATALOG_SNAPSHOT_IN_TEST = 'true';
     resetAuthStore();
+    JobSearchService.clearCache();
   });
 
   const sampleLegacyJobs: LegacyJob[] = [

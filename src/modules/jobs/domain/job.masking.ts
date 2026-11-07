@@ -1,5 +1,6 @@
 import { LegacyJob } from './job.types';
-import { isValidHttpUrl } from './job.normalization';
+import { isValidHttpUrl, isFabricatedJobUrl } from './job.normalization';
+import { EmployerRegistry } from '../providers/employer.registry';
 
 export const ANONYMOUS_COMPANY_LABEL = 'Company hidden';
 export const ANONYMOUS_SOURCE_LABEL = 'Job source hidden';
@@ -21,7 +22,10 @@ export function isSourceMasked(source?: string): boolean {
 }
 
 /**
- * Validates that an application URL is safe to open (valid HTTP/HTTPS, no javascript: or data: schemes).
+ * Validates that an application URL is safe and genuine to open:
+ * - Must be valid HTTP/HTTPS
+ * - No javascript: or data: schemes
+ * - Strictly rejects fabricated or manufactured synthetic URLs
  */
 export function isValidApplicationUrl(url: unknown): boolean {
   if (typeof url !== 'string' || !url.trim()) return false;
@@ -30,7 +34,9 @@ export function isValidApplicationUrl(url: unknown): boolean {
   if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
     return false;
   }
-  return isValidHttpUrl(trimmed);
+  if (!isValidHttpUrl(trimmed)) return false;
+  if (isFabricatedJobUrl(trimmed)) return false;
+  return true;
 }
 
 /**
@@ -123,6 +129,14 @@ export function getFallbackApplicationUrl(job: {
   const src = (job.source || '').toLowerCase();
   const title = encodeURIComponent(job.title || 'software engineer');
   const comp = encodeURIComponent(job.company && !isCompanyMasked(job.company) ? job.company : '');
+
+  const realCompName = job.company && !isCompanyMasked(job.company) ? job.company.trim() : '';
+  if (realCompName) {
+    const employer = EmployerRegistry.findByName(realCompName);
+    if (employer?.careerPageUrl) {
+      return employer.careerPageUrl;
+    }
+  }
 
   if (isSourceMasked(job.source)) {
     return comp

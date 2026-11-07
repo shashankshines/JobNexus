@@ -1124,6 +1124,16 @@ export class EmployerRegistry {
   getBySlug(ats: AtsProviderType, slug: string): EmployerConfig | undefined {
     return this.employers.get(`${ats}:${slug.toLowerCase()}`);
   }
+
+  findByName(name: string): EmployerConfig | undefined {
+    if (!name) return undefined;
+    const term = name.toLowerCase().trim();
+    return this.getAll().find((e) => e.name.toLowerCase() === term);
+  }
+
+  static findByName(name: string): EmployerConfig | undefined {
+    return globalEmployerRegistry.findByName(name);
+  }
 }
 
 // Global singleton instance

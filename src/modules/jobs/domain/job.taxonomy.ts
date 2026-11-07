@@ -554,7 +554,7 @@ const TAXONOMY_RULES: TaxonomyRule[] = [
   },
   {
     industry: 'technology',
-    tagRegex: /\b(technology|technology industry|information technology|tech industry)\b/i,
+    tagRegex: /\b(technology|technology industry|information technology|tech industry|software|programming|cloud|ai|machine learning|web development|frontend|backend|devops)\b/i,
   },
 ];
 

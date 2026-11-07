@@ -28,14 +28,22 @@ function resolveDataDir(): string {
   return path.join(process.cwd(), '.jobnexus-data');
 }
 
+const globalDurableCaches = (globalThis as any).__DURABLE_STORE_REGISTRY__ || ((globalThis as any).__DURABLE_STORE_REGISTRY__ = new Map<string, Map<string, any>>());
+
 export class DurableStore<T extends { id?: string }> {
-  private cache = new Map<string, T>();
+  private cache: Map<string, T>;
   private filePath: string;
   private isLoaded = false;
   private collectionName: string;
+  private isSaveScheduled = false;
+  private isSaving = false;
 
   constructor(collectionName: string) {
     this.collectionName = collectionName;
+    if (!globalDurableCaches.has(collectionName)) {
+      globalDurableCaches.set(collectionName, new Map<string, T>());
+    }
+    this.cache = globalDurableCaches.get(collectionName)!;
     const dataDir = resolveDataDir();
     this.filePath = path.join(dataDir, `${collectionName}.json`);
     this.ensureDir(dataDir);
@@ -73,7 +81,24 @@ export class DurableStore<T extends { id?: string }> {
     }
   }
 
+  private scheduleSave(): void {
+    if (this.isSaveScheduled) return;
+    this.isSaveScheduled = true;
+    // Batch multiple synchronous set() calls into a single atomic disk write
+    setImmediate(() => {
+      this.isSaveScheduled = false;
+      this.saveToDisk();
+    });
+  }
+
+  public flush(): void {
+    this.isSaveScheduled = false;
+    this.saveToDisk();
+  }
+
   private saveToDisk(): void {
+    if (this.isSaving) return;
+    this.isSaving = true;
     try {
       const data: Record<string, T> = {};
       for (const [k, v] of this.cache.entries()) {
@@ -92,6 +117,8 @@ export class DurableStore<T extends { id?: string }> {
       }
     } catch (err) {
       console.warn(`[DurableStore] Error persisting collection ${this.collectionName} to disk:`, err);
+    } finally {
+      this.isSaving = false;
     }
   }
 
@@ -105,7 +132,14 @@ export class DurableStore<T extends { id?: string }> {
 
   set(key: string, value: T): void {
     this.cache.set(key, value);
-    this.saveToDisk();
+    this.scheduleSave();
+  }
+
+  setMany(items: [string, T][]): void {
+    for (const [k, v] of items) {
+      this.cache.set(k, v);
+    }
+    this.scheduleSave();
   }
 
   has(key: string): boolean {
@@ -119,7 +153,7 @@ export class DurableStore<T extends { id?: string }> {
   delete(key: string): boolean {
     const existed = this.cache.delete(key);
     if (existed) {
-      this.saveToDisk();
+      this.scheduleSave();
     }
     return existed;
   }

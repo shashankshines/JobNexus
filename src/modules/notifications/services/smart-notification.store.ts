@@ -20,6 +20,7 @@ import {
 } from './notification-scheduler.service';
 import { findMatchingAlertsForJob } from './job-alert-matcher.service';
 import { fromCanonicalJob } from '@/modules/jobs/domain/canonical-job.types';
+import { isValidProviderApplicationUrl } from '@/modules/jobs/domain/job.normalization';
 import {
   upsertCanonicalJobs,
   getPendingJobEvents,
@@ -66,12 +67,7 @@ export function isValidJobApplicationUrl(url: string | null | undefined): boolea
   ) {
     return false;
   }
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return isValidProviderApplicationUrl(trimmed);
 }
 
 // ============================================================================
