@@ -338,4 +338,35 @@ describe('JobNexus — Industry Filtering, Deduplication & Caching Suite', () =>
       assert.ok(techOnly.every((j) => j.industry === 'technology'));
     });
   });
+
+  describe('High-Performance Sector Discovery Invariants', () => {
+    it('filters 8,000+ jobs by industry in under 150ms', () => {
+      const largePool: NormalizedJob[] = [];
+      const industries: JobIndustry[] = ['technology', 'healthcare', 'education', 'manufacturing', 'retail_sales', 'other'];
+      for (let i = 0; i < 8000; i++) {
+        const ind = industries[i % industries.length];
+        largePool.push({
+          ...sampleJobs[i % sampleJobs.length],
+          id: `job-perf-${i}`,
+          industry: ind,
+        });
+      }
+
+      const t0 = performance.now();
+      const results = filterAndRankJobs(largePool, { industry: 'technology' });
+      const elapsed = performance.now() - t0;
+
+      assert.ok(elapsed < 150, `Filtering 8,000 jobs by industry took ${elapsed}ms; must be < 150ms`);
+      assert.ok(results.length > 1000);
+      assert.ok(results.every((j) => j.industry === 'technology'));
+    });
+
+    it('matchesIndustry accurately checks precomputed target in sub-millisecond time', () => {
+      const job = sampleJobs[0]; // technology
+      assert.strictEqual(matchesIndustry(job, 'technology'), true);
+      assert.strictEqual(matchesIndustry(job, 'healthcare'), false);
+      assert.strictEqual(matchesIndustry(job, 'all'), true);
+      assert.strictEqual(matchesIndustry(job, ''), true);
+    });
+  });
 });

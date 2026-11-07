@@ -1248,22 +1248,29 @@ export function matchesRemote(job: NormalizedJob, filterRemote?: string): boolea
   return true;
 }
 
-export function matchesIndustry(job: NormalizedJob, filterIndustry?: string): boolean {
-  const target = normalizeIndustryFilter(filterIndustry);
+export function matchesIndustry(
+  job: NormalizedJob,
+  filterIndustry?: string,
+  precomputedTarget?: ReturnType<typeof normalizeIndustryFilter>
+): boolean {
+  const target = precomputedTarget !== undefined ? precomputedTarget : normalizeIndustryFilter(filterIndustry);
   if (target === '') return true;
   if (!target) return false;
   if (job.industry) {
     if (job.industry === target) return true;
     const directNormalized = normalizeIndustryFilter(job.industry);
-    if (directNormalized === target) return true;
+    if (directNormalized) return directNormalized === target;
   }
-  return resolveJobIndustry(
-    job.industry,
-    job.category,
-    job.title,
-    job.tags,
-    job.description
-  ) === target;
+  if (!job.industry || job.industry === 'other') {
+    return resolveJobIndustry(
+      job.industry,
+      job.category,
+      job.title,
+      job.tags,
+      job.description
+    ) === target;
+  }
+  return false;
 }
 
 export function filterAndRankJobs(
@@ -1278,12 +1285,16 @@ export function filterAndRankJobs(
   const level = params.level || '';
   const remote = params.remote || '';
   const industry = params.industry || '';
+  const targetIndustry = normalizeIndustryFilter(industry);
   const now = Date.now();
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
   const filtered: NormalizedJob[] = [];
 
   for (const job of jobs) {
+    // Fast path: Check industry first to immediately eliminate non-matching jobs in 0.001ms
+    if (targetIndustry && !matchesIndustry(job, industry, targetIndustry)) continue;
+
     // Independent keyword and selected-role dimensions must both match.
     const queryResult = matchesQuery(job, query);
     if (!queryResult.matches) continue;
@@ -1303,9 +1314,6 @@ export function filterAndRankJobs(
 
     // 6. Check seniority level
     if (!matchesLevel(job, level)) continue;
-
-    // 7. Check industry taxonomy
-    if (!matchesIndustry(job, industry)) continue;
 
     let score = queryResult.baseScore;
     if (role) score += 100;

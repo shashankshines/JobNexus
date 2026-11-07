@@ -21,7 +21,7 @@ import {
   getLocationBucket,
   mergeProvenance,
 } from '../domain/job.deduplication';
-import { canonicalizeUrl, isValidProviderApplicationUrl } from '../domain/job.normalization';
+import { canonicalizeUrl, isValidProviderApplicationUrl, isFabricatedJobUrl } from '../domain/job.normalization';
 import { isValidJobApplicationUrl } from '@/modules/notifications/services/smart-notification.store';
 import { upsertCanonicalJobs } from './canonical-job.store';
 import { filterAndRankJobs } from '../domain/job.ranking';
@@ -167,9 +167,12 @@ export class JobSearchService {
       return { valid: false, allJobs: [], diagnostics: [], timestamp: 0 };
     }
     // Verify schema and integrity on sample records
-    const sample = d.allJobs.slice(0, 10);
+    const sample = d.allJobs.slice(0, 25);
     for (const job of sample) {
       if (!job || typeof job !== 'object' || !job.id || !job.title || !job.company) {
+        return { valid: false, allJobs: [], diagnostics: [], timestamp: 0 };
+      }
+      if (job.applicationUrl && isFabricatedJobUrl(job.applicationUrl)) {
         return { valid: false, allJobs: [], diagnostics: [], timestamp: 0 };
       }
     }
@@ -225,7 +228,6 @@ export class JobSearchService {
     const fallbackPaths = [
       path.resolve(process.cwd(), '.catalog-snapshot.json'),
       path.join(os.tmpdir(), 'jobnexus-catalog-snapshot.json'),
-      path.resolve(process.cwd(), 'src/modules/jobs/data/catalog-seed.json'),
     ];
     for (const filePath of fallbackPaths) {
       try {
@@ -260,6 +262,12 @@ export class JobSearchService {
       return;
     }
     if (!Array.isArray(allJobs) || allJobs.length === 0) return;
+
+    // Guardrail: Never save snapshots containing fabricated job URLs
+    if (allJobs.slice(0, 25).some((j) => isFabricatedJobUrl(j.applicationUrl))) {
+      console.warn('[JobNexus] Guardrail prevented writing snapshot containing fabricated URLs');
+      return;
+    }
 
     // Guardrail: Never overwrite a healthy canonical dataset with an empty or broken sub-batch (<500 jobs)
     const primaryPath = path.resolve(process.cwd(), '.catalog-snapshot.json');

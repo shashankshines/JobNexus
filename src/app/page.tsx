@@ -1354,9 +1354,11 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
         setSearchError('We could not complete this search. Please try again.');
         setPendingSearchCriteria(null);
       } finally {
-        if (requestId === searchRequestIdRef.current && activeSearchAbortRef.current === abortController) {
+        if (requestId === searchRequestIdRef.current) {
           setLoading(false);
-          activeSearchAbortRef.current = null;
+          if (activeSearchAbortRef.current === abortController) {
+            activeSearchAbortRef.current = null;
+          }
         }
       }
     },
@@ -1531,7 +1533,6 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
 
     const abortController = new AbortController();
     paginationAbortRef.current = abortController;
-    activeSearchAbortRef.current = abortController;
     setIsLoadingMore(true);
     try {
       const response = await fetch(`/api/jobs?${params.toString()}`, {
@@ -1627,9 +1628,6 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
     } finally {
       if (requestId === searchRequestIdRef.current) {
         setIsLoadingMore(false);
-        if (activeSearchAbortRef.current === abortController) {
-          activeSearchAbortRef.current = null;
-        }
       }
       if (paginationAbortRef.current === abortController) {
         paginationAbortRef.current = null;
@@ -2153,9 +2151,13 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
 
   const handleDomainClick = (domain: DiscoveryDomain) => {
     const criteria: SearchCriteria = {
-      ...appliedSearchCriteria,
       query: '',
       role: '',
+      company: '',
+      location: '',
+      type: '',
+      level: '',
+      remote: appliedSearchCriteria.remote || '',
       industry: domain.industry ?? '',
     };
     updateDraftSearchCriteria(criteria);

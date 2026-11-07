@@ -108,7 +108,7 @@ export class DurableStore<T extends { id?: string }> {
       this.ensureDir(dir);
 
       const tmpPath = `${this.filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+      fs.writeFileSync(tmpPath, JSON.stringify(data), 'utf-8');
       try {
         fs.renameSync(tmpPath, this.filePath);
       } catch {
