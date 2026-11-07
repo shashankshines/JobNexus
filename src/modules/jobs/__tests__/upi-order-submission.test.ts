@@ -340,7 +340,7 @@ describe('JobNexus — Manual UPI Payment Foundation (Phase 2B.1)', () => {
       assert.strictEqual(data4.code, 'INVALID_UTR');
     });
 
-    it('atomically reserves UTR, creates submission with 12h SLA, and marks order submitted', async () => {
+    it('atomically reserves UTR, creates submission with 2h SLA, and marks order submitted', async () => {
       const session = createAuthenticatedSession('usr_valid_submit');
       const order = await createPaymentOrder({ userId: session.user.id });
       const validUtr = '429817293812';
@@ -369,11 +369,11 @@ describe('JobNexus — Manual UPI Payment Foundation (Phase 2B.1)', () => {
       assert.strictEqual(data.submission.declaredAmount, 499);
       assert.strictEqual(data.submission.paymentDate, today);
 
-      // Verify 12-hour SLA deadline
+      // Verify 2-hour SLA deadline (120 minutes)
       const submittedTime = new Date(data.submission.submittedAt).getTime();
       const slaDeadline = new Date(data.submission.slaDeadlineAt).getTime();
       const diffSlaHours = (slaDeadline - submittedTime) / (1000 * 60 * 60);
-      assert.strictEqual(Math.round(diffSlaHours), 12);
+      assert.strictEqual(Math.round(diffSlaHours), 2);
 
       // Verify order status updated to 'submitted'
       const updatedOrder = await getPaymentOrderById(order.orderId);

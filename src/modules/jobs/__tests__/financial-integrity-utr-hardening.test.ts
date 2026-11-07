@@ -105,7 +105,7 @@ describe('JobNexus — Financial Integrity, UTR Protection & Admin Authorization
       paymentDate: nowIso.split('T')[0],
       status: 'pending_verification',
       submittedAt: nowIso,
-      slaDeadlineAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+      slaDeadlineAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
     };
     await getSubmissionsCollection().doc(submissionId).set(submissionDoc);
 

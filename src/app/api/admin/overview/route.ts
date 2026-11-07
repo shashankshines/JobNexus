@@ -6,7 +6,7 @@ import { getAdminOverview } from '@/modules/storage/firestore/admin-billing.stor
  * GET /api/admin/overview
  * Returns aggregate metrics for the JobNexus Admin Console:
  * - Pending verification submissions count
- * - 12h SLA breach count
+ * - 2h SLA breach count
  * - Active Premium subscribers count
  * - Total approved and rejected counts
  * - Audit logs count

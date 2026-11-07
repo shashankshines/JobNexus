@@ -88,7 +88,7 @@ describe('JobNexus Transactional Payment Email Lifecycle (Phase 2B.4)', () => {
       // Full UTR must NOT appear in body or subject
       assert.ok(!sent[0].subject.includes('512398741234'));
       assert.ok(sent[0].html.includes('5123••••••••1234'));
-      assert.ok(sent[0].html.includes('12 hours'));
+      assert.ok(sent[0].html.includes('2 hours'));
       assert.ok(sent[0].html.includes('is not activated merely because a UTR was submitted'));
     });
 

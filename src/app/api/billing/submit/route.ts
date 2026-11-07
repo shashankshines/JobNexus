@@ -158,7 +158,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           emailStatus,
           adminAlertStatus,
           message:
-            'Payment reference submitted successfully. Our team will verify and activate your Premium membership within 12 hours.',
+            'Payment reference submitted successfully. Our team will verify and activate your Premium membership within 2 hours.',
         },
         { status: 201 }
       );

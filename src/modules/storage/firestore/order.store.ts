@@ -20,6 +20,7 @@ import {
   writeBillingSyncVersionInTransaction,
 } from './billing-sync.store';
 import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
+import { calculateSlaDeadline, LEGAL_VERSIONS } from '@/modules/legal/legal.config';
 
 // ============================================================================
 // Business UPI Configuration
@@ -268,9 +269,9 @@ export async function createPaymentSubmission(params: {
       userId,
     });
 
-    // 7. Construct authoritative submission document with 12h SLA
+    // 7. Construct authoritative submission document with 2h (120m) SLA
     const now = new Date();
-    const slaDeadlineAt = new Date(now.getTime() + 12 * 60 * 60 * 1000); // 12 hours
+    const slaDeadlineAt = calculateSlaDeadline(now); // 2 hours SLA
     const resolvedEmail = (userEmail || order.userEmail)?.trim().toLowerCase();
 
     const submissionDoc: PaymentSubmissionDocument = {
@@ -284,6 +285,8 @@ export async function createPaymentSubmission(params: {
       submittedAt: now.toISOString(),
       slaDeadlineAt: slaDeadlineAt.toISOString(),
       status: 'pending_verification',
+      policyVersion: LEGAL_VERSIONS.termsAndConditions,
+      policyAcceptedAt: now.toISOString(),
       ...(params.receiptPath ? { receiptPath: params.receiptPath } : {}),
       ...(params.verificationNotes ? { verificationNotes: params.verificationNotes.trim() } : {}),
     };

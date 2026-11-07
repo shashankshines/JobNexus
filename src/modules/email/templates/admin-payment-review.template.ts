@@ -25,7 +25,7 @@ export function renderAdminPaymentReviewEmail(
         dateStyle: 'medium',
         timeStyle: 'short',
       })
-    : 'Within 12 hours';
+    : 'Within 2 hours';
 
   const contentHtml = `
     <!-- Admin Submission Summary Card -->
@@ -68,7 +68,7 @@ export function renderAdminPaymentReviewEmail(
           <td style="color: #e2e8f0; padding: 6px 0; text-align: right;">${escapeHtml(formattedSubmittedAt)}</td>
         </tr>
         <tr>
-          <td style="color: #94a3b8; padding: 6px 0;">12h SLA Target:</td>
+          <td style="color: #94a3b8; padding: 6px 0;">2h SLA Target:</td>
           <td style="color: #fde68a; font-weight: 700; padding: 6px 0; text-align: right;">${escapeHtml(formattedSla)}</td>
         </tr>
       </table>
@@ -92,7 +92,7 @@ NEW PAYMENT SUBMISSION AWAITING ADMIN APPROVAL:
 - Submission ID: ${data.submissionId}
 - Masked UTR: ${masked}
 - Submitted At: ${formattedSubmittedAt}
-- 12h SLA Target: ${formattedSla}
+- 2h SLA Target: ${formattedSla}
 
 Action Required:
 Sign in with your authorized Google administrator account to inspect the full UTR in the Verification Queue, confirm bank credit, and approve or reject this claim.

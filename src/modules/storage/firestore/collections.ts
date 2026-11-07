@@ -65,12 +65,14 @@ export interface PaymentSubmissionDocument {
   receiptPath?: string;
   receiptContentType?: string;
   submittedAt: string; // ISO
-  slaDeadlineAt: string; // ISO (submittedAt + 12h)
+  slaDeadlineAt: string; // ISO (submittedAt + 2h / 120 mins SLA)
   status: 'pending_verification' | 'approved' | 'rejected';
   decisionReason?: string;
   reviewedBy?: string; // Admin email
   reviewedAt?: string; // ISO
   verificationNotes?: string;
+  policyVersion?: string; // e.g. "1.0"
+  policyAcceptedAt?: string; // ISO timestamp when legal terms were accepted upon submission
 }
 
 export interface UtrReservationHistoryEntry {

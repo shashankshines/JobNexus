@@ -7185,6 +7185,16 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
                   </button>
                 </li>
                 <li>
+                  <Link href="/privacy-policy" className="footer-link-btn" style={{ textDecoration: 'none' }}>
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terms-and-conditions" className="footer-link-btn" style={{ textDecoration: 'none' }}>
+                    Terms &amp; Conditions
+                  </Link>
+                </li>
+                <li>
                   <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.25rem' }}>
                     <ShieldCheck size={14} color="#34d399" />
                     Anti-Scam Filter Active
@@ -7196,8 +7206,16 @@ function isMeaningfulPill(pill?: QuickPill | null): boolean {
 
           {/* Footer Bottom Bar */}
           <div className="footer-bottom-bar">
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem' }}>
               <span>© {new Date().getFullYear()} JobNexus Inc. All rights reserved. Direct ATS crawl pipeline.</span>
+              <span style={{ opacity: 0.35 }}>•</span>
+              <Link href="/privacy-policy" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+                Privacy Policy
+              </Link>
+              <span style={{ opacity: 0.35 }}>•</span>
+              <Link href="/terms-and-conditions" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+                Terms &amp; Conditions
+              </Link>
             </div>
 
             <button

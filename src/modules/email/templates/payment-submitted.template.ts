@@ -48,7 +48,7 @@ export function renderPaymentSubmittedEmail(data: PaymentSubmittedEmailData): Ge
     <!-- Review Target Notice Banner -->
     <div style="background-color: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 12px; padding: 14px 16px; margin-bottom: 24px;">
       <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #fde68a;">
-        <strong>Awaiting Manual Review:</strong> Our administrative team reviews UPI references against bank credit records. Target review window is within 12 hours.
+        <strong>Awaiting Manual Review:</strong> Our administrative team reviews UPI references against bank credit records. Target review window is within a maximum of 2 hours.
       </p>
     </div>
 
@@ -71,7 +71,7 @@ TRANSACTION DETAILS:
 
 Awaiting Manual Review:
 Our administrative team reviews UPI references against banking records.
-Target review window is within 12 hours.
+Target review window is within a maximum of 2 hours.
 
 Important Security Notice:
 Submitting a transaction reference records your claim for verification.

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import {
   Check,
   CheckCircle2,
@@ -845,7 +846,15 @@ export function UpiPaymentFlow({
         {/* Notice */}
         <div style={{ padding: '0.85rem 2rem 0.25rem 2rem' }}>
           <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, fontStyle: 'italic' }}>
-            * Payment is processed manually via UPI. Upon payment, submit your 12-digit UTR reference. Premium access is granted only after an authorized administrator independently verifies your transaction with bank records and records approval (target review window within 12 hours). Refreshing or elapsed time does not grant access automatically.
+            * Payment is processed manually via UPI. Upon payment, submit your 12-digit UTR reference. Premium access is granted only after an authorized administrator independently verifies your transaction with bank records and records approval (target review window within a maximum of 2 hours). Refreshing or elapsed time does not grant access automatically. By proceeding, you agree to our{' '}
+            <Link href="/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+              Terms &amp; Conditions
+            </Link>{' '}
+            and{' '}
+            <Link href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+              Privacy Policy
+            </Link>
+            . JobNexus never asks for your UPI PIN, banking password, or OTP.
           </p>
         </div>
 
@@ -1472,6 +1481,31 @@ export function UpiPaymentFlow({
           )}
         </div>
 
+        {/* Legal & SLA Consent Notice */}
+        <div style={{ padding: '0 2rem', marginTop: '0.25rem' }}>
+          <p style={{ fontSize: '0.73rem', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0 }}>
+            By submitting, you agree to our{' '}
+            <Link
+              href="/terms-and-conditions"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--primary)', textDecoration: 'underline', fontWeight: 600 }}
+            >
+              Terms &amp; Conditions
+            </Link>{' '}
+            and{' '}
+            <Link
+              href="/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--primary)', textDecoration: 'underline', fontWeight: 600 }}
+            >
+              Privacy Policy
+            </Link>
+            . Your reference will be manually verified within a <strong>maximum of 2 hours</strong>. JobNexus never requests your UPI PIN, banking password, or OTP.
+          </p>
+        </div>
+
         {/* Action Buttons */}
         <div style={{ padding: '1.25rem 2rem 1.75rem 2rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
           <button
@@ -1679,10 +1713,10 @@ export function UpiPaymentFlow({
             <Clock size={22} style={{ color: '#d97706', flexShrink: 0, marginTop: 2 }} />
             <div>
               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--badge-amber-text, #b45309)' }}>
-                Review Target: Within 12 Hours
+                Review Target: Within 2 Hours (Maximum 120 Minutes)
               </span>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0', lineHeight: 1.4 }}>
-                This is an estimated administrative review target window, not an automatic timer. Premium access activates in the system only after an authorized billing administrator independently verifies bank records and records approval. Refreshing or waiting does not trigger automatic activation.
+                This is an administrative review target window (maximum 2 hours from submission), not an automatic timer. Premium access activates in the system only after an authorized billing administrator independently verifies bank records and records approval. Refreshing or waiting does not trigger automatic activation.
               </p>
             </div>
           </div>

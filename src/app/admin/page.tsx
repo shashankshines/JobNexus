@@ -1180,14 +1180,14 @@ export default function AdminConsolePage() {
               {/* SLA Breaches */}
               <div className="admin-kpi-card" style={{ border: '1px solid rgba(239, 68, 68, 0.35)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ef4444', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>SLA Breaches (&gt;12h)</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>SLA Breaches (&gt;2h)</span>
                   <AlertOctagon size={18} />
                 </div>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#ef4444' }}>
                   {metrics ? metrics.slaBreachCount : '...'}
                 </div>
                 <span className="admin-text-label" style={{ fontSize: '0.72rem', marginTop: 4 }}>
-                  Pending claims over 12h review target
+                  Pending claims over 2h review target
                 </span>
               </div>
             </div>
@@ -1323,7 +1323,7 @@ export default function AdminConsolePage() {
             <div className="admin-notice-banner" style={{ marginBottom: '1.25rem' }}>
               <Clock size={18} style={{ color: 'var(--primary-start, #818cf8)', flexShrink: 0 }} />
               <div>
-                <strong>Operational SLA Notice:</strong> 12-Hour SLA is an operational response target for administrative review, not a payment guarantee or automated approval trigger.
+                <strong>Operational SLA Notice:</strong> 2-Hour SLA is an operational response target for administrative review, not a payment guarantee or automated approval trigger.
               </div>
             </div>
 
