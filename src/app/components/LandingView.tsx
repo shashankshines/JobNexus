@@ -993,10 +993,10 @@ export default function LandingView() {
                 style={{
                   padding: '0.45rem 0.95rem',
                   fontSize: '0.84rem',
-                  background: 'rgba(15, 23, 42, 0.75)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'var(--tag-bg, rgba(15, 23, 42, 0.75))',
+                  border: '1px solid var(--border)',
                   borderRadius: 9999,
-                  color: '#e2e8f0',
+                  color: 'var(--text-primary)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.45rem',
@@ -1085,9 +1085,9 @@ export default function LandingView() {
             style={{
               padding: '3.5rem 2rem',
               borderRadius: 24,
-              border: '1px solid rgba(99, 102, 241, 0.35)',
-              background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(99, 102, 241, 0.18) 100%)',
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(99, 102, 241, 0.15)',
+              border: '1px solid var(--border-card-hover, rgba(99, 102, 241, 0.35))',
+              background: 'var(--surface-card)',
+              boxShadow: 'var(--shadow-lg)',
             }}
           >
             <div

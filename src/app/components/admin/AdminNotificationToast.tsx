@@ -95,12 +95,12 @@ export function AdminNotificationToastContainer({
             role="alert"
             style={{
               pointerEvents: 'auto',
-              background: 'var(--card-bg, #1e293b)',
-              color: 'var(--text-primary, #f8fafc)',
+              background: 'var(--toast-bg, var(--card-bg, #1e293b))',
+              color: 'var(--toast-title, var(--text-primary, #f8fafc))',
               border: `1px solid ${meta.border}`,
               borderRadius: 14,
               padding: '14px 16px',
-              boxShadow: '0 12px 32px -4px rgba(0, 0, 0, 0.45)',
+              boxShadow: 'var(--toast-shadow, 0 12px 32px -4px rgba(0, 0, 0, 0.45))',
               backdropFilter: 'blur(16px)',
               display: 'flex',
               flexDirection: 'column',

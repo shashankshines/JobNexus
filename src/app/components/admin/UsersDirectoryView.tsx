@@ -1145,7 +1145,7 @@ export function UsersDirectoryView({
                 display: 'flex',
                 alignItems: 'flex-end',
                 justifyContent: 'center',
-                background: 'rgba(3, 7, 18, 0.75)',
+                background: 'var(--modal-backdrop, rgba(3, 7, 18, 0.75))',
                 backdropFilter: 'blur(6px)',
               }}
               onClick={() => setMobileActionUser(null)}

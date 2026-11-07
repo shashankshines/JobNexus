@@ -54,6 +54,12 @@
   --modal-border: rgba(255, 255, 255, 0.12);
   --modal-backdrop: rgba(3, 7, 18, 0.78);
 
+  /* Shared / Admin Semantic Aliases */
+  --card-bg: var(--surface-card);
+  --border-color: var(--border);
+  --text-tertiary: var(--text-muted);
+  --header-bg: var(--nav-bg);
+
   /* Toast Notification Tokens (Dark Mode) */
   --toast-bg: rgba(15, 23, 42, 0.94);
   --toast-border: rgba(255, 255, 255, 0.12);
@@ -228,6 +234,12 @@
   --modal-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
   --modal-border: rgba(15, 23, 42, 0.12);
   --modal-backdrop: rgba(15, 23, 42, 0.5);
+
+  /* Shared / Admin Semantic Aliases (Light Theme) */
+  --card-bg: #ffffff;
+  --border-color: var(--border);
+  --text-tertiary: var(--text-muted);
+  --header-bg: var(--nav-bg);
 
   /* Toast Notification Tokens (Light Mode - Crisp & High Contrast) */
   --toast-bg: rgba(255, 255, 255, 0.96);
@@ -4759,6 +4771,65 @@ html[data-theme="light"] .admin-modal-card {
   border: 1px solid #cbd5e1 !important;
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.15) !important;
   color: #0f172a !important;
+}
+
+/* Premium Offer & UPI Payment Modal Card */
+.premium-offer-modal-card {
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
+  border-radius: 24px;
+  box-shadow: var(--shadow-lg), 0 0 40px rgba(99, 102, 241, 0.15);
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] .premium-offer-modal-card,
+[data-theme="light"] .premium-offer-modal-card,
+html[data-theme="light"] .premium-offer-modal-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 20px 48px -10px rgba(15, 23, 42, 0.16), 0 0 32px rgba(99, 102, 241, 0.08) !important;
+  color: #0f172a !important;
+}
+
+.upi-form-input {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.upi-form-input:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+}
+
+:root[data-theme="light"] .upi-form-input,
+[data-theme="light"] .upi-form-input,
+html[data-theme="light"] .upi-form-input {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.18) !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="light"] .upi-form-input::placeholder,
+[data-theme="light"] .upi-form-input::placeholder,
+html[data-theme="light"] .upi-form-input::placeholder {
+  color: #94a3b8 !important;
+}
+
+.upi-readonly-box {
+  background: var(--tag-bg);
+  border: 1px solid var(--input-border);
+  color: var(--accent-emerald);
+}
+
+:root[data-theme="light"] .upi-readonly-box,
+[data-theme="light"] .upi-readonly-box,
+html[data-theme="light"] .upi-readonly-box {
+  background: #f1f5f9 !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  color: #059669 !important;
 }
 
 .admin-form-input {

@@ -37,10 +37,11 @@ export function AdminNotificationCenter() {
       aria-labelledby="admin-notifications-title"
       style={{
         marginBottom: '1.5rem',
-        border: '1px solid var(--border-color, rgba(255, 255, 255, 0.12))',
+        border: '1px solid var(--border)',
         borderRadius: 16,
         padding: '1.2rem',
-        background: 'var(--card-bg, #1e293b)',
+        background: 'var(--surface-solid, var(--card-bg, #1e293b))',
+        color: 'var(--text-primary)',
       }}
     >
       <div

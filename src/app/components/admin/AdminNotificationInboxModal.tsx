@@ -114,7 +114,7 @@ export function AdminNotificationInboxModal({
         position: 'fixed',
         inset: 0,
         zIndex: 100000,
-        background: 'rgba(0, 0, 0, 0.7)',
+        background: 'var(--modal-backdrop, rgba(0, 0, 0, 0.7))',
         backdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
@@ -123,14 +123,15 @@ export function AdminNotificationInboxModal({
       }}
     >
       <div
+        className="admin-modal-card"
         style={{
           width: '100%',
           maxWidth: 820,
           maxHeight: '90vh',
-          background: 'var(--card-bg, #0f172a)',
-          border: '1px solid var(--border-color, rgba(255, 255, 255, 0.15))',
+          background: 'var(--modal-bg, var(--card-bg, #0f172a))',
+          border: '1px solid var(--modal-border, var(--border))',
           borderRadius: 20,
-          boxShadow: '0 24px 64px -12px rgba(0, 0, 0, 0.75)',
+          boxShadow: 'var(--shadow-lg)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -141,12 +142,12 @@ export function AdminNotificationInboxModal({
         <div
           style={{
             padding: '18px 24px',
-            borderBottom: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
+            borderBottom: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: 'var(--surface)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -181,8 +182,8 @@ export function AdminNotificationInboxModal({
               disabled={loading}
               title="Refresh inbox"
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
+                background: 'var(--tag-bg, rgba(255, 255, 255, 0.05))',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '7px 10px',
                 color: 'var(--text-secondary, #cbd5e1)',
@@ -198,8 +199,8 @@ export function AdminNotificationInboxModal({
               onClick={onClose}
               aria-label="Close modal"
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
+                background: 'var(--tag-bg, rgba(255, 255, 255, 0.05))',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '7px 10px',
                 color: 'var(--text-secondary, #cbd5e1)',
@@ -217,7 +218,7 @@ export function AdminNotificationInboxModal({
         <div
           style={{
             padding: '10px 24px 0',
-            borderBottom: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
+            borderBottom: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -610,13 +611,11 @@ export function AdminNotificationInboxModal({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Filter by title, user email, ID..."
+                  className="admin-form-input"
                   style={{
                     width: '100%',
                     padding: '7px 10px 7px 32px',
                     borderRadius: 8,
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
-                    color: 'var(--text-primary, #f8fafc)',
                     fontSize: '0.8rem',
                   }}
                 />
@@ -627,12 +626,10 @@ export function AdminNotificationInboxModal({
                 <select
                   value={priorityFilter}
                   onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="admin-form-input"
                   style={{
                     padding: '6px 10px',
                     borderRadius: 8,
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
-                    color: 'var(--text-primary, #f8fafc)',
                     fontSize: '0.78rem',
                   }}
                 >

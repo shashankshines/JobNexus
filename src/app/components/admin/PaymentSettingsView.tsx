@@ -813,7 +813,7 @@ export function PaymentSettingsView({ onRefreshParent }: PaymentSettingsViewProp
             position: 'fixed',
             inset: 0,
             zIndex: 1000,
-            background: 'rgba(0, 0, 0, 0.75)',
+            background: 'var(--modal-backdrop, rgba(0, 0, 0, 0.75))',
             backdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',

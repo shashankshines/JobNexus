@@ -268,7 +268,7 @@ export function AccountLifecycleModal({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '0.75rem',
-        background: 'rgba(3, 7, 18, 0.85)',
+        background: 'var(--modal-backdrop, rgba(3, 7, 18, 0.85))',
         backdropFilter: 'blur(10px)',
       }}
     >

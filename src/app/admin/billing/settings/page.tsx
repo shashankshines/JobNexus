@@ -15,6 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { PaymentSettingsView } from '@/app/components/admin/PaymentSettingsView';
+import ThemeToggle from '@/app/components/ThemeToggle';
 
 export default function AdminPaymentSettingsPage() {
   const [refreshKey, setRefreshKey] = useState<number>(0);
@@ -114,6 +115,7 @@ export default function AdminPaymentSettingsPage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <ThemeToggle />
             <Link
               href="/"
               style={{

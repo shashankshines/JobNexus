@@ -529,20 +529,20 @@ export function UpiPaymentFlow({
           minHeight: 280,
         }}
       >
-        <RefreshCw size={24} className="animate-spin" style={{ color: '#818cf8' }} />
+        <RefreshCw size={24} className="animate-spin" style={{ color: 'var(--primary)' }} />
         <div>
           <h2
             id="premium-offer-title"
             style={{
               fontSize: '1.05rem',
               fontWeight: 700,
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               margin: '0 0 0.25rem 0',
             }}
           >
             Checking Membership &amp; Payment Status
           </h2>
-          <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
             Loading your authoritative subscription state...
           </p>
         </div>
@@ -574,7 +574,7 @@ export function UpiPaymentFlow({
                 background: isExpiredRenewal
                   ? 'rgba(245, 158, 11, 0.16)'
                   : 'rgba(99, 102, 241, 0.16)',
-                color: isExpiredRenewal ? '#fbbf24' : '#a5b4fc',
+                color: isExpiredRenewal ? '#fbbf24' : 'var(--primary)',
                 padding: '0.35rem 0.8rem',
                 borderRadius: 999,
                 border: isExpiredRenewal
@@ -582,7 +582,7 @@ export function UpiPaymentFlow({
                   : '1px solid rgba(99, 102, 241, 0.35)',
               }}
             >
-              <Sparkles size={13} style={{ color: isExpiredRenewal ? '#fbbf24' : '#818cf8', flexShrink: 0 }} />
+              <Sparkles size={13} style={{ color: isExpiredRenewal ? '#fbbf24' : 'var(--primary)', flexShrink: 0 }} />
               <span>{isExpiredRenewal ? 'Membership Expired · Renew Access' : 'Membership Offer'}</span>
             </span>
             <button
@@ -591,15 +591,15 @@ export function UpiPaymentFlow({
               disabled={isLoadingOrder}
               aria-label="Close modal"
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--tag-bg, rgba(255, 255, 255, 0.05))',
+                border: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
                 borderRadius: '50%',
                 width: 32,
                 height: 32,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#94a3b8',
+                color: 'var(--text-secondary, #94a3b8)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
               }}
@@ -613,7 +613,7 @@ export function UpiPaymentFlow({
             style={{
               fontSize: '1.45rem',
               fontWeight: 800,
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               letterSpacing: '-0.025em',
               marginTop: '0.85rem',
               marginBottom: '0.35rem',
@@ -624,7 +624,7 @@ export function UpiPaymentFlow({
               ? 'Renew Your 30-Day JobNexus Premium'
               : 'Supercharge Your Job Search with Premium'}
           </h2>
-          <p style={{ fontSize: '0.86rem', color: '#94a3b8', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
             {isExpiredRenewal
               ? billingFlow?.renewal?.message ||
                 `Your previous 30-day cycle ended. Renew for ₹${PREMIUM_PLAN.priceInr} (regularly ₹${PREMIUM_PLAN.originalPriceInr}) to unlock unmasked employer identities and direct ATS links again — your saved jobs are safe.`
@@ -638,8 +638,8 @@ export function UpiPaymentFlow({
             margin: '0 2rem 1rem 2rem',
             padding: '1.1rem 1.35rem',
             borderRadius: 16,
-            background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(6, 182, 212, 0.08) 100%)',
-            border: '1px solid rgba(99, 102, 241, 0.3)',
+            background: 'var(--surface-hover, rgba(79, 70, 229, 0.08))',
+            border: '1px solid var(--border-card-hover, rgba(99, 102, 241, 0.3))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -652,7 +652,7 @@ export function UpiPaymentFlow({
               <span
                 style={{
                   fontSize: '0.75rem',
-                  color: '#cbd5e1',
+                  color: 'var(--text-secondary)',
                   fontWeight: 600,
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
@@ -666,7 +666,7 @@ export function UpiPaymentFlow({
                   fontWeight: 800,
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
-                  color: '#fde68a',
+                  color: '#b45309',
                   background: 'rgba(245, 158, 11, 0.16)',
                   border: '1px solid rgba(245, 158, 11, 0.35)',
                   padding: '0.12rem 0.45rem',
@@ -681,23 +681,23 @@ export function UpiPaymentFlow({
                 style={{
                   fontSize: '1.18rem',
                   fontWeight: 600,
-                  color: '#64748b',
+                  color: 'var(--text-muted)',
                   textDecoration: 'line-through',
                 }}
               >
                 ₹{PREMIUM_PLAN.originalPriceInr}
               </s>
-              <span style={{ fontSize: '2.05rem', fontWeight: 800, color: '#ffffff' }}>
+              <span style={{ fontSize: '2.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                 ₹{PREMIUM_PLAN.priceInr}
               </span>
-              <span style={{ fontSize: '0.88rem', color: '#94a3b8', fontWeight: 500 }}>/ month</span>
+              <span style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', fontWeight: 500 }}>/ month</span>
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <span
               style={{
                 fontSize: '0.72rem',
-                color: '#34d399',
+                color: 'var(--accent-emerald, #059669)',
                 fontWeight: 700,
                 background: 'rgba(52, 211, 153, 0.12)',
                 padding: '0.25rem 0.55rem',
@@ -708,7 +708,7 @@ export function UpiPaymentFlow({
             >
               All Taxes Included
             </span>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.3rem' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
               Cancel anytime in 1 click
             </div>
           </div>
@@ -731,10 +731,10 @@ export function UpiPaymentFlow({
                 marginTop: 1,
               }}
             >
-              <Zap size={15} style={{ color: '#38bdf8' }} />
+              <Zap size={15} style={{ color: '#0284c7' }} />
             </div>
-            <div style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.45 }}>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>Direct Application Access:</strong> Get convenient access to available application links and move from job discovery to applying with fewer steps.
+            <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+              <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Direct Application Access:</strong> Get convenient access to available application links and move from job discovery to applying with fewer steps.
             </div>
           </div>
 
@@ -753,10 +753,10 @@ export function UpiPaymentFlow({
                 marginTop: 1,
               }}
             >
-              <BookmarkCheck size={15} style={{ color: '#34d399' }} />
+              <BookmarkCheck size={15} style={{ color: '#059669' }} />
             </div>
-            <div style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.45 }}>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>Unlimited Saved Jobs:</strong> Organize and bookmark opportunities across all verified sources.
+            <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+              <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Unlimited Saved Jobs:</strong> Organize and bookmark opportunities across all verified sources.
             </div>
           </div>
 
@@ -775,10 +775,10 @@ export function UpiPaymentFlow({
                 marginTop: 1,
               }}
             >
-              <Eye size={15} style={{ color: '#c084fc' }} />
+              <Eye size={15} style={{ color: '#7c3aed' }} />
             </div>
-            <div style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.45 }}>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>Clean Focus View:</strong> Distraction-free, zero-ad interface engineered for high-intent job seekers.
+            <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+              <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Clean Focus View:</strong> Distraction-free, zero-ad interface engineered for high-intent job seekers.
             </div>
           </div>
 
@@ -797,10 +797,10 @@ export function UpiPaymentFlow({
                 marginTop: 1,
               }}
             >
-              <TrendingUp size={15} style={{ color: '#fbbf24' }} />
+              <TrendingUp size={15} style={{ color: '#d97706' }} />
             </div>
-            <div style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.45 }}>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>Priority Feed Indexing:</strong> Early access to freshly indexed Indian tech and global remote roles.
+            <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+              <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Priority Feed Indexing:</strong> Early access to freshly indexed Indian tech and global remote roles.
             </div>
           </div>
         </div>
@@ -813,9 +813,9 @@ export function UpiPaymentFlow({
               margin: '1rem 2rem 0 2rem',
               padding: '0.8rem 1rem',
               borderRadius: 10,
-              background: 'rgba(239, 68, 68, 0.14)',
-              border: '1px solid rgba(239, 68, 68, 0.32)',
-              color: '#fca5a5',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: 'var(--badge-crimson-text, #b91c1c)',
               fontSize: '0.82rem',
               lineHeight: 1.45,
             }}
@@ -832,9 +832,9 @@ export function UpiPaymentFlow({
               margin: '1rem 2rem 0 2rem',
               padding: '0.75rem 1rem',
               borderRadius: 10,
-              background: 'rgba(239, 68, 68, 0.15)',
+              background: 'rgba(239, 68, 68, 0.12)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#fca5a5',
+              color: 'var(--badge-crimson-text, #b91c1c)',
               fontSize: '0.82rem',
             }}
           >
@@ -844,7 +844,7 @@ export function UpiPaymentFlow({
 
         {/* Notice */}
         <div style={{ padding: '0.85rem 2rem 0.25rem 2rem' }}>
-          <p style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: 1.45, margin: 0, fontStyle: 'italic' }}>
+          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, fontStyle: 'italic' }}>
             * Payment is processed manually via UPI. Upon payment, submit your 12-digit UTR reference. Premium access is granted only after an authorized administrator independently verifies your transaction with bank records and records approval (target review window within 12 hours). Refreshing or elapsed time does not grant access automatically.
           </p>
         </div>
@@ -865,7 +865,7 @@ export function UpiPaymentFlow({
                 : isLoadingOrder
                 ? '#4338ca'
                 : 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
-              color: isAdminRestricted ? '#94a3b8' : '#ffffff',
+              color: isAdminRestricted ? 'var(--text-muted)' : '#ffffff',
               fontSize: '0.95rem',
               fontWeight: 700,
               border: 'none',
@@ -914,7 +914,7 @@ export function UpiPaymentFlow({
               padding: '0.65rem',
               borderRadius: 10,
               background: 'transparent',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               fontSize: '0.82rem',
               fontWeight: 600,
               border: 'none',
@@ -945,7 +945,7 @@ export function UpiPaymentFlow({
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
                 background: 'rgba(56, 189, 248, 0.12)',
-                color: '#38bdf8',
+                color: 'var(--accent-cyan, #0284c7)',
                 padding: '0.25rem 0.65rem',
                 borderRadius: 999,
                 border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -958,15 +958,15 @@ export function UpiPaymentFlow({
               onClick={onClose}
               aria-label="Close modal"
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--tag-bg, rgba(255, 255, 255, 0.05))',
+                border: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
                 borderRadius: '50%',
                 width: 32,
                 height: 32,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#94a3b8',
+                color: 'var(--text-secondary, #94a3b8)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
               }}
@@ -979,20 +979,20 @@ export function UpiPaymentFlow({
             style={{
               fontSize: '1.35rem',
               fontWeight: 800,
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               marginTop: '0.65rem',
               marginBottom: '0.25rem',
             }}
           >
             Pay{' '}
             {order.amountInr < PREMIUM_PLAN.originalPriceInr && (
-              <s style={{ color: '#64748b', fontWeight: 600, fontSize: '1.05rem', marginRight: 6 }}>
+              <s style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '1.05rem', marginRight: 6 }}>
                 ₹{PREMIUM_PLAN.originalPriceInr}
               </s>
             )}
             ₹{order.amountInr} via UPI
           </h2>
-          <p style={{ fontSize: '0.84rem', color: '#94a3b8', margin: 0 }}>
+          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', margin: 0 }}>
             Scan the QR code using any UPI app (Google Pay, PhonePe, Paytm, BHIM, Cred) or copy the UPI ID below.
           </p>
         </div>
@@ -1003,8 +1003,8 @@ export function UpiPaymentFlow({
             margin: '0 2rem 1rem 2rem',
             padding: '1.25rem',
             borderRadius: 18,
-            background: 'rgba(15, 23, 42, 0.85)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            background: 'var(--surface-hover, rgba(15, 23, 42, 0.85))',
+            border: '1px solid var(--border)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -1020,8 +1020,8 @@ export function UpiPaymentFlow({
               width: '100%',
               padding: '0.75rem 1rem',
               borderRadius: 12,
-              background: 'rgba(0, 0, 0, 0.35)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'var(--input-bg, rgba(0, 0, 0, 0.04))',
+              border: '1px solid var(--input-border, rgba(255, 255, 255, 0.1))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1029,14 +1029,14 @@ export function UpiPaymentFlow({
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Business UPI ID ({order.payeeName})
               </span>
               <span
                 style={{
                   fontSize: '0.95rem',
                   fontWeight: 700,
-                  color: '#f8fafc',
+                  color: 'var(--text-primary)',
                   fontFamily: 'monospace',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -1057,7 +1057,7 @@ export function UpiPaymentFlow({
                 padding: '0.5rem 0.85rem',
                 borderRadius: 8,
                 background: copySuccess ? 'rgba(52, 211, 153, 0.2)' : 'rgba(99, 102, 241, 0.2)',
-                color: copySuccess ? '#34d399' : '#a5b4fc',
+                color: copySuccess ? '#059669' : 'var(--primary)',
                 border: copySuccess ? '1px solid rgba(52, 211, 153, 0.4)' : '1px solid rgba(99, 102, 241, 0.35)',
                 fontSize: '0.78rem',
                 fontWeight: 600,
@@ -1090,21 +1090,21 @@ export function UpiPaymentFlow({
             style={{
               width: '100%',
               fontSize: '0.76rem',
-              color: '#cbd5e1',
+              color: 'var(--text-secondary)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
             }}
           >
             <span>
-              Order Ref: <code style={{ color: '#818cf8', fontWeight: 600 }}>{order.orderId}</code>
+              Order Ref: <code style={{ color: 'var(--primary)', fontWeight: 600 }}>{order.orderId}</code>
             </span>
-            <span style={{ color: '#94a3b8' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>
               Amount:{' '}
               {order.amountInr < PREMIUM_PLAN.originalPriceInr && (
-                <s style={{ opacity: 0.7, marginRight: 4 }}>₹{PREMIUM_PLAN.originalPriceInr}</s>
+                <s style={{ opacity: 0.7, marginRight: 4, color: 'var(--text-muted)' }}>₹{PREMIUM_PLAN.originalPriceInr}</s>
               )}
-              <strong style={{ color: '#34d399' }}>₹{order.amountInr}</strong>
+              <strong style={{ color: 'var(--accent-emerald, #059669)' }}>₹{order.amountInr}</strong>
             </span>
           </div>
 
@@ -1115,9 +1115,9 @@ export function UpiPaymentFlow({
               width: '100%',
               padding: '0.6rem 1rem',
               borderRadius: 10,
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              color: '#e2e8f0',
+              background: 'var(--tag-bg, rgba(255, 255, 255, 0.05))',
+              border: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
+              color: 'var(--text-primary)',
               fontSize: '0.82rem',
               fontWeight: 600,
               display: 'flex',
@@ -1134,10 +1134,10 @@ export function UpiPaymentFlow({
         </div>
 
         {/* Safety Invariant Notice */}
-        <div style={{ margin: '0 2rem', padding: '0.7rem 0.95rem', borderRadius: 10, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', color: '#fde68a', fontSize: '0.78rem', lineHeight: 1.45, display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-          <AlertCircle size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
+        <div style={{ margin: '0 2rem', padding: '0.7rem 0.95rem', borderRadius: 10, background: 'var(--badge-amber-bg, rgba(245, 158, 11, 0.1))', border: '1px solid var(--badge-amber-border, rgba(245, 158, 11, 0.25))', color: 'var(--badge-amber-text, #b45309)', fontSize: '0.78rem', lineHeight: 1.45, display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+          <AlertCircle size={15} style={{ color: '#d97706', flexShrink: 0, marginTop: 2 }} />
           <div>
-            <strong style={{ color: '#fef3c7' }}>Next Step Required:</strong> After transferring ₹{order.amountInr}, click below to submit your 12-digit UTR transaction reference so our team can verify and activate your Premium access.
+            <strong style={{ color: 'var(--text-primary)' }}>Next Step Required:</strong> After transferring ₹{order.amountInr}, click below to submit your 12-digit UTR transaction reference so our team can verify and activate your Premium access.
           </div>
         </div>
 
@@ -1188,7 +1188,7 @@ export function UpiPaymentFlow({
               padding: '0.6rem',
               borderRadius: 10,
               background: 'transparent',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               fontSize: '0.82rem',
               fontWeight: 600,
               border: 'none',
@@ -1223,7 +1223,7 @@ export function UpiPaymentFlow({
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
                 background: 'rgba(16, 185, 129, 0.12)',
-                color: '#34d399',
+                color: 'var(--accent-emerald, #059669)',
                 padding: '0.25rem 0.65rem',
                 borderRadius: 999,
                 border: '1px solid rgba(52, 211, 153, 0.25)',
@@ -1237,15 +1237,15 @@ export function UpiPaymentFlow({
               aria-label="Close modal"
               disabled={isSubmitting}
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--tag-bg, rgba(255, 255, 255, 0.05))',
+                border: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
                 borderRadius: '50%',
                 width: 32,
                 height: 32,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#94a3b8',
+                color: 'var(--text-secondary, #94a3b8)',
                 cursor: 'pointer',
                 fontSize: '1.1rem',
               }}
@@ -1258,14 +1258,14 @@ export function UpiPaymentFlow({
             style={{
               fontSize: '1.35rem',
               fontWeight: 800,
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               marginTop: '0.65rem',
               marginBottom: '0.25rem',
             }}
           >
             Confirm Your UPI Payment
           </h2>
-          <p style={{ fontSize: '0.84rem', color: '#94a3b8', margin: 0 }}>
+          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', margin: 0 }}>
             Enter the 12-digit UPI Reference / UTR Number from your banking or UPI app receipt.
           </p>
         </div>
@@ -1280,11 +1280,11 @@ export function UpiPaymentFlow({
                 display: 'block',
                 fontSize: '0.82rem',
                 fontWeight: 600,
-                color: '#e2e8f0',
+                color: 'var(--text-primary)',
                 marginBottom: '0.35rem',
               }}
             >
-              UPI Transaction Reference (UTR) <span style={{ color: '#f87171' }}>*</span>
+              UPI Transaction Reference (UTR) <span style={{ color: 'var(--badge-crimson-icon, #ef4444)' }}>*</span>
             </label>
             <input
               id="utr-input"
@@ -1299,13 +1299,12 @@ export function UpiPaymentFlow({
               }}
               aria-invalid={Boolean(fieldErrors.utr)}
               aria-describedby={fieldErrors.utr ? 'utr-error' : 'utr-help'}
+              className="upi-form-input"
               style={{
                 width: '100%',
                 padding: '0.75rem 1rem',
                 borderRadius: 10,
-                background: 'rgba(8, 12, 22, 0.85)',
-                border: fieldErrors.utr ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#ffffff',
+                border: fieldErrors.utr ? '1px solid #ef4444' : '1px solid var(--input-border)',
                 fontSize: '1rem',
                 fontFamily: 'monospace',
                 letterSpacing: '0.05em',
@@ -1313,11 +1312,11 @@ export function UpiPaymentFlow({
               }}
             />
             {fieldErrors.utr ? (
-              <span id="utr-error" style={{ display: 'block', fontSize: '0.74rem', color: '#f87171', marginTop: '0.3rem' }}>
+              <span id="utr-error" style={{ display: 'block', fontSize: '0.74rem', color: '#ef4444', marginTop: '0.3rem' }}>
                 {fieldErrors.utr}
               </span>
             ) : (
-              <span id="utr-help" style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', marginTop: '0.3rem' }}>
+              <span id="utr-help" style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                 Found in your payment app under &quot;UPI Ref No.&quot;, &quot;UTR&quot;, or &quot;Transaction ID&quot;.
               </span>
             )}
@@ -1332,13 +1331,13 @@ export function UpiPaymentFlow({
                   display: 'block',
                   fontSize: '0.82rem',
                   fontWeight: 600,
-                  color: '#e2e8f0',
+                  color: 'var(--text-primary)',
                   marginBottom: '0.35rem',
                 }}
               >
                 Plan Amount{' '}
                 {order.amountInr < PREMIUM_PLAN.originalPriceInr && (
-                  <span style={{ fontSize: '0.72rem', fontWeight: 500, color: '#94a3b8' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--text-muted)' }}>
                     (<s style={{ opacity: 0.8 }}>₹{PREMIUM_PLAN.originalPriceInr}</s>)
                   </span>
                 )}
@@ -1348,13 +1347,11 @@ export function UpiPaymentFlow({
                 type="text"
                 readOnly
                 value={`₹${order.amountInr}`}
+                className="upi-readonly-box"
                 style={{
                   width: '100%',
                   padding: '0.75rem 1rem',
                   borderRadius: 10,
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#34d399',
                   fontSize: '0.95rem',
                   fontWeight: 700,
                   outline: 'none',
@@ -1371,11 +1368,11 @@ export function UpiPaymentFlow({
                   display: 'block',
                   fontSize: '0.82rem',
                   fontWeight: 600,
-                  color: '#e2e8f0',
+                  color: 'var(--text-primary)',
                   marginBottom: '0.35rem',
                 }}
               >
-                Payment Date <span style={{ color: '#f87171' }}>*</span>
+                Payment Date <span style={{ color: 'var(--badge-crimson-icon, #ef4444)' }}>*</span>
               </label>
               <input
                 id="date-input"
@@ -1389,13 +1386,12 @@ export function UpiPaymentFlow({
                 }}
                 aria-invalid={Boolean(fieldErrors.date)}
                 aria-describedby={fieldErrors.date ? 'date-error' : undefined}
+                className="upi-form-input"
                 style={{
                   width: '100%',
                   padding: '0.75rem 1rem',
                   borderRadius: 10,
-                  background: 'rgba(8, 12, 22, 0.85)',
-                  border: fieldErrors.date ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
+                  border: fieldErrors.date ? '1px solid #ef4444' : '1px solid var(--input-border)',
                   fontSize: '0.88rem',
                   outline: 'none',
                 }}
@@ -1411,7 +1407,7 @@ export function UpiPaymentFlow({
                 display: 'block',
                 fontSize: '0.82rem',
                 fontWeight: 600,
-                color: '#e2e8f0',
+                color: 'var(--text-primary)',
                 marginBottom: '0.35rem',
               }}
             >
@@ -1424,13 +1420,12 @@ export function UpiPaymentFlow({
               placeholder="e.g. Google Pay / HDFC Bank"
               value={verificationNotes}
               onChange={(e) => setVerificationNotes(e.target.value)}
+              className="upi-form-input"
               style={{
                 width: '100%',
                 padding: '0.65rem 1rem',
                 borderRadius: 10,
-                background: 'rgba(8, 12, 22, 0.85)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                color: '#ffffff',
+                border: '1px solid var(--input-border)',
                 fontSize: '0.88rem',
                 outline: 'none',
               }}
@@ -1444,9 +1439,9 @@ export function UpiPaymentFlow({
               style={{
                 padding: '0.75rem 1rem',
                 borderRadius: 10,
-                background: 'rgba(239, 68, 68, 0.15)',
+                background: 'rgba(239, 68, 68, 0.12)',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: '#fca5a5',
+                color: 'var(--badge-crimson-text, #b91c1c)',
                 fontSize: '0.82rem',
                 display: 'flex',
                 flexDirection: 'column',
@@ -1527,7 +1522,7 @@ export function UpiPaymentFlow({
               padding: '0.6rem',
               borderRadius: 10,
               background: 'transparent',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               fontSize: '0.82rem',
               fontWeight: 600,
               border: 'none',
@@ -1573,7 +1568,7 @@ export function UpiPaymentFlow({
                   : isPending
                   ? 'rgba(245, 158, 11, 0.15)'
                   : 'rgba(239, 68, 68, 0.15)',
-                color: isApproved ? '#34d399' : isPending ? '#fbbf24' : '#f87171',
+                color: isApproved ? 'var(--accent-emerald, #059669)' : isPending ? 'var(--accent-amber, #d97706)' : 'var(--badge-crimson-icon, #ef4444)',
                 padding: '0.3rem 0.75rem',
                 borderRadius: 999,
                 border: isApproved
@@ -1607,15 +1602,15 @@ export function UpiPaymentFlow({
               onClick={onClose}
               aria-label="Close modal"
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--tag-bg, rgba(255, 255, 255, 0.05))',
+                border: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
                 borderRadius: '50%',
                 width: 32,
                 height: 32,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#94a3b8',
+                color: 'var(--text-secondary, #94a3b8)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
               }}
@@ -1629,7 +1624,7 @@ export function UpiPaymentFlow({
             style={{
               fontSize: '1.4rem',
               fontWeight: 800,
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               marginTop: '0.85rem',
               marginBottom: '0.35rem',
             }}
@@ -1638,7 +1633,7 @@ export function UpiPaymentFlow({
             {isPending && 'Payment Details Received'}
             {isRejected && 'Payment Verification Unsuccessful'}
           </h2>
-          <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
             {isApproved && 'Your payment has been verified. You now enjoy unmasked ATS links and priority alerts.'}
             {isPending && 'Our team is reviewing your UPI transaction reference against banking records.'}
             {isRejected && (submission?.decisionReason || 'We were unable to verify this transaction reference.')}
@@ -1655,14 +1650,14 @@ export function UpiPaymentFlow({
               borderRadius: 12,
               background: 'rgba(239, 68, 68, 0.12)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#fca5a5',
+              color: 'var(--badge-crimson-text, #b91c1c)',
               fontSize: '0.8rem',
               display: 'flex',
               alignItems: 'center',
               gap: '0.55rem',
             }}
           >
-            <AlertCircle size={16} style={{ flexShrink: 0, color: '#f87171' }} />
+            <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -1674,19 +1669,19 @@ export function UpiPaymentFlow({
               margin: '0 2rem 1rem 2rem',
               padding: '1rem',
               borderRadius: 14,
-              background: 'rgba(245, 158, 11, 0.1)',
-              border: '1px solid rgba(245, 158, 11, 0.25)',
+              background: 'var(--badge-amber-bg, rgba(245, 158, 11, 0.1))',
+              border: '1px solid var(--badge-amber-border, rgba(245, 158, 11, 0.25))',
               display: 'flex',
               alignItems: 'flex-start',
               gap: '0.75rem',
             }}
           >
-            <Clock size={22} style={{ color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
+            <Clock size={22} style={{ color: '#d97706', flexShrink: 0, marginTop: 2 }} />
             <div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fde68a' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--badge-amber-text, #b45309)' }}>
                 Review Target: Within 12 Hours
               </span>
-              <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '0.2rem 0 0 0', lineHeight: 1.4 }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0', lineHeight: 1.4 }}>
                 This is an estimated administrative review target window, not an automatic timer. Premium access activates in the system only after an authorized billing administrator independently verifies bank records and records approval. Refreshing or waiting does not trigger automatic activation.
               </p>
             </div>
@@ -1706,10 +1701,10 @@ export function UpiPaymentFlow({
               alignItems: 'center',
               gap: '0.65rem',
               fontSize: '0.78rem',
-              color: '#c7d2fe',
+              color: 'var(--primary)',
             }}
           >
-            <Mail size={16} style={{ color: '#818cf8', flexShrink: 0 }} />
+            <Mail size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
             <span>{emailDeliveryNotice}</span>
           </div>
         )}
@@ -1721,8 +1716,8 @@ export function UpiPaymentFlow({
               margin: '0 2rem 1rem 2rem',
               padding: '1.1rem 1.25rem',
               borderRadius: 14,
-              background: 'rgba(15, 23, 42, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'var(--surface-hover, rgba(15, 23, 42, 0.8))',
+              border: '1px solid var(--border)',
               display: 'flex',
               flexDirection: 'column',
               gap: '0.65rem',
@@ -1732,27 +1727,27 @@ export function UpiPaymentFlow({
             {submission && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Submission ID:</span>
-                  <code style={{ color: '#e2e8f0', fontWeight: 600 }}>{submission.submissionId}</code>
+                  <span style={{ color: 'var(--text-secondary)' }}>Submission ID:</span>
+                  <code style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{submission.submissionId}</code>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>UTR Reference:</span>
-                  <code style={{ color: '#818cf8', fontWeight: 700 }}>{submission.utrNumber}</code>
+                  <span style={{ color: 'var(--text-secondary)' }}>UTR Reference:</span>
+                  <code style={{ color: 'var(--primary)', fontWeight: 700 }}>{submission.utrNumber}</code>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Declared Amount:</span>
-                  <span style={{ color: '#34d399', fontWeight: 700 }}>₹{submission.declaredAmount}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Declared Amount:</span>
+                  <span style={{ color: 'var(--accent-emerald, #059669)', fontWeight: 700 }}>₹{submission.declaredAmount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Payment Date:</span>
-                  <span style={{ color: '#e2e8f0' }}>{submission.paymentDate}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Payment Date:</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{submission.paymentDate}</span>
                 </div>
               </>
             )}
             {isApproved && billingFlow?.renewal?.currentPeriodEnd && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>Access Valid Until:</span>
-                <span style={{ color: '#fbbf24', fontWeight: 700 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Access Valid Until:</span>
+                <span style={{ color: 'var(--accent-amber, #d97706)', fontWeight: 700 }}>
                   {new Date(billingFlow.renewal.currentPeriodEnd).toLocaleDateString('en-IN', {
                     month: 'short',
                     day: 'numeric',
@@ -1762,8 +1757,8 @@ export function UpiPaymentFlow({
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94a3b8' }}>Current Status:</span>
-              <span style={{ color: isApproved ? '#34d399' : isPending ? '#fbbf24' : '#f87171', fontWeight: 600 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Current Status:</span>
+              <span style={{ color: isApproved ? 'var(--accent-emerald, #059669)' : isPending ? 'var(--accent-amber, #d97706)' : '#ef4444', fontWeight: 600 }}>
                 {isApproved ? 'Approved' : isPending ? 'Pending Verification' : 'Rejected'}
               </span>
             </div>
@@ -1780,11 +1775,11 @@ export function UpiPaymentFlow({
               background:
                 billingFlow.renewal.stage === 'expiring_urgent'
                   ? 'rgba(239, 68, 68, 0.12)'
-                  : 'rgba(245, 158, 11, 0.1)',
+                  : 'var(--badge-amber-bg, rgba(245, 158, 11, 0.1))',
               border:
                 billingFlow.renewal.stage === 'expiring_urgent'
                   ? '1px solid rgba(239, 68, 68, 0.32)'
-                  : '1px solid rgba(245, 158, 11, 0.28)',
+                  : '1px solid var(--badge-amber-border, rgba(245, 158, 11, 0.28))',
               display: 'flex',
               alignItems: 'flex-start',
               gap: '0.7rem',
@@ -1794,7 +1789,7 @@ export function UpiPaymentFlow({
               size={18}
               style={{
                 color:
-                  billingFlow.renewal.stage === 'expiring_urgent' ? '#f87171' : '#fbbf24',
+                  billingFlow.renewal.stage === 'expiring_urgent' ? '#ef4444' : '#d97706',
                 flexShrink: 0,
                 marginTop: 2,
               }}
@@ -1805,7 +1800,7 @@ export function UpiPaymentFlow({
                   fontSize: '0.82rem',
                   fontWeight: 700,
                   color:
-                    billingFlow.renewal.stage === 'expiring_urgent' ? '#fca5a5' : '#fde68a',
+                    billingFlow.renewal.stage === 'expiring_urgent' ? 'var(--badge-crimson-text, #b91c1c)' : 'var(--badge-amber-text, #b45309)',
                 }}
               >
                 {billingFlow.renewal.headline}
@@ -1813,7 +1808,7 @@ export function UpiPaymentFlow({
               <p
                 style={{
                   fontSize: '0.75rem',
-                  color: '#cbd5e1',
+                  color: 'var(--text-secondary)',
                   margin: '0.2rem 0 0 0',
                   lineHeight: 1.45,
                 }}
@@ -1826,9 +1821,9 @@ export function UpiPaymentFlow({
 
         {/* Security Invariant Explanatory Banner */}
         {isPending && (
-          <div style={{ margin: '0 2rem', padding: '0.65rem 0.85rem', borderRadius: 10, background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.2)', color: '#c7d2fe', fontSize: '0.74rem', lineHeight: 1.45 }}>
-            <ShieldCheck size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '0.35rem', color: '#818cf8' }} />
-            <strong>Security Invariant:</strong> Submitting a payment reference records your request for independent administrative verification. Refreshing the status is a read-only check for recorded approval and does not grant access or mutate records. Premium remains locked until approval is formally recorded.
+          <div style={{ margin: '0 2rem', padding: '0.65rem 0.85rem', borderRadius: 10, background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.2)', color: 'var(--text-secondary)', fontSize: '0.74rem', lineHeight: 1.45 }}>
+            <ShieldCheck size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '0.35rem', color: 'var(--primary)' }} />
+            <strong style={{ color: 'var(--text-primary)' }}>Security Invariant:</strong> Submitting a payment reference records your request for independent administrative verification. Refreshing the status is a read-only check for recorded approval and does not grant access or mutate records. Premium remains locked until approval is formally recorded.
           </div>
         )}
 
@@ -1846,9 +1841,9 @@ export function UpiPaymentFlow({
                   minHeight: 44,
                   padding: '0.75rem 1rem',
                   borderRadius: 12,
-                  background: isRefreshingStatus ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: isRefreshingStatus ? '#94a3b8' : '#ffffff',
+                  background: isRefreshingStatus ? 'var(--surface)' : 'var(--surface-hover)',
+                  border: '1px solid var(--border)',
+                  color: isRefreshingStatus ? 'var(--text-muted)' : 'var(--text-primary)',
                   fontSize: '0.88rem',
                   fontWeight: 600,
                   cursor: isRefreshingStatus ? 'not-allowed' : 'pointer',
@@ -1865,9 +1860,9 @@ export function UpiPaymentFlow({
               </button>
 
               {lastCheckedAt && (
-                <div style={{ textAlign: 'center', fontSize: '0.73rem', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                <div style={{ textAlign: 'center', fontSize: '0.73rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
                   <span>Last checked:</span>
-                  <span style={{ color: '#94a3b8', fontWeight: 600 }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
                     {lastCheckedAt.toLocaleTimeString('en-IN', {
                       hour: 'numeric',
                       minute: '2-digit',
@@ -1937,7 +1932,7 @@ export function UpiPaymentFlow({
                 background: billingFlow?.renewal?.canRenewNow
                   ? 'rgba(16, 185, 129, 0.14)'
                   : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                color: billingFlow?.renewal?.canRenewNow ? '#34d399' : '#ffffff',
+                color: billingFlow?.renewal?.canRenewNow ? 'var(--accent-emerald, #059669)' : '#ffffff',
                 fontSize: '0.92rem',
                 fontWeight: 700,
                 border: billingFlow?.renewal?.canRenewNow
@@ -1980,7 +1975,7 @@ export function UpiPaymentFlow({
               padding: '0.65rem',
               borderRadius: 10,
               background: 'transparent',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               fontSize: '0.82rem',
               fontWeight: 600,
               border: 'none',

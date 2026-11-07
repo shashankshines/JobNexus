@@ -54,6 +54,7 @@ import { PREMIUM_PLAN } from '@/modules/billing/domain/subscription.types';
 import { AdminNotificationCenter } from '@/app/components/admin/AdminNotificationCenter';
 import { AdminNotificationBell } from '@/app/components/admin/AdminNotificationBell';
 import { AdminNotificationProvider } from '@/modules/notifications/AdminNotificationContext';
+import ThemeToggle from '@/app/components/ThemeToggle';
 
 const ADMIN_PAGE_SIZE = 5;
 
@@ -912,6 +913,7 @@ export default function AdminConsolePage() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <ThemeToggle />
               <AdminNotificationBell />
               <Link
                 href="/"
@@ -2526,7 +2528,7 @@ export default function AdminConsolePage() {
 
       {/* APPROVAL MODAL */}
       {approvalModalOpen && selectedSubmission && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(3, 7, 18, 0.8)', backdropFilter: 'blur(8px)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'var(--modal-backdrop, rgba(3, 7, 18, 0.8))', backdropFilter: 'blur(8px)' }}>
           <div className="admin-modal-card" style={{ maxWidth: 500, width: '100%', border: '1.5px solid rgba(16, 185, 129, 0.4)', padding: '1.75rem' }}>
             <h3 className="admin-text-value" style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.5rem' }}>
               Confirm Payment Verification & Premium Activation
@@ -2600,7 +2602,7 @@ export default function AdminConsolePage() {
 
       {/* REJECTION MODAL */}
       {rejectionModalOpen && selectedSubmission && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(3, 7, 18, 0.8)', backdropFilter: 'blur(8px)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'var(--modal-backdrop, rgba(3, 7, 18, 0.8))', backdropFilter: 'blur(8px)' }}>
           <div className="admin-modal-card" style={{ maxWidth: 500, width: '100%', border: '1.5px solid rgba(239, 68, 68, 0.4)', padding: '1.75rem' }}>
             <h3 className="admin-text-value" style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.5rem' }}>
               Reject Payment Submission
@@ -2659,7 +2661,7 @@ export default function AdminConsolePage() {
 
       {/* SUBSCRIPTION CONTROL MODAL */}
       {controlModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(3, 7, 18, 0.8)', backdropFilter: 'blur(8px)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'var(--modal-backdrop, rgba(3, 7, 18, 0.8))', backdropFilter: 'blur(8px)' }}>
           <div className="admin-modal-card" style={{ maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto', border: '1.5px solid rgba(99, 102, 241, 0.4)', padding: '1.75rem' }}>
             <h3 className="admin-text-value" style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.5rem' }}>
               Manage Premium Access
@@ -2870,7 +2872,7 @@ export default function AdminConsolePage() {
 
       {/* USER 360° PROFILE & ENTITLEMENT DOSSIER MODAL */}
       {user360ModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.75rem', background: 'rgba(3, 7, 18, 0.85)', backdropFilter: 'blur(10px)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.75rem', background: 'var(--modal-backdrop, rgba(3, 7, 18, 0.85))', backdropFilter: 'blur(10px)' }}>
           <div className="admin-modal-card" style={{ maxWidth: 860, width: '100%', maxHeight: '94vh', border: '1.5px solid rgba(99, 102, 241, 0.4)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
             <div style={{ padding: '1.25rem 1.5rem', background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

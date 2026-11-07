@@ -77,7 +77,7 @@ export function PremiumOfferModal({
             style={{
               position: 'absolute',
               inset: 0,
-              backgroundColor: 'rgba(3, 7, 18, 0.78)',
+              backgroundColor: 'var(--modal-backdrop, rgba(3, 7, 18, 0.78))',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
               transform: 'translateZ(0)',
@@ -93,6 +93,7 @@ export function PremiumOfferModal({
           {/* Modal Content Card (Sibling to Backdrop to prevent GPU compositor blur recursion) */}
           <motion.div
             key="premium-modal-card"
+            className="premium-offer-modal-card"
             initial={{ opacity: 0, scale: 0.94, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 15 }}
@@ -103,15 +104,16 @@ export function PremiumOfferModal({
               width: '100%',
               maxWidth: 520,
               maxHeight: '92vh',
-              background: '#0d1321',
+              background: 'var(--modal-bg, #0d1321)',
               borderRadius: 24,
-              border: '1px solid rgba(99, 102, 241, 0.35)',
-              boxShadow: '0 24px 64px rgba(0, 0, 0, 0.75), 0 0 40px rgba(99, 102, 241, 0.15)',
+              border: '1px solid var(--modal-border, rgba(99, 102, 241, 0.35))',
+              boxShadow: 'var(--shadow-lg), 0 0 40px rgba(99, 102, 241, 0.15)',
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
               transform: 'translateZ(0)',
               willChange: 'transform, opacity',
+              color: 'var(--text-primary)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
