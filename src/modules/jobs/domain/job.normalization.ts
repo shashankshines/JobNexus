@@ -13,6 +13,7 @@ const TRACKING_PARAMS = new Set([
   'mc_eid',
   '_hsenc',
   '_hsmi',
+  'gh_src',
 ]);
 
 import {
@@ -69,7 +70,22 @@ export function isFabricatedJobUrl(url: unknown): boolean {
       host === 'placeholder.com' ||
       host === 'invalid.com' ||
       host === 'localhost' ||
-      host === '127.0.0.1'
+      host === '127.0.0.1' ||
+      host === 'example.com' ||
+      host === 'test.com' ||
+      host === 'fake.com' ||
+      host === 'dummy.com' ||
+      host.endsWith('.invalid.com')
+    ) {
+      return true;
+    }
+
+    // Rejects synthetic generator markers
+    if (
+      parsed.searchParams.get('fabricated') === 'true' ||
+      parsed.searchParams.get('synthetic') === 'true' ||
+      pathname.includes('/synthetic/') ||
+      pathname.includes('/fabricated/')
     ) {
       return true;
     }

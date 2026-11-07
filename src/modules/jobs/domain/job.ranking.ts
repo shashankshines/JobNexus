@@ -836,14 +836,186 @@ export function matchesLevel(job: NormalizedJob, filterLevel?: string): boolean 
   return false;
 }
 
-const ROLE_TITLE_SYNONYMS: Record<string, string[]> = {
+export const ROLE_TITLE_SYNONYMS: Record<string, string[]> = {
+  // 1. AI Engineer
+  'ai engineer': [
+    'ai engineer',
+    'artificial intelligence engineer',
+    'ai software engineer',
+    'ai developer',
+    'machine learning engineer',
+    'ml engineer',
+    'ai specialist',
+    'deep learning engineer',
+    'ai research engineer',
+  ],
+  'artificial intelligence engineer': [
+    'artificial intelligence engineer',
+    'ai engineer',
+    'ai developer',
+    'machine learning engineer',
+  ],
+
+  // 2. Generative AI Engineer
+  'generative ai engineer': [
+    'generative ai engineer',
+    'genai engineer',
+    'gen ai engineer',
+    'generative ai developer',
+    'genai developer',
+    'generative ai specialist',
+    'llm engineer',
+    'ai prompt engineer',
+    'generative ai architect',
+  ],
+  'genai engineer': [
+    'genai engineer',
+    'generative ai engineer',
+    'gen ai engineer',
+    'generative ai developer',
+    'llm engineer',
+  ],
+
+  // 3. LLM Engineer
+  'llm engineer': [
+    'llm engineer',
+    'large language model engineer',
+    'llm developer',
+    'generative ai engineer',
+    'prompt engineer',
+    'rag engineer',
+    'ai language model engineer',
+  ],
+  'large language model engineer': [
+    'large language model engineer',
+    'llm engineer',
+    'llm developer',
+    'generative ai engineer',
+  ],
+
+  // 4. Agentic AI Engineer
+  'agentic ai engineer': [
+    'agentic ai engineer',
+    'ai agent engineer',
+    'agentic engineer',
+    'autonomous agents engineer',
+    'multi agent systems engineer',
+    'agentic developer',
+    'ai agents developer',
+    'ai agent architect',
+  ],
+  'ai agent engineer': [
+    'ai agent engineer',
+    'agentic ai engineer',
+    'autonomous agents engineer',
+  ],
+
+  // 5. Forward Deployed Engineer
+  'forward deployed engineer': [
+    'forward deployed engineer',
+    'forward deployed software engineer',
+    'fde',
+    'forward deployed ai engineer',
+    'solutions engineer',
+    'deployment engineer',
+    'forward deployed solutions engineer',
+  ],
+  fde: [
+    'fde',
+    'forward deployed engineer',
+    'forward deployed software engineer',
+    'forward deployed ai engineer',
+  ],
+
+  // 6. Applied AI Engineer
+  'applied ai engineer': [
+    'applied ai engineer',
+    'applied machine learning engineer',
+    'applied ml engineer',
+    'applied ai scientist',
+    'applied deep learning engineer',
+    'ai application developer',
+  ],
+  'applied machine learning engineer': [
+    'applied machine learning engineer',
+    'applied ai engineer',
+    'applied ml engineer',
+  ],
+
+  // 7. MLOps Engineer
+  'mlops engineer': [
+    'mlops engineer',
+    'machine learning operations engineer',
+    'ml platform engineer',
+    'ml infrastructure engineer',
+    'machine learning engineer',
+    'ai infrastructure engineer',
+  ],
+  'machine learning operations engineer': [
+    'machine learning operations engineer',
+    'mlops engineer',
+    'ml platform engineer',
+  ],
+
+  // 8. Data Engineer
+  'data engineer': [
+    'data engineer',
+    'etl engineer',
+    'data pipeline engineer',
+    'big data engineer',
+    'data platform engineer',
+    'analytics engineer',
+  ],
+  'data analyst': [
+    'data analyst',
+    'bi analyst',
+    'business intelligence analyst',
+    'reporting analyst',
+  ],
+
+  // 9. Python Developer
+  'python developer': [
+    'python developer',
+    'python engineer',
+    'python backend developer',
+    'python software engineer',
+    'django developer',
+    'fastapi developer',
+    'backend python developer',
+  ],
+  'python engineer': [
+    'python engineer',
+    'python developer',
+    'python software engineer',
+  ],
+
+  // 10. Full Stack Developer
+  'full stack developer': [
+    'full stack developer',
+    'fullstack developer',
+    'full stack engineer',
+    'fullstack engineer',
+    'full stack software engineer',
+    'mern developer',
+    'web developer',
+  ],
+  'fullstack developer': [
+    'fullstack developer',
+    'full stack developer',
+    'fullstack engineer',
+    'full stack engineer',
+  ],
+
+  // 11. Frontend Developer
   'frontend developer': [
     'frontend developer',
     'front end developer',
     'frontend engineer',
     'front end engineer',
     'ui developer',
-    'web ui engineer',
+    'ui engineer',
+    'web ui developer',
+    'react developer',
   ],
   'frontend engineer': [
     'frontend engineer',
@@ -851,23 +1023,181 @@ const ROLE_TITLE_SYNONYMS: Record<string, string[]> = {
     'frontend developer',
     'front end developer',
     'ui developer',
+    'ui engineer',
     'web ui engineer',
   ],
+
+  // 12. Backend Developer
   'backend developer': [
     'backend developer',
     'backend engineer',
+    'back end developer',
+    'back end engineer',
     'api developer',
     'server side developer',
+    'backend software engineer',
   ],
   'backend engineer': [
     'backend engineer',
     'backend developer',
+    'back end engineer',
+    'back end developer',
     'api developer',
     'server side developer',
   ],
-  'full stack developer': ['full stack developer', 'fullstack developer', 'full stack engineer', 'fullstack engineer'],
-  'data analyst': ['data analyst', 'bi analyst', 'business intelligence analyst', 'reporting analyst'],
-  'data engineer': ['data engineer', 'etl engineer', 'data pipeline engineer'],
+
+  // 13. Cloud Engineer
+  'cloud engineer': [
+    'cloud engineer',
+    'cloud solutions architect',
+    'cloud infrastructure engineer',
+    'aws engineer',
+    'azure engineer',
+    'gcp engineer',
+    'cloud architect',
+    'cloud platform engineer',
+  ],
+  'cloud architect': [
+    'cloud architect',
+    'cloud solutions architect',
+    'cloud engineer',
+  ],
+
+  // 14. DevOps Engineer
+  'devops engineer': [
+    'devops engineer',
+    'site reliability engineer',
+    'sre',
+    'platform engineer',
+    'infrastructure engineer',
+    'devops specialist',
+    'ci cd engineer',
+  ],
+  sre: [
+    'sre',
+    'site reliability engineer',
+    'devops engineer',
+    'infrastructure engineer',
+  ],
+  'site reliability engineer': [
+    'site reliability engineer',
+    'sre',
+    'devops engineer',
+    'infrastructure engineer',
+  ],
+
+  // 15. Cybersecurity Engineer
+  'cybersecurity engineer': [
+    'cybersecurity engineer',
+    'cyber security engineer',
+    'information security engineer',
+    'infosec engineer',
+    'security engineer',
+    'soc analyst',
+    'cyber security analyst',
+    'penetration tester',
+  ],
+  'security engineer': [
+    'security engineer',
+    'cybersecurity engineer',
+    'infosec engineer',
+  ],
+
+  // 16. QA Automation Engineer
+  'qa automation engineer': [
+    'qa automation engineer',
+    'quality assurance automation engineer',
+    'test automation engineer',
+    'sdet',
+    'software development engineer in test',
+    'qa test engineer',
+    'automation tester',
+    'qa engineer',
+  ],
+  sdet: [
+    'sdet',
+    'software development engineer in test',
+    'qa automation engineer',
+    'test automation engineer',
+  ],
+  'test automation engineer': [
+    'test automation engineer',
+    'qa automation engineer',
+    'sdet',
+  ],
+
+  // 17. Technical Product Manager
+  'technical product manager': [
+    'technical product manager',
+    'tpm',
+    'tech product manager',
+    'product manager technical',
+    'technical pm',
+    'platform product manager',
+    'api product manager',
+  ],
+  tpm: [
+    'tpm',
+    'technical product manager',
+    'technical program manager',
+    'tech product manager',
+  ],
+
+  // 18. SAP Consultant
+  'sap consultant': [
+    'sap consultant',
+    'sap functional consultant',
+    'sap technical consultant',
+    'sap abap developer',
+    'sap fico consultant',
+    'sap mm consultant',
+    'sap sd consultant',
+    'sap hana consultant',
+    'sap specialist',
+  ],
+
+  // 19. Mobile Developer
+  'mobile developer': [
+    'mobile developer',
+    'mobile engineer',
+    'mobile application developer',
+    'ios developer',
+    'android developer',
+    'react native developer',
+    'flutter developer',
+    'ios engineer',
+    'android engineer',
+  ],
+  'ios developer': [
+    'ios developer',
+    'mobile developer',
+    'ios engineer',
+    'swift developer',
+  ],
+  'android developer': [
+    'android developer',
+    'mobile developer',
+    'android engineer',
+    'kotlin developer',
+  ],
+
+  // 20. Embedded Systems Engineer
+  'embedded systems engineer': [
+    'embedded systems engineer',
+    'embedded software engineer',
+    'embedded engineer',
+    'firmware engineer',
+    'iot engineer',
+    'hardware software engineer',
+    'microcontroller engineer',
+  ],
+  'firmware engineer': [
+    'firmware engineer',
+    'embedded software engineer',
+    'embedded systems engineer',
+  ],
+
+  // Cross-Sector Standard Roles
   teacher: ['teacher', 'school teacher', 'educator', 'teaching faculty', 'teaching staff'],
   accountant: ['accountant', 'financial accountant', 'accounts executive', 'chartered accountant'],
   'hr executive': ['hr executive', 'hr generalist', 'human resources executive'],
@@ -894,6 +1224,39 @@ const ROLE_TITLE_SYNONYMS: Record<string, string[]> = {
   'ui ux product designer': ['ui ux designer', 'ux designer', 'ui designer', 'product designer'],
 };
 
+export const ROLE_SKILLS_MAP: Record<string, string[]> = {
+  'ai engineer': ['python', 'pytorch', 'tensorflow', 'machine learning', 'deep learning', 'nlp', 'computer vision', 'scikit-learn'],
+  'generative ai engineer': ['genai', 'llm', 'langchain', 'llamaindex', 'rag', 'fine-tuning', 'prompt engineering', 'diffusion', 'openai', 'transformers'],
+  'llm engineer': ['llm', 'langchain', 'llamaindex', 'transformers', 'huggingface', 'prompt engineering', 'rag', 'vector database', 'fine-tuning'],
+  'agentic ai engineer': ['agents', 'autogen', 'crewai', 'langgraph', 'multi-agent', 'function calling', 'tool use', 'autonomous agents'],
+  'forward deployed engineer': ['solutions engineering', 'client deployment', 'enterprise integration', 'fde', 'customer architecture', 'systems integration', 'deployment'],
+  'applied ai engineer': ['applied machine learning', 'model deployment', 'onnx', 'tensorrt', 'triton', 'applied deep learning', 'inference optimization'],
+  'mlops engineer': ['mlflow', 'kubeflow', 'airflow', 'feast', 'model registry', 'dvc', 'sagemaker', 'ci cd for ml', 'model monitoring'],
+  'data engineer': ['sql', 'spark', 'pyspark', 'kafka', 'airflow', 'snowflake', 'bigquery', 'databricks', 'dbt', 'etl'],
+  'python developer': ['python', 'django', 'fastapi', 'flask', 'celery', 'sqlalchemy', 'pydantic', 'pytest', 'asyncio'],
+  'full stack developer': ['react', 'node', 'nodejs', 'typescript', 'javascript', 'nextjs', 'mongodb', 'postgresql', 'express', 'tailwind'],
+  'frontend developer': ['react', 'next.js', 'vue', 'angular', 'typescript', 'javascript', 'html5', 'css3', 'tailwind', 'redux'],
+  'backend developer': ['node', 'java', 'golang', 'python', 'spring boot', 'microservices', 'postgresql', 'rest api', 'graphql', 'docker'],
+  'cloud engineer': ['aws', 'azure', 'gcp', 'terraform', 'cloudformation', 'kubernetes', 'iam', 'vpc', 'serverless'],
+  'devops engineer': ['docker', 'kubernetes', 'k8s', 'terraform', 'ci cd', 'jenkins', 'github actions', 'helm', 'ansible', 'prometheus', 'grafana'],
+  'cybersecurity engineer': ['siem', 'soc', 'penetration testing', 'firewall', 'incident response', 'vulnerability management', 'owasp', 'cissp', 'network security'],
+  'qa automation engineer': ['selenium', 'cypress', 'playwright', 'testng', 'junit', 'cucumber', 'appium', 'api testing', 'postman', 'automation testing'],
+  'technical product manager': ['product management', 'agile', 'scrum', 'user stories', 'prds', 'system design', 'api design', 'roadmap', 'jira'],
+  'sap consultant': ['sap', 'abap', 'hana', 's 4hana', 'sap fico', 'sap mm', 'sap sd', 'sap erp', 'bapi', 'idoc'],
+  'mobile developer': ['ios', 'android', 'react native', 'flutter', 'swift', 'kotlin', 'xcode', 'android studio', 'mobile app'],
+  'embedded systems engineer': ['c', 'c++', 'embedded c', 'rtos', 'firmware', 'microcontroller', 'arm', 'stm32', 'iot', 'uart', 'spi', 'i2c'],
+};
+
+export function getRoleSkills(roleOrQuery: string): string[] {
+  const clean = normalizeSearchPhrase(roleOrQuery).replace(/^remote /, '');
+  if (ROLE_SKILLS_MAP[clean]) return ROLE_SKILLS_MAP[clean];
+  const alternatives = getRoleAlternatives(clean);
+  for (const alt of alternatives) {
+    if (ROLE_SKILLS_MAP[alt]) return ROLE_SKILLS_MAP[alt];
+  }
+  return [];
+}
+
 function normalizeSearchPhrase(value: string): string {
   return value
     .toLowerCase()
@@ -909,7 +1272,7 @@ function phraseMatches(target: string, phrase: string): boolean {
   return Boolean(normalizedPhrase) && ` ${normalizedTarget} `.includes(` ${normalizedPhrase} `);
 }
 
-function getRoleAlternatives(role: string): string[] {
+export function getRoleAlternatives(role: string): string[] {
   const cleanRole = normalizeSearchPhrase(role).replace(/^remote /, '');
   return ROLE_TITLE_SYNONYMS[cleanRole] || [cleanRole];
 }
@@ -968,14 +1331,29 @@ export function matchesQuery(
       queryTokens.length > 0 &&
       queryTokens.every((token) => title.split(' ').includes(token) || tags.some((tag) => tag.split(' ').includes(token)));
 
+    const roleSkills = getRoleSkills(queryPhrase);
+    const matchingSkills = roleSkills.length > 0
+      ? roleSkills.filter((skill) => tags.some((tag) => phraseMatches(tag, skill)) || phraseMatches(title, skill))
+      : [];
+    const descSkillMatches = roleSkills.length > 0
+      ? roleSkills.filter((skill) => phraseMatches(description, skill))
+      : [];
+
+    const titleWithoutSeniority = title.replace(/^(senior|lead|principal|staff|junior|mid|entry level|associate)\s+/, '');
+    const isDirectRoleMatch = titleWithoutSeniority === queryPhrase || title === queryPhrase;
+
     if (exactTitleMatch) {
-      score = 180;
+      score = isDirectRoleMatch ? 220 : 180;
     } else if (aliasTitleMatch) {
       score = 145;
     } else if (allTitleTokensMatch) {
       score = 130;
     } else if (allTitleOrTagTokensMatch) {
       score = 85 + queryTokens.filter((token) => title.split(' ').includes(token)).length * 10;
+    } else if (matchingSkills.length > 0) {
+      score = 90 + Math.min(matchingSkills.length * 10, 40);
+    } else if (descSkillMatches.length >= 2) {
+      score = 45 + Math.min(descSkillMatches.length * 5, 25);
     } else if (queryTokens.every((token) => company.split(' ').includes(token))) {
       score = 55;
     } else if (queryTokens.every((token) => category.split(' ').includes(token))) {
@@ -1069,6 +1447,15 @@ export const ROLE_CONTEXTUAL_MAPPINGS: Record<string, string[]> = {
   'data scientist': ['machine learning', 'python', 'statistics', 'deep learning', 'pandas', 'modeling', 'data science'],
   ai: ['artificial intelligence', 'machine learning', 'ml', 'deep learning', 'nlp', 'llm', 'genai', 'computer vision'],
   'machine learning': ['ml', 'ai', 'deep learning', 'pytorch', 'tensorflow', 'nlp', 'model'],
+  llm: ['large language model', 'llm engineer', 'generative ai', 'prompt engineer', 'langchain', 'rag', 'openai', 'transformers'],
+  genai: ['generative ai', 'gen ai', 'llm', 'diffusion', 'prompt engineer', 'rag'],
+  agentic: ['ai agent', 'autonomous agent', 'agentic ai', 'multi agent', 'langchain', 'autogen', 'crewai', 'langgraph'],
+  fde: ['forward deployed engineer', 'solutions engineer', 'forward deployed', 'deployment engineer', 'customer architecture'],
+  mlops: ['machine learning operations', 'ml pipeline', 'kubeflow', 'mlflow', 'model deployment', 'sagemaker'],
+  sap: ['sap consultant', 'sap hana', 'abap', 'sap fico', 'sap mm', 'sap sd', 'sap erp'],
+  tpm: ['technical product manager', 'technical program manager', 'tech product manager', 'product manager'],
+  embedded: ['embedded systems', 'firmware', 'c/c++', 'microcontroller', 'rtos', 'arm', 'iot', 'hardware'],
+  firmware: ['embedded', 'rtos', 'microcontroller', 'c++', 'hardware', 'embedded systems'],
   
   // QA & Testing
   qa: ['quality assurance', 'test engineer', 'automation', 'sdet', 'manual testing', 'selenium', 'cypress', 'testing'],
@@ -1334,8 +1721,8 @@ export function filterAndRankJobs(
     }
 
     // Freshness boost
-    const pubTime = new Date(job.publishedAt).getTime();
-    if (!isNaN(pubTime)) {
+    const pubTime = job.publishedAt ? Date.parse(job.publishedAt) : 0;
+    if (!isNaN(pubTime) && pubTime > 0) {
       const ageDays = (now - pubTime) / ONE_DAY_MS;
       if (ageDays <= 7) {
         score += 8;
@@ -1344,10 +1731,12 @@ export function filterAndRankJobs(
       }
     }
 
-    filtered.push({
+    const scoredJob: NormalizedJob & { _pubTime?: number } = {
       ...job,
       score,
-    });
+      _pubTime: isNaN(pubTime) ? 0 : pubTime,
+    };
+    filtered.push(scoredJob);
   }
 
   // Deterministic sorting: Score descending, then publishedAt descending
@@ -1357,8 +1746,8 @@ export function filterAndRankJobs(
     if (scoreA !== scoreB) {
       return scoreB - scoreA;
     }
-    const timeA = new Date(a.publishedAt).getTime() || 0;
-    const timeB = new Date(b.publishedAt).getTime() || 0;
+    const timeA = (a as { _pubTime?: number })._pubTime ?? (a.publishedAt ? Date.parse(a.publishedAt) || 0 : 0);
+    const timeB = (b as { _pubTime?: number })._pubTime ?? (b.publishedAt ? Date.parse(b.publishedAt) || 0 : 0);
     if (timeA !== timeB) return timeB - timeA;
     return a.id.localeCompare(b.id);
   });

@@ -65,6 +65,7 @@ export class JobSearchService {
   private isCustom: boolean;
   private instanceSearchCache = new Map<string, CachedSearchResult>();
   private instanceRankedQueryCache = new Map<string, RankedQuerySnapshot>();
+  private instanceRawJobs: NormalizedJob[] | null = null;
   private instanceUniqueJobs: NormalizedJob[] | null = null;
   private customInFlightPromise?: Promise<{ allJobs: NormalizedJob[]; diagnostics: ProviderDiagnostic[] }> | null;
 
@@ -450,8 +451,22 @@ export class JobSearchService {
       }
       this.customInFlightPromise = this.fetchFromProviders(params)
         .then((res) => {
-          this.instanceUniqueJobs = deduplicateJobs(res.allJobs);
-          return res;
+          if (!this.instanceRawJobs || this.instanceRawJobs.length === 0) {
+            this.instanceRawJobs = [...res.allJobs];
+          } else {
+            // Additive merge: preserve existing records when a smaller partial batch arrives
+            const idMap = new Map<string, NormalizedJob>();
+            for (const j of this.instanceRawJobs) {
+              if (j.id) idMap.set(j.id, j);
+            }
+            for (const j of res.allJobs) {
+              if (j.id && !idMap.has(j.id)) {
+                this.instanceRawJobs.push(j);
+              }
+            }
+          }
+          this.instanceUniqueJobs = deduplicateJobs(this.instanceRawJobs);
+          return { allJobs: [...this.instanceRawJobs], diagnostics: res.diagnostics };
         })
         .finally(() => {
           this.customInFlightPromise = null;
